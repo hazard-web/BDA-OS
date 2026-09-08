@@ -130,9 +130,6 @@ export default function PulseAppGrantsAdmin() {
           <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
         }
       >
-        <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-          Grant any tool (name + URL) to an employee email. Their launcher shows only those apps, plus Pulse.
-        </Typography.Paragraph>
         <Form form={form} layout="vertical" onFinish={onAssign} requiredMark={false}>
           <Flex gap={10} wrap="wrap" align="flex-start">
             <Form.Item

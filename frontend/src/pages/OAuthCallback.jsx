@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import toast from 'react-hot-toast'
-import { toastWelcomeBack } from '../components/PosToast'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 import { AuthLogoLoader } from '../components/auth/AuthLogoLoader'
@@ -39,7 +37,6 @@ export default function OAuthCallback() {
         const res = await api.get('/auth/profile', { __skipCache: true })
         if (cancelled) return
         login(token, res.data.user)
-        toastWelcomeBack(res.data.user?.firstName || res.data.user?.displayName)
         const next = params.get('next')
         const section = params.get('section')
         if (next && next.startsWith('/') && !next.startsWith('//')) {

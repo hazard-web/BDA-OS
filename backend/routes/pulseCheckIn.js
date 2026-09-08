@@ -10,6 +10,8 @@ const Announcement = require('../models/Announcement');
 const AssignedTask = require('../models/AssignedTask');
 const { logActivity } = require('../utils/logger');
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth');
+const { sendLeaveRequestEmail } = require('../utils/emailService');
+const { getProductionBaseUrl } = require('../utils/urlHelper');
 const {
   clientIp,
   clientUserAgent,
@@ -18,6 +20,70 @@ const {
 } = require('../utils/requestMeta');
 
 const TARGET_HOURS = 9;
+const PULSE_CASUAL_ANNUAL = 18;
+
+async function linkedStaff(user) {
+  return Staff.findOne({
+    email: String(user.email || '').toLowerCase(),
+    user: orgIdOf(user),
+  }).lean();
+}
+
+function casualLeaveBalance(staff) {
+  const remaining = staff?.leaveBalance?.casual != null
+    ? Number(staff.leaveBalance.casual)
+    : PULSE_CASUAL_ANNUAL;
+  return {
+    name: 'Casual',
+    used: Math.max(0, PULSE_CASUAL_ANNUAL - remaining),
+    total: PULSE_CASUAL_ANNUAL,
+    remaining: Math.max(0, remaining),
+    color: '#1A5F4A',
+  };
+}
+
+function leaveDurationDays(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+  return Math.max(1, Math.ceil((end - start) / 86_400_000) + 1);
+}
+
+/** Leave types the LeaveRequest model accepts, keyed by the labels the UI sends. */
+const LEAVE_TYPE_ALIASES = {
+  casual: 'Casual',
+  'casual leave': 'Casual',
+  sick: 'Sick',
+  'sick leave': 'Sick',
+  custom: 'Custom',
+  'custom leave': 'Custom',
+};
+
+/**
+ * Inboxes a leave request may be sent to for approval. Requests can only name an
+ * address from this list, so the endpoint can never mail an arbitrary recipient.
+ */
+const LEAVE_NOTIFY_EMAILS = String(
+  process.env.PULSE_LEAVE_NOTIFY_EMAILS || 'office@bda.co.in,hello@ambesh.com',
+)
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+function resolveNotifyEmail(raw) {
+  const wanted = String(raw || '').trim().toLowerCase();
+  if (!wanted) return '';
+  return LEAVE_NOTIFY_EMAILS.find((email) => email.toLowerCase() === wanted) || '';
+}
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Matches the "4 Sep 2026" the UI shows; leave dates are stored at UTC midnight. */
+function formatLeaveDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${date.getUTCDate()} ${MONTH_LABELS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
 
 function todayKey(raw) {
   if (raw && /^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return String(raw);
@@ -478,49 +544,27 @@ router.get('/overview', auth, async (req, res) => {
     let monthLeaveDates = [];
     let leaveBalances = [];
     let approvals = [];
+    let leaveByDate = {};
 
-    if (policy) {
-      const casualTotal = Number(policy.casualLeave?.daysPerYear) || 12;
-      const sickTotal = Number(policy.sickLeave?.daysPerYear) || 12;
-      const casualLeft = staff?.leaveBalance?.casual != null
-        ? Number(staff.leaveBalance.casual)
-        : casualTotal;
-      const sickLeft = staff?.leaveBalance?.sick != null
-        ? Number(staff.leaveBalance.sick)
-        : sickTotal;
-      leaveBalances = [
-        {
-          name: 'Casual',
-          used: Math.max(0, casualTotal - casualLeft),
-          total: casualTotal,
-          color: '#1A5F4A',
-        },
-        {
-          name: 'Sick',
-          used: Math.max(0, sickTotal - sickLeft),
-          total: sickTotal,
-          color: '#d97706',
-        },
-      ];
-    }
-    if (!leaveBalances.length) {
-      leaveBalances = [
-        { name: 'Casual', used: 0, total: 12, color: '#1A5F4A' },
-        { name: 'Sick', used: 0, total: 12, color: '#d97706' },
-      ];
-    }
+    leaveBalances = [casualLeaveBalance(staff)];
 
     if (staff) {
       const leaves = await LeaveRequest.find({
         staff: staff._id,
-        status: 'Approved',
+        status: { $in: ['Pending', 'Approved'] },
         startDate: { $lte: new Date(`${end}T23:59:59`) },
         endDate: { $gte: new Date(`${monthFrom}T00:00:00`) },
       })
-        .select('startDate endDate')
+        .select('startDate endDate status type')
         .lean();
       leaves.forEach((row) => {
+        const label = row.status === 'Pending' ? 'Leave applied' : 'On Leave';
         enumerateKeys(dayKeyOf(row.startDate), dayKeyOf(row.endDate)).forEach((key) => {
+          const prev = leaveByDate[key];
+          // Approved wins over Pending if both overlap
+          if (!prev || row.status === 'Approved') {
+            leaveByDate[key] = { status: row.status, type: row.type || 'Leave', label };
+          }
           if (key >= start && key <= end) leaveDates.push(key);
           if (key >= monthFrom && key <= today) monthLeaveDates.push(key);
         });
@@ -610,6 +654,7 @@ router.get('/overview', auth, async (req, res) => {
         days: weekDocs.map((d) => serializeDay(d)),
         holidays,
         leaveDates,
+        leaveByDate,
         leaveBalances,
         approvals,
         announcements: announcements.map((row) => ({
@@ -643,6 +688,416 @@ router.get('/overview', auth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to load overview' });
+  }
+});
+
+const NAMED_HOLIDAYS = {
+  '2026-01-01': { name: "New Year's Day", kind: 'restricted' },
+  '2026-01-14': { name: 'Pongal', kind: 'restricted' },
+  '2026-01-26': { name: 'Republic Day', kind: 'company' },
+  '2026-03-04': { name: 'Holi', kind: 'restricted' },
+  '2026-03-21': { name: 'Eid al-Fitr', kind: 'restricted' },
+  '2026-04-03': { name: 'Good Friday', kind: 'restricted' },
+  '2026-08-15': { name: 'Independence Day', kind: 'company' },
+  '2026-08-26': { name: 'Onam', kind: 'restricted' },
+  '2026-09-04': { name: 'Janmashtami', kind: 'restricted' },
+  '2026-09-14': { name: 'Ganesh Chaturthi', kind: 'restricted' },
+  '2026-10-02': { name: 'Gandhi Jayanti', kind: 'company' },
+  '2026-10-20': { name: 'Dussehra', kind: 'restricted' },
+  '2026-10-29': { name: 'Diwali', kind: 'restricted' },
+  '2026-12-25': { name: 'Christmas', kind: 'restricted' },
+  '2027-01-26': { name: 'Republic Day', kind: 'company' },
+  '2027-03-03': { name: 'Holi', kind: 'restricted' },
+};
+
+function firstName(value, email) {
+  const name = String(value || '').trim();
+  if (name) return name.split(/\s+/)[0];
+  return String(email || '').split('@')[0] || 'Teammate';
+}
+
+function initialOf(value) {
+  return String(value || '?').trim().charAt(0).toUpperCase() || '?';
+}
+
+function serializeSessions(row) {
+  return (row?.sessions || []).map((session) => ({
+    in: session.checkInAt || null,
+    out: session.checkOutAt || null,
+    hours: msToHours(session.durationMs),
+  }));
+}
+
+function monthBounds(raw) {
+  const match = String(raw || '').match(/^(\d{4})-(\d{2})$/);
+  const now = new Date();
+  const year = match ? Number(match[1]) : now.getFullYear();
+  const month = match ? Number(match[2]) : now.getMonth() + 1;
+  const from = `${year}-${String(month).padStart(2, '0')}-01`;
+  const last = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+  return { month: from.slice(0, 7), from, to };
+}
+
+// GET /api/pulse-checkin/calendar?month=2026-09
+router.get('/calendar', auth, async (req, res) => {
+  try {
+    const { month, from, to } = monthBounds(req.query.month);
+    const today = todayKey();
+    const orgId = orgIdOf(req.user);
+    const workDays = Array.isArray(req.user.defaultWorkDays) && req.user.defaultWorkDays.length
+      ? req.user.defaultWorkDays
+      : [1, 2, 3, 4, 5];
+    const workDaySet = new Set(workDays.map((d) => Number(d)));
+
+    const [policy, myDays, leaves] = await Promise.all([
+      LeavePolicy.findOne({ user: orgId }).lean(),
+      PulseWorkDay.find({
+        user: req.user._id,
+        date: { $gte: from, $lte: to },
+      })
+        .sort({ date: 1 })
+        .lean(),
+      LeaveRequest.find({
+        admin: orgId,
+        status: 'Approved',
+        startDate: { $lte: new Date(`${to}T23:59:59`) },
+        endDate: { $gte: new Date(`${from}T00:00:00`) },
+      })
+        .populate('staff', 'fullName email')
+        .sort({ startDate: 1 })
+        .lean(),
+    ]);
+
+    const companyDates = new Set((policy?.holidays || []).map(dayKeyOf).filter(Boolean));
+    const holidays = [];
+    const seen = new Set();
+    companyDates.forEach((date) => {
+      if (date < from || date > to) return;
+      const named = NAMED_HOLIDAYS[date];
+      holidays.push({
+        date,
+        name: named?.name || 'Holiday',
+        kind: 'company',
+      });
+      seen.add(date);
+    });
+    Object.entries(NAMED_HOLIDAYS).forEach(([date, meta]) => {
+      if (date < from || date > to || seen.has(date)) return;
+      holidays.push({ date, name: meta.name, kind: meta.kind });
+      seen.add(date);
+    });
+    holidays.sort((a, b) => a.date.localeCompare(b.date));
+    const holidaySet = new Set(holidays.map((row) => row.date));
+
+    const teamLeave = leaves.map((row) => {
+      const name = row.staff?.fullName || firstName('', row.staff?.email);
+      const days = enumerateKeys(dayKeyOf(row.startDate), dayKeyOf(row.endDate))
+        .filter((key) => key >= from && key <= to);
+      const type = row.type === 'Sick' ? 'Sick leave' : row.type === 'Custom' ? 'Leave' : 'Casual leave';
+      return {
+        id: String(row._id),
+        name,
+        initial: initialOf(name),
+        type,
+        startDate: dayKeyOf(row.startDate),
+        endDate: dayKeyOf(row.endDate),
+        days,
+      };
+    }).filter((row) => row.days.length);
+
+    const leaveDates = [...new Set(teamLeave.flatMap((row) => row.days))];
+    const myLeave = new Set();
+    const staff = await linkedStaff(req.user);
+    if (staff) {
+      leaves.forEach((row) => {
+        if (String(row.staff?._id || row.staff) === String(staff._id)) {
+          enumerateKeys(dayKeyOf(row.startDate), dayKeyOf(row.endDate)).forEach((key) => myLeave.add(key));
+        }
+      });
+    }
+
+    const byDate = new Map(myDays.map((row) => [row.date, row]));
+    const days = {};
+    enumerateKeys(from, to).forEach((date) => {
+      const row = byDate.get(date);
+      const weekend = !workDaySet.has(weekdayOf(date));
+      const holiday = holidaySet.has(date);
+      const onLeave = myLeave.has(date);
+      const present = recordIsPresent(row);
+      const future = date > today;
+      const absent = !weekend && !holiday && !onLeave && !present && !future && date !== today;
+      days[date] = {
+        date,
+        hours: row?.timesheetLogged && row?.timesheetHours != null
+          ? Number(row.timesheetHours)
+          : msToHours(row?.totalActiveMs),
+        present,
+        absent,
+        onLeave,
+        weekend,
+        holiday,
+        sessions: serializeSessions(row),
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        month,
+        from,
+        to,
+        holidays,
+        teamLeave,
+        leaveDates,
+        days,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load calendar' });
+  }
+});
+
+router.get('/leaves', auth, async (req, res) => {
+  try {
+    const staff = await linkedStaff(req.user);
+    if (!staff) {
+      return res.json({
+        success: true,
+        data: [],
+        casual: casualLeaveBalance(null),
+        notifyEmails: LEAVE_NOTIFY_EMAILS,
+      });
+    }
+    const requests = await LeaveRequest.find({ staff: staff._id })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({
+      success: true,
+      data: requests.map((row) => ({
+        id: String(row._id),
+        type: row.type,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        status: row.status,
+        reason: row.reason,
+        days: leaveDurationDays(row.startDate, row.endDate),
+        createdAt: row.createdAt,
+      })),
+      casual: casualLeaveBalance(staff),
+      notifyEmails: LEAVE_NOTIFY_EMAILS,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load leave requests' });
+  }
+});
+
+router.post('/leaves/apply', auth, async (req, res) => {
+  try {
+    const { startDate, endDate, reason, leaveType, teamEmailId } = req.body || {};
+    if (!startDate || !endDate || !String(reason || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Start date, end date, and reason are required' });
+    }
+    const type = LEAVE_TYPE_ALIASES[String(leaveType || 'Casual').trim().toLowerCase()];
+    if (!type) {
+      return res.status(400).json({
+        success: false,
+        message: `${leaveType} is not a supported leave type`,
+      });
+    }
+    const notifyEmail = resolveNotifyEmail(teamEmailId);
+    if (teamEmailId && !notifyEmail) {
+      return res.status(400).json({ success: false, message: 'Pick a team email from the list' });
+    }
+    const staff = await linkedStaff(req.user);
+    if (!staff) {
+      return res.status(400).json({
+        success: false,
+        message: 'No employee profile is linked to this Pulse account yet.',
+      });
+    }
+    const days = leaveDurationDays(startDate, endDate);
+    if (type === 'Casual') {
+      const balance = casualLeaveBalance(staff);
+      if (days > balance.remaining) {
+        return res.status(400).json({
+          success: false,
+          message: `Only ${balance.remaining} casual day(s) left this year.`,
+        });
+      }
+    }
+    const leave = await LeaveRequest.create({
+      staff: staff._id,
+      admin: orgIdOf(req.user),
+      type,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      reason: String(reason).trim(),
+      status: 'Pending',
+    });
+
+    // A mail failure must not lose a saved request, so report it instead of throwing.
+    let notified = false;
+    if (notifyEmail) {
+      try {
+        await sendLeaveRequestEmail({
+          to: notifyEmail,
+          employeeName: staff.fullName || [req.user.firstName, req.user.lastName].filter(Boolean).join(' '),
+          employeeEmail: staff.email || req.user.email,
+          leaveType: type,
+          fromDate: formatLeaveDate(leave.startDate),
+          toDate: formatLeaveDate(leave.endDate),
+          days,
+          reason: leave.reason,
+          reviewUrl: `${getProductionBaseUrl()}/pulse`,
+          companyName: req.user.companyName || '',
+        });
+        notified = true;
+      } catch {
+        // Leave still saved; client sees notified=false.
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Leave request submitted',
+      notified,
+      notifyEmail,
+      data: {
+        id: String(leave._id),
+        type: leave.type,
+        startDate: leave.startDate,
+        endDate: leave.endDate,
+        status: leave.status,
+        reason: leave.reason,
+        days,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to submit leave request' });
+  }
+});
+
+const IMPORT_ROW_LIMIT = 500;
+
+router.post('/leaves/import', auth, async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) {
+      return res.status(400).json({ success: false, message: 'No rows to import' });
+    }
+    if (rows.length > IMPORT_ROW_LIMIT) {
+      return res.status(400).json({
+        success: false,
+        message: `Import is limited to ${IMPORT_ROW_LIMIT} rows per file`,
+      });
+    }
+    const isAdmin = isPulseAdmin(req.user);
+    const selfStaff = await linkedStaff(req.user);
+    if (!selfStaff && !isAdmin) {
+      return res.status(400).json({
+        success: false,
+        message: 'No employee profile is linked to this Pulse account yet.',
+      });
+    }
+
+    // A blank employee id imports against the signed-in profile; a filled one is
+    // resolved within the org and only admins may target somebody else.
+    const wantedIds = [...new Set(
+      rows.map((row) => String(row?.employeeId || '').trim()).filter(Boolean),
+    )];
+    const staffById = new Map();
+    if (wantedIds.length) {
+      const matches = await Staff.find({
+        user: orgIdOf(req.user),
+        employeeId: { $in: wantedIds },
+      }).lean();
+      matches.forEach((row) => staffById.set(String(row.employeeId), row));
+    }
+
+    const casualLeft = new Map();
+    const remainingFor = (staff) => {
+      const key = String(staff._id);
+      if (!casualLeft.has(key)) casualLeft.set(key, casualLeaveBalance(staff).remaining);
+      return casualLeft.get(key);
+    };
+
+    const added = [];
+    const skipped = [];
+
+    for (const row of rows) {
+      const rowNo = Number(row?.rowNo) || 0;
+      const errors = [];
+      const rawType = String(row?.leaveType || '').trim();
+      const type = LEAVE_TYPE_ALIASES[rawType.toLowerCase()];
+      const startDate = new Date(row?.from);
+      const endDate = new Date(row?.to);
+      const employeeId = String(row?.employeeId || '').trim();
+
+      let target = selfStaff;
+      if (employeeId) {
+        const match = staffById.get(employeeId);
+        if (!match) {
+          errors.push(`No employee found with ID ${employeeId}`);
+        } else if (!isAdmin && String(match._id) !== String(selfStaff?._id)) {
+          errors.push('You can only import leave for your own profile');
+        } else {
+          target = match;
+        }
+      }
+      if (!target && !errors.length) {
+        errors.push('No employee profile is linked to this Pulse account yet');
+      }
+
+      if (!type) errors.push(`${rawType || 'Leave type'} is not a supported leave type`);
+      if (Number.isNaN(startDate.getTime())) errors.push('From is not a valid date');
+      if (Number.isNaN(endDate.getTime())) errors.push('To is not a valid date');
+      if (!errors.length && endDate < startDate) errors.push('To cannot be earlier than From');
+
+      const days = errors.length ? 0 : leaveDurationDays(startDate, endDate);
+      if (!errors.length && type === 'Casual' && days > remainingFor(target)) {
+        errors.push(`Only ${remainingFor(target)} casual day(s) left this year`);
+      }
+
+      if (errors.length) {
+        skipped.push({ rowNo, errors });
+        continue;
+      }
+
+      const leave = await LeaveRequest.create({
+        staff: target._id,
+        admin: orgIdOf(req.user),
+        type,
+        startDate,
+        endDate,
+        reason: String(row?.reason || '').trim() || 'Imported leave',
+        status: 'Pending',
+      });
+      if (type === 'Casual') casualLeft.set(String(target._id), remainingFor(target) - days);
+      added.push({
+        rowNo,
+        id: String(leave._id),
+        type: leave.type,
+        startDate: leave.startDate,
+        endDate: leave.endDate,
+        status: leave.status,
+        reason: leave.reason,
+        days,
+      });
+    }
+
+    if (added.length) {
+      await logActivity(
+        req.user._id,
+        'PULSE_LEAVE_IMPORT',
+        `${req.user.email} imported ${added.length} leave request(s), ${skipped.length} skipped`,
+        { added: added.length, skipped: skipped.length },
+      );
+    }
+
+    res.status(201).json({ success: true, added, skipped });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to import leave requests' });
   }
 });
 

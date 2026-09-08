@@ -364,9 +364,31 @@ form > .auth-input {
 }
 
 /* #nextbtn margin-bottom 36px before social row */
+.auth-next-slot + .auth-using-row,
 .auth-next-slot + .auth-using,
 .auth-btn + .auth-using {
-  margin-top: 32px !important;
+  margin-top: 48px !important;
+}
+
+.auth-using-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-using-row .auth-using {
+  margin: 0 !important;
+}
+
+.auth-using-row .auth-idp {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+}
+
+.auth-using-row .auth-idp svg {
+  width: 28px;
+  height: 28px;
 }
 
 .auth-label {

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import './auth-loader.css'
 
 const DEFAULT_MS = 900
@@ -48,4 +49,38 @@ export function useAuthRedirect(delayMs = DEFAULT_MS) {
   )
 
   return { redirecting, redirectTo, onRedirectClick }
+}
+
+/** Accounts + Pulse: button loads, then People OS mark, then login. */
+export function useAccountSignOut({ onClosePanel, blocked = false } = {}) {
+  const navigate = useNavigate()
+  const { logout, startExit } = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutLogo, setSignOutLogo] = useState(false)
+  const closeRef = useRef(onClosePanel)
+  const timersRef = useRef([])
+  closeRef.current = onClosePanel
+
+  const beginSignOut = useCallback(() => {
+    if (signingOut || signOutLogo || blocked) return
+    startExit?.()
+    setSigningOut(true)
+    timersRef.current.forEach((id) => window.clearTimeout(id))
+    timersRef.current = [
+      window.setTimeout(() => {
+        closeRef.current?.()
+        setSignOutLogo(true)
+      }, 650),
+      window.setTimeout(() => {
+        logout()
+        navigate('/login', { replace: true })
+      }, 650 + 950),
+    ]
+  }, [signingOut, signOutLogo, blocked, logout, navigate, startExit])
+
+  useEffect(() => () => {
+    timersRef.current.forEach((id) => window.clearTimeout(id))
+  }, [])
+
+  return { signingOut, signOutLogo, beginSignOut }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   AppstoreOutlined,
@@ -50,7 +50,7 @@ import {
 } from 'antd'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
-import { AuthLogoLoader, useAuthRedirect } from '../components/auth/AuthLogoLoader'
+import { AuthLogoLoader, useAccountSignOut, useAuthRedirect } from '../components/auth/AuthLogoLoader'
 import AccountsLogo from '../components/AccountsLogo'
 import AppsFlyout from '../components/AppsFlyout'
 import LinkedAppsPanel from '../components/LinkedAppsPanel'
@@ -340,10 +340,9 @@ function GoogleMark({ size = 16 }) {
   )
 }
 
-export default function AccountPortal() {
-  const { user, updateProfile, logout, loading } = useAuth()
+export default function AccountPortal({ embedded = false }) {
+  const { user, updateProfile, loading } = useAuth()
   const { redirecting } = useAuthRedirect()
-  const navigate = useNavigate()
   const [params] = useSearchParams()
   const [section, setSection] = useState('personal')
   const [editing, setEditing] = useState(false)
@@ -355,8 +354,10 @@ export default function AccountPortal() {
   const [emailMarketing, setEmailMarketing] = useState(true)
   const [appsOpen, setAppsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [signingOut, setSigningOut] = useState(false)
-  const [signOutLogo, setSignOutLogo] = useState(false)
+  const { signingOut, signOutLogo, beginSignOut } = useAccountSignOut({
+    onClosePanel: () => setProfileOpen(false),
+    blocked: redirecting,
+  })
   const [saving, setSaving] = useState(false)
   const [mobileIsPrimary, setMobileIsPrimary] = useState(false)
   const [primaryModalOpen, setPrimaryModalOpen] = useState(false)
@@ -622,19 +623,6 @@ export default function AccountPortal() {
     })
   }
 
-  const onSignOut = () => {
-    if (signingOut || signOutLogo || redirecting) return
-    setSigningOut(true)
-    window.setTimeout(() => {
-      setProfileOpen(false)
-      setSignOutLogo(true)
-    }, 650)
-    window.setTimeout(() => {
-      logout()
-      navigate('/login', { replace: true })
-    }, 650 + 950)
-  }
-
   if (loading || !user) return <AuthLogoLoader show label="Loading account" />
 
   const initials = fullName
@@ -706,36 +694,39 @@ export default function AccountPortal() {
     : <Avatar size={28} style={{ background: '#1A5F4A' }}>{initials || 'P'}</Avatar>
 
   return (
-    <AntLayout className="acc-shell">
+    <AntLayout className={`acc-shell${embedded ? ' is-embedded' : ''}`}>
       <AuthLogoLoader
         show={redirecting || saving || signOutLogo}
         label={signOutLogo ? 'Signing out' : saving ? 'Saving' : 'Redirecting'}
       />
 
-      <Header className="acc-top">
-        <button type="button" className="acc-brand" onClick={() => scrollToBlock('personal')}>
-          <AccountsLogo size={26} />
-          Accounts
-        </button>
-        <div className="acc-top-tools">
-          <Tooltip title="Account menu">
-            <button type="button" className="acc-avatar-btn" onClick={() => setProfileOpen(true)} aria-label="Account menu">
-              {avatar}
+      {embedded ? null : (
+        <>
+          <Header className="acc-top">
+            <button type="button" className="acc-brand" onClick={() => scrollToBlock('personal')}>
+              <AccountsLogo size={26} />
+              Accounts
             </button>
-          </Tooltip>
-          <Tooltip title="Apps">
-            <Button
-              type="text"
-              ref={appsBtnRef}
-              icon={<AppstoreOutlined />}
-              aria-label="Open People OS apps"
-              onClick={() => setAppsOpen(true)}
-            />
-          </Tooltip>
-        </div>
-      </Header>
-
-      <AppsFlyout open={appsOpen} onClose={() => setAppsOpen(false)} anchorRef={appsBtnRef} />
+            <div className="acc-top-tools">
+              <Tooltip title="Account menu">
+                <button type="button" className="acc-avatar-btn" onClick={() => setProfileOpen(true)} aria-label="Account menu">
+                  {avatar}
+                </button>
+              </Tooltip>
+              <Tooltip title="Apps">
+                <Button
+                  type="text"
+                  ref={appsBtnRef}
+                  icon={<AppstoreOutlined />}
+                  aria-label="Open People OS apps"
+                  onClick={() => setAppsOpen(true)}
+                />
+              </Tooltip>
+            </div>
+          </Header>
+          <AppsFlyout open={appsOpen} onClose={() => setAppsOpen(false)} anchorRef={appsBtnRef} />
+        </>
+      )}
 
       <Drawer
         title="Account"
@@ -758,7 +749,7 @@ export default function AccountPortal() {
               <InfoCircleOutlined />
             </Tooltip>
           </Typography.Text>
-          <Button type="primary" danger loading={signingOut} onClick={onSignOut}>
+          <Button type="primary" danger loading={signingOut} onClick={beginSignOut}>
             Sign Out
           </Button>
         </Flex>

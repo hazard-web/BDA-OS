@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import {
   CloseOutlined,
+  FileOutlined,
   HolderOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -15,18 +16,65 @@ import {
   Switch,
   Typography,
 } from 'antd'
+import { DRAG_THRESHOLD, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
 
 const STORAGE_KEY = 'pulseMySpaceDashWidgets'
-const DRAG_THRESHOLD = 4
+
+const ROLLING_3_KEYS = new Set(['announcements', 'holidays'])
+const CURRENT_MONTH_KEYS = new Set(['birthday', 'workAnniv', 'weddingAnniv'])
+
+function parseItemDate(on, now) {
+  if (!on) return null
+  if (on === 'today') return now
+  const d = new Date(`${on}T12:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function inCurrentMonth(date, now) {
+  return date.getMonth() === now.getMonth()
+}
+
+function inRollingMonths(date, now, span, recurring) {
+  if (recurring) {
+    const delta = (date.getMonth() - now.getMonth() + 12) % 12
+    return delta < span
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + span, 0, 23, 59, 59, 999)
+  return date >= start && date <= end
+}
+
+function filterWidgetData(source, now = new Date()) {
+  const next = { ...source }
+  for (const key of Object.keys(source)) {
+    const rows = source[key]
+    if (!Array.isArray(rows)) continue
+    if (ROLLING_3_KEYS.has(key)) {
+      const recurring = key === 'holidays'
+      next[key] = rows.filter((row) => {
+        const d = parseItemDate(row.on, now)
+        return d ? inRollingMonths(d, now, 3, recurring) : false
+      })
+    } else if (CURRENT_MONTH_KEYS.has(key)) {
+      next[key] = rows.filter((row) => {
+        const d = parseItemDate(row.on, now)
+        return d ? inCurrentMonth(d, now) : false
+      })
+    }
+  }
+  return next
+}
 
 const DEMO = {
   birthday: [
-    { id: 'b1', title: 'Priya Sharma', meta: 'Today · Design' },
-    { id: 'b2', title: 'Amit Verma', meta: '22 Aug · Engineering' },
-    { id: 'b3', title: 'Neha Kapoor', meta: '24 Aug · People' },
-    { id: 'b4', title: 'Karan Joshi', meta: '28 Aug · Sales' },
-    { id: 'b5', title: 'Sara Ali', meta: '1 Sep · Finance' },
-    { id: 'b6', title: 'Vikram Rao', meta: '4 Sep · Ops' },
+    { id: 'b1', title: 'Priya Sharma', meta: 'Today · Design', on: 'today' },
+    { id: 'b2', title: 'Amit Verma', meta: '22 Aug · Engineering', on: '2026-08-22' },
+    { id: 'b3', title: 'Neha Kapoor', meta: '24 Aug · People', on: '2026-08-24' },
+    { id: 'b4', title: 'Karan Joshi', meta: '28 Aug · Sales', on: '2026-08-28' },
+    { id: 'b5', title: 'Sara Ali', meta: '1 Sep · Finance', on: '2026-09-01' },
+    { id: 'b6', title: 'Vikram Rao', meta: '4 Sep · Ops', on: '2026-09-04' },
+    { id: 'b7', title: 'Leela Menon', meta: '18 Oct · Product', on: '2026-10-18' },
+    { id: 'b8', title: 'Arjun Sethi', meta: '9 Nov · Engineering', on: '2026-11-09' },
   ],
   newHires: [
     { id: 'n1', title: 'Ananya Gupta', meta: 'Joined 11 Aug · Product' },
@@ -53,12 +101,13 @@ const DEMO = {
     { id: 'ql8', title: 'Learning hub', meta: 'L&D' },
   ],
   announcements: [
-    { id: 'a1', title: 'Independence Day — office closed', meta: '15 Aug · All hands' },
-    { id: 'a2', title: 'Q2 town hall recording', meta: '12 Aug · Leadership' },
-    { id: 'a3', title: 'New parking levels open', meta: '10 Aug · Facilities' },
-    { id: 'a4', title: 'Update your emergency contacts', meta: '8 Aug · HR' },
-    { id: 'a5', title: 'Wifi maintenance Sunday', meta: '7 Aug · IT' },
-    { id: 'a6', title: 'Performance cycle kickoff', meta: '5 Aug · People' },
+    { id: 'a1', title: 'Independence Day — office closed', meta: '15 Aug · All hands', on: '2026-08-15' },
+    { id: 'a2', title: 'Q2 town hall recording', meta: '12 Aug · Leadership', on: '2026-08-12' },
+    { id: 'a3', title: 'New parking levels open', meta: '10 Aug · Facilities', on: '2026-08-10' },
+    { id: 'a4', title: 'Pulse town hall — Q3', meta: '12 Sep · Leadership', on: '2026-09-12' },
+    { id: 'a5', title: 'Update your emergency contacts', meta: '20 Sep · HR', on: '2026-09-20' },
+    { id: 'a6', title: 'Diwali week hours', meta: '18 Oct · People', on: '2026-10-18' },
+    { id: 'a7', title: 'Benefits enrollment window', meta: '4 Nov · HR', on: '2026-11-04' },
   ],
   leaveReport: [
     { id: 'l1', title: 'Casual leave', meta: '6 used · 6 left' },
@@ -69,12 +118,12 @@ const DEMO = {
     { id: 'l6', title: 'Bereavement', meta: '0 used · 5 left' },
   ],
   holidays: [
-    { id: 'h1', title: 'Independence Day', meta: 'Fri · 15 Aug 2026' },
-    { id: 'h2', title: 'Gandhi Jayanti', meta: 'Fri · 2 Oct 2026' },
-    { id: 'h3', title: 'Diwali', meta: 'Thu · 29 Oct 2026' },
-    { id: 'h4', title: 'Christmas', meta: 'Fri · 25 Dec 2026' },
-    { id: 'h5', title: 'Republic Day', meta: 'Tue · 26 Jan 2027' },
-    { id: 'h6', title: 'Holi', meta: 'Wed · 3 Mar 2027' },
+    { id: 'h1', title: 'Independence Day', meta: 'Fri · 15 Aug 2026', on: '2026-08-15' },
+    { id: 'h2', title: 'Gandhi Jayanti', meta: 'Fri · 2 Oct 2026', on: '2026-10-02' },
+    { id: 'h3', title: 'Diwali', meta: 'Thu · 29 Oct 2026', on: '2026-10-29' },
+    { id: 'h4', title: 'Christmas', meta: 'Fri · 25 Dec 2026', on: '2026-12-25' },
+    { id: 'h5', title: 'Republic Day', meta: 'Tue · 26 Jan 2027', on: '2027-01-26' },
+    { id: 'h6', title: 'Holi', meta: 'Wed · 3 Mar 2027', on: '2027-03-03' },
   ],
   tasks: [
     { id: 't1', title: 'Approve casual leave — Asha Mehta', meta: 'Due today' },
@@ -86,23 +135,28 @@ const DEMO = {
     { id: 't7', title: 'Submit training feedback', meta: 'Due 30 Aug' },
   ],
   files: [
-    { id: 'file1', title: 'Offer_Letter_Template.pdf', meta: 'Organization · 240 KB' },
-    { id: 'file2', title: 'Code_of_Conduct.pdf', meta: 'Organization · 1.1 MB' },
-    { id: 'file3', title: 'WFH_Guidelines.docx', meta: 'Organization · 88 KB' },
-    { id: 'file4', title: 'Onboarding_Checklist.xlsx', meta: 'Organization · 56 KB' },
-    { id: 'file5', title: 'ID_Proof_Scan.pdf', meta: 'Employee · 2.4 MB' },
-    { id: 'file6', title: 'Bank_Mandate.pdf', meta: 'Employee · 310 KB' },
+    { id: 'file1', title: 'Offer_Letter_Template.pdf', meta: 'PDF · 240 KB', section: 'org' },
+    { id: 'file2', title: 'Code_of_Conduct.pdf', meta: 'PDF · 1.1 MB', section: 'org' },
+    { id: 'file3', title: 'WFH_Guidelines.docx', meta: 'Doc · 88 KB', section: 'org' },
+    { id: 'file4', title: 'Onboarding_Checklist.xlsx', meta: 'Sheet · 56 KB', section: 'org' },
+    { id: 'file7', title: 'Holiday_Calendar_2026.xlsx', meta: 'Sheet · 44 KB', section: 'org' },
+    { id: 'file8', title: 'IT_Asset_Policy.pdf', meta: 'PDF · 620 KB', section: 'org' },
+    { id: 'file9', title: 'Salary_Structure.pdf', meta: 'PDF · 190 KB', section: 'org' },
+    { id: 'file5', title: 'ID_Proof_Scan.pdf', meta: 'PDF · 2.4 MB', section: 'employee' },
+    { id: 'file6', title: 'Bank_Mandate.pdf', meta: 'PDF · 310 KB', section: 'employee' },
+    { id: 'file10', title: 'Form_16_FY25.pdf', meta: 'PDF · 1.8 MB', section: 'employee' },
+    { id: 'file11', title: 'Address_Proof.jpg', meta: 'Image · 840 KB', section: 'employee' },
   ],
   workAnniv: [
-    { id: 'w1', title: 'Rahul Iyer · 4 years', meta: '18 Aug · Engineering' },
-    { id: 'w2', title: 'Asha Mehta · 2 years', meta: '21 Aug · People' },
-    { id: 'w3', title: 'Suresh Nair · 7 years', meta: '2 Sep · Ops' },
-    { id: 'w4', title: 'Fatima Noor · 1 year', meta: '9 Sep · Design' },
+    { id: 'w1', title: 'Rahul Iyer · 4 years', meta: '18 Aug · Engineering', on: '2026-08-18' },
+    { id: 'w2', title: 'Asha Mehta · 2 years', meta: '21 Aug · People', on: '2026-08-21' },
+    { id: 'w3', title: 'Suresh Nair · 7 years', meta: '2 Sep · Ops', on: '2026-09-02' },
+    { id: 'w4', title: 'Fatima Noor · 1 year', meta: '9 Sep · Design', on: '2026-09-09' },
   ],
   weddingAnniv: [
-    { id: 'wa1', title: 'Deepak & Riya', meta: '20 Aug' },
-    { id: 'wa2', title: 'Pooja & Arjun', meta: '27 Aug' },
-    { id: 'wa3', title: 'Nikhil & Sana', meta: '3 Sep' },
+    { id: 'wa1', title: 'Deepak & Riya', meta: '20 Aug', on: '2026-08-20' },
+    { id: 'wa2', title: 'Pooja & Arjun', meta: '27 Aug', on: '2026-08-27' },
+    { id: 'wa3', title: 'Nikhil & Sana', meta: '3 Sep', on: '2026-09-03' },
   ],
   engagement: [
     { id: 'e1', title: 'Pulse check · August', meta: 'Due 31 Aug' },
@@ -113,18 +167,18 @@ const DEMO = {
 }
 
 const MY_WIDGETS = [
-  { id: 'birthday', label: 'Birthday', dataKey: 'birthday', empty: 'No birthdays today', showAvatar: true },
-  { id: 'newHires', label: 'New Hires', dataKey: 'newHires', empty: 'No new joinees in past 15 days', showAvatar: true },
-  { id: 'favorites', label: 'Favorites', dataKey: 'favorites', empty: 'No favorites yet', addable: true },
-  { id: 'quickLinks', label: 'Quick Links', dataKey: 'quickLinks', empty: 'No quick links', addable: true },
-  { id: 'announcements', label: 'Announcements', dataKey: 'announcements', empty: 'No announcements', addable: true },
-  { id: 'leaveReport', label: 'Leave Report', dataKey: 'leaveReport', empty: 'No leave data yet' },
-  { id: 'holidays', label: 'Upcoming Holidays', dataKey: 'holidays', empty: 'No upcoming holidays' },
-  { id: 'tasks', label: 'My Pending Tasks', dataKey: 'tasks', empty: 'There are no tasks available', badge: true },
-  { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No files found', showTotal: true, scrollable: true },
-  { id: 'workAnniv', label: 'Work Anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries today', showAvatar: true },
-  { id: 'weddingAnniv', label: 'Wedding Anniversary', dataKey: 'weddingAnniv', empty: 'No wedding anniversaries today', showAvatar: true },
-  { id: 'engagement', label: 'Employee Engagement', dataKey: 'engagement', empty: 'No pending surveys', badge: true },
+  { id: 'birthday', label: 'Birthday', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
+  { id: 'newHires', label: 'New Hires', dataKey: 'newHires', empty: 'No new joinees in past 15 days', showAvatar: true, tone: 'blue' },
+  { id: 'favorites', label: 'Favorites', dataKey: 'favorites', empty: 'No favorites yet', addable: true, tone: 'green' },
+  { id: 'quickLinks', label: 'Quick Links', dataKey: 'quickLinks', empty: 'No quick links', addable: true, tone: 'teal' },
+  { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No Files Found', showTotal: true, fileTabs: true, tone: 'slate' },
+  { id: 'announcements', label: 'Announcements', dataKey: 'announcements', empty: 'No announcements in the next 3 months', addable: true, tone: 'gold' },
+  { id: 'leaveReport', label: 'Leave Report', dataKey: 'leaveReport', empty: 'No leave data yet', tone: 'slate' },
+  { id: 'holidays', label: 'Upcoming Holidays', dataKey: 'holidays', empty: 'No holidays in the next 3 months', tone: 'terracotta' },
+  { id: 'tasks', label: 'My Pending Tasks', dataKey: 'tasks', empty: 'There are no tasks available', badge: true, tone: 'green' },
+  { id: 'workAnniv', label: 'Work Anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
+  { id: 'weddingAnniv', label: 'Wedding Anniversary', dataKey: 'weddingAnniv', empty: 'No wedding anniversaries this month', showAvatar: true, tone: 'rose' },
+  { id: 'engagement', label: 'Employee Engagement', dataKey: 'engagement', empty: 'No pending surveys', badge: true, tone: 'blue' },
 ]
 
 function defaultPrefs() {
@@ -137,12 +191,23 @@ function defaultPrefs() {
 function readPrefs() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return defaultPrefs()
-    const parsed = JSON.parse(raw)
     const base = defaultPrefs()
+    if (!raw) return base
+    const parsed = JSON.parse(raw)
+    const known = MY_WIDGETS.map((w) => w.id)
+    const knownSet = new Set(known)
+    const saved = Array.isArray(parsed.order) ? parsed.order.filter((id) => knownSet.has(id)) : []
+    const order = [...saved]
+    known.forEach((id) => {
+      if (!order.includes(id)) order.push(id)
+    })
+    const enabled = { ...base.enabled, ...(parsed.enabled || {}) }
+    known.forEach((id) => {
+      if (!saved.includes(id)) enabled[id] = true
+    })
     return {
-      order: Array.isArray(parsed.order) && parsed.order.length ? parsed.order : base.order,
-      enabled: { ...base.enabled, ...(parsed.enabled || {}) },
+      order,
+      enabled,
     }
   } catch {
     return defaultPrefs()
@@ -162,40 +227,10 @@ function rowInitial(title = '') {
   return part.charAt(0).toUpperCase()
 }
 
-function moveId(list, fromId, toId) {
-  if (!fromId || !toId || fromId === toId) return list
-  const next = [...list]
-  const from = next.indexOf(fromId)
-  const to = next.indexOf(toId)
-  if (from < 0 || to < 0) return list
-  next.splice(from, 1)
-  next.splice(to, 0, fromId)
-  return next
-}
-
-function hitIdFromPoint(ids, refs, clientX, clientY) {
-  let best = null
-  let bestDist = Infinity
-  for (const id of ids) {
-    const el = refs.current.get(id)
-    if (!el) continue
-    const r = el.getBoundingClientRect()
-    const inside =
-      clientX >= r.left &&
-      clientX <= r.right &&
-      clientY >= r.top &&
-      clientY <= r.bottom
-    if (inside) return id
-    const cx = r.left + r.width / 2
-    const cy = r.top + r.height / 2
-    const dist = (clientX - cx) ** 2 + (clientY - cy) ** 2
-    if (dist < bestDist) {
-      bestDist = dist
-      best = id
-    }
-  }
-  return best
-}
+const FILE_TABS = [
+  { id: 'org', label: 'Organization Files' },
+  { id: 'employee', label: 'Employee Files' },
+]
 
 function DashListWidget({
   title,
@@ -207,20 +242,28 @@ function DashListWidget({
   showTotal,
   showAvatar,
   scrollable,
+  fileTabs,
+  fileTab,
+  onFileTabChange,
+  tone = 'green',
   cardRef,
   isPlaceholder,
   placeholderHeight,
   floating,
   onGripPointerDown,
+  index = 0,
 }) {
-  const total = items.length
+  const visibleItems = fileTabs
+    ? items.filter((item) => (item.section || 'org') === fileTab)
+    : items
+  const total = visibleItems.length
 
   if (isPlaceholder) {
     return (
       <div
         ref={cardRef}
         className="pulse-dash-placeholder"
-        style={{ minHeight: placeholderHeight || 188 }}
+        style={{ minHeight: placeholderHeight || 148 }}
         aria-hidden="true"
       />
     )
@@ -251,9 +294,10 @@ function DashListWidget({
     )
   } else if (showTotal) {
     headExtra = (
-      <Typography.Text className="pulse-dash-meta">
-        Total <strong>{total}</strong>
-      </Typography.Text>
+      <span className="pulse-dash-files-total">
+        Total Files
+        <span className="pulse-dash-files-count">{total}</span>
+      </span>
     )
   }
 
@@ -262,12 +306,15 @@ function DashListWidget({
       ref={cardRef}
       className={[
         'pulse-dash-card',
+        `pulse-dash-card--${tone}`,
         floating ? 'is-floating' : '',
         scrollable ? 'is-scroll' : '',
+        fileTabs ? 'is-files' : '',
         total === 0 ? 'is-empty' : '',
       ]
         .filter(Boolean)
         .join(' ')}
+      style={floating ? undefined : { '--dash-i': index }}
     >
       <header className="pulse-dash-card-head">
         <div className="pulse-dash-card-title-row">
@@ -285,26 +332,57 @@ function DashListWidget({
         {headExtra}
       </header>
 
+      {fileTabs ? (
+        <div className="pulse-dash-file-tabs" role="tablist" aria-label="File sections">
+          {FILE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={fileTab === tab.id}
+              className={`pulse-dash-file-tab${fileTab === tab.id ? ' is-on' : ''}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onFileTabChange?.(tab.id)
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {total === 0 ? (
-        <div className="pulse-dash-empty">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty || 'No data'} />
+        <div className={`pulse-dash-empty${fileTabs ? ' is-files' : ''}`}>
+          {fileTabs ? (
+            <p className="pulse-dash-empty-text">{empty || 'No Files Found'}</p>
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty || 'No data'} />
+          )}
         </div>
       ) : (
-        <ul className="pulse-dash-rows">
-          {items.map((item) => (
-            <li key={item.id} className="pulse-dash-row">
-              {showAvatar ? (
-                <span className="pulse-dash-avatar" aria-hidden="true">
-                  {rowInitial(item.title)}
-                </span>
-              ) : null}
-              <div className="pulse-dash-row-copy">
-                <p className="pulse-dash-row-title">{item.title}</p>
-                {item.meta ? <p className="pulse-dash-row-meta">{item.meta}</p> : null}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className={fileTabs ? 'pulse-dash-files-body' : undefined}>
+          <ul className="pulse-dash-rows">
+            {visibleItems.map((item) => (
+              <li key={item.id} className="pulse-dash-row">
+                {fileTabs ? (
+                  <span className="pulse-dash-file-ico" aria-hidden="true">
+                    <FileOutlined />
+                  </span>
+                ) : showAvatar ? (
+                  <span className="pulse-dash-avatar" aria-hidden="true">
+                    {rowInitial(item.title)}
+                  </span>
+                ) : null}
+                <div className="pulse-dash-row-copy">
+                  <p className="pulse-dash-row-title">{item.title}</p>
+                  {item.meta ? <p className="pulse-dash-row-meta">{item.meta}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </article>
   )
@@ -480,14 +558,16 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
   const [customizeOpen, setCustomizeOpen] = useState(false)
   const [tick, setTick] = useState(0)
   const [ghost, setGhost] = useState(null)
+  const [fileTab, setFileTab] = useState('org')
   const cardRefs = useRef(new Map())
   const dragRef = useRef(null)
   const ghostPosRef = useRef({ x: 0, y: 0 })
   const rafRef = useRef(0)
 
-  const data = useSample
-    ? DEMO
-    : Object.fromEntries(Object.keys(DEMO).map((k) => [k, []]))
+  const data = useMemo(() => {
+    if (!useSample) return Object.fromEntries(Object.keys(DEMO).map((k) => [k, []]))
+    return filterWidgetData(DEMO)
+  }, [useSample, tick])
 
   const catalog = useMemo(() => Object.fromEntries(MY_WIDGETS.map((w) => [w.id, w])), [])
 
@@ -613,6 +693,7 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
       height: Math.round(rect.height),
       active: false,
     }
+    document.body.classList.add('pulse-dash-dragging')
     // Seed ghost id so listeners attach; position appears after threshold.
     setGhost({
       id,
@@ -676,7 +757,7 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
   })
 
   return (
-    <div className={`pulse-dash${draggingId ? ' is-reordering' : ''}`} key={tick}>
+    <div className={`pulse-dash is-glass${draggingId ? ' is-reordering' : ''}`} key={tick}>
       {toolsHost ? createPortal(chip, toolsHost) : null}
 
       <div className="pulse-dash-grid">
@@ -688,12 +769,13 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
             />
           </div>
         ) : (
-          visibleWidgets.map((widget) => {
+          visibleWidgets.map((widget, index) => {
             const items = data[widget.dataKey] || []
             const isSlot = draggingId === widget.id
             return (
               <DashListWidget
                 key={widget.id}
+                index={index}
                 title={widget.label}
                 items={items}
                 empty={widget.empty}
@@ -703,6 +785,10 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
                 showTotal={widget.showTotal}
                 showAvatar={widget.showAvatar}
                 scrollable={widget.scrollable}
+                fileTabs={widget.fileTabs}
+                fileTab={widget.fileTabs ? fileTab : undefined}
+                onFileTabChange={widget.fileTabs ? setFileTab : undefined}
+                tone={widget.tone}
                 isPlaceholder={isSlot}
                 placeholderHeight={ghost?.height}
                 cardRef={(el) => {
@@ -735,6 +821,9 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
                 showTotal={dragWidget.showTotal}
                 showAvatar={dragWidget.showAvatar}
                 scrollable={dragWidget.scrollable}
+                fileTabs={dragWidget.fileTabs}
+                fileTab={dragWidget.fileTabs ? fileTab : undefined}
+                tone={dragWidget.tone}
                 floating
               />
             </div>,
