@@ -1,0 +1,965 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,14..32,500;0,14..32,650;1,14..32,500;1,14..32,650&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+/* Pulse identity — not Zoho chrome, not lavender glass. Timber paper + copper beat. */
+
+.pulse-shell.pulse-id {
+  font-family: Figtree, 'IBM Plex Sans', system-ui, sans-serif;
+  color: #142019;
+  background:
+    radial-gradient(ellipse 90% 70% at 0% 0%, #e4efe0 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, #c5d4b8 0%, transparent 50%),
+    linear-gradient(180deg, #d7e2d4 0%, #c8d4c4 100%);
+}
+
+.pulse-shell.pulse-id .pulse-maincol:has(.pulse-body-overview),
+.pulse-shell.pulse-id .pulse-maincol:has(.pulse-body-surface),
+.pulse-shell.pulse-id .pulse-chrome.ant-layout {
+  background: transparent;
+}
+
+.pulse-shell.pulse-id .pulse-scroll-surface {
+  min-height: 100%;
+}
+
+.pulse-shell.pulse-id .pulse-wordmark {
+  font-family: Fraunces, Georgia, serif;
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+  color: #142019;
+  padding: 0 14px 0 6px;
+  user-select: none;
+}
+
+.pulse-shell.pulse-id .pulse-top.ant-layout-header {
+  height: 56px !important;
+  min-height: 56px;
+  max-height: 56px;
+  padding-inline: 8px 18px !important;
+  background: rgba(232, 238, 228, 0.58) !important;
+  color: #142019;
+  border-bottom: 1px solid rgba(20, 32, 25, 0.08);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+}
+
+.pulse-shell.pulse-id .pulse-space {
+  height: 56px;
+  color: rgba(20, 32, 25, 0.55);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pulse-shell.pulse-id .pulse-space.is-on {
+  color: #142019;
+  box-shadow: inset 0 -2px 0 #c45c26;
+}
+
+.pulse-shell.pulse-id .pulse-top-tools .ant-btn-text {
+  color: #3a4a3e;
+}
+
+.pulse-shell.pulse-id .pulse-top-tools .ant-btn-text:hover,
+.pulse-shell.pulse-id .pulse-top-tools .ant-btn-text:focus-visible {
+  color: #142019 !important;
+  background: rgba(20, 32, 25, 0.06) !important;
+}
+
+.pulse-shell.pulse-id .pulse-plus {
+  border-radius: 999px !important;
+}
+
+.pulse-shell.pulse-id .pulse-sider-left.ant-layout-sider {
+  background: transparent !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-right: 0;
+  flex: 0 0 108px !important;
+  max-width: 108px !important;
+  min-width: 108px !important;
+  width: 108px !important;
+  overflow: visible;
+}
+
+.pulse-shell.pulse-id .pulse-rail-item {
+  width: 64px;
+  color: rgba(20, 32, 25, 0.55);
+}
+
+.pulse-shell.pulse-id .pulse-rail-item.is-on {
+  color: #142019;
+}
+
+.pulse-shell.pulse-id .pulse-rail-item.is-on .pulse-rail-ico {
+  background: transparent;
+  color: #c45c26;
+  box-shadow: inset 0 -2px 0 #c45c26;
+  border-radius: 0;
+}
+
+.pulse-shell.pulse-id .pulse-rail-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pulse-shell.pulse-id .pulse-sub {
+  height: 40px;
+  background: rgba(232, 238, 228, 0.5);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border-bottom: 1px solid rgba(20, 32, 25, 0.08);
+}
+
+.pulse-shell.pulse-id .pulse-sub-tab {
+  color: rgba(20, 32, 25, 0.5);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pulse-shell.pulse-id .pulse-sub-tab.is-on {
+  color: #142019;
+}
+
+.pulse-shell.pulse-id .pulse-sub-tab.is-on::after {
+  background: #c45c26;
+  height: 2px;
+}
+
+.pulse-shell.pulse-id .pulse-ribbon.ant-layout-footer {
+  background: rgba(232, 238, 228, 0.55);
+  border-top: 1px solid rgba(20, 32, 25, 0.08);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.pulse-shell.pulse-id .pulse-ribbon-btn {
+  color: rgba(20, 32, 25, 0.5);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.pulse-shell.pulse-id .pulse-ribbon-mark {
+  font-family: Fraunces, Georgia, serif;
+  font-style: italic;
+  color: rgba(20, 32, 25, 0.45);
+  font-size: 14px;
+}
+
+.pulse-shell.pulse-id:has(.pulse-body-surface) {
+  background-color: #4e7db8;
+  background-image: none;
+}
+
+.pulse-shell.pulse-id:has(.pulse-body-surface) .pulse-body.pulse-body-surface.ant-layout-content {
+  position: relative;
+  background-color: #4e7db8 !important;
+  background-image: none !important;
+}
+
+/* Overview stage — alpine peak, grounded toward the bottom of the pane. */
+.pulse-strip-root {
+  --pulse-stage: #4e7db8;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--pulse-stage);
+}
+
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface {
+  position: relative;
+  z-index: 1;
+  display: block;
+  isolation: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  background-color: transparent !important;
+  background-image: none !important;
+  animation: none;
+}
+
+.pulse-strip-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--pulse-stage, #4e7db8);
+}
+
+.pulse-strip-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center 68%;
+  display: block;
+  transform-origin: center 70%;
+  animation: pulse-peak-drift 56s ease-in-out infinite;
+}
+
+.pulse-strip-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(247, 250, 255, 0.32) 0%, rgba(247, 250, 255, 0.08) 34%, transparent 58%),
+    linear-gradient(180deg, transparent 62%, rgba(28, 22, 16, 0.14) 100%);
+}
+
+.pulse-aura-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    108deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 58%
+  );
+  background-size: 240% 100%;
+  background-repeat: no-repeat;
+  animation: pulse-aura-sheen 40s ease-in-out infinite;
+}
+
+@keyframes pulse-peak-drift {
+  0%, 100% { transform: scale(1.04); }
+  50% { transform: scale(1.09) translate3d(-0.8%, 0.7%, 0); }
+}
+
+@keyframes pulse-aura-sheen {
+  0% { background-position: 130% 0; }
+  100% { background-position: -30% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-strip-photo,
+  .pulse-aura-sheen {
+    animation: none;
+  }
+  .pulse-aura-sheen { background-position: 40% 0; }
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id:has(.pulse-body-surface),
+:root[data-theme='dark'] .pulse-shell.pulse-id:has(.pulse-body-surface) .pulse-body.pulse-body-surface.ant-layout-content,
+:root[data-theme='dark'] .pulse-strip-root {
+  --pulse-stage: #152033;
+  background-color: #152033 !important;
+}
+
+:root[data-theme='dark'] .pulse-strip-scene {
+  background-color: #152033;
+}
+
+:root[data-theme='dark'] .pulse-strip-root > .pulse-scroll.pulse-scroll-surface {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+:root[data-theme='dark'] .pulse-strip-photo {
+  filter: saturate(0.88) brightness(0.68);
+}
+
+:root[data-theme='dark'] .pulse-strip-shade {
+  background:
+    linear-gradient(180deg, rgba(10, 16, 28, 0.42) 0%, rgba(10, 16, 28, 0.12) 40%, rgba(10, 16, 28, 0.28) 100%);
+}
+
+.pulse-shell.pulse-id .ms-hello-copy {
+  align-items: flex-start;
+}
+
+.pulse-shell.pulse-id .ms-hello-greet {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-transform: none;
+  color: rgba(20, 32, 25, 0.5);
+}
+
+.pulse-shell.pulse-id .ms-hello-name {
+  margin-top: 4px;
+  font-family: Fraunces, Georgia, serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-weight: 650;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  color: #142019;
+}
+
+.pulse-shell.pulse-id .ms-hello-line {
+  margin-top: 8px;
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: rgba(20, 32, 25, 0.55);
+}
+
+.pulse-shell.pulse-id .ms-hello-when {
+  color: rgba(20, 32, 25, 0.48);
+}
+
+.pulse-ov-open .ms-hello-name {
+  animation: pulse-ov-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.pulse-ov-open .ms-hello-line,
+.pulse-ov-open .ms-hello-when {
+  animation: pulse-ov-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
+}
+
+.pulse-ov-open .pulse-overview.is-reordering .ms-hello-name,
+.pulse-ov-open .pulse-overview.is-reordering .ms-hello-line,
+.pulse-ov-open .pulse-overview.is-reordering .ms-hello-when,
+.pulse-ov-open .pulse-overview.is-settled .ms-hello-name,
+.pulse-ov-open .pulse-overview.is-settled .ms-hello-line,
+.pulse-ov-open .pulse-overview.is-settled .ms-hello-when {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ov-open .ms-hello-name,
+  .pulse-ov-open .ms-hello-line,
+  .pulse-ov-open .ms-hello-when {
+    animation: none;
+  }
+}
+
+.pulse-shell.pulse-id .pulse-checkin-meta .ant-tag {
+  margin-inline-end: 0;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 20px;
+  padding: 0 8px;
+}
+
+.pulse-shell.pulse-id .pulse-kpi .ant-statistic-content {
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 650;
+}
+
+.pulse-shell.pulse-id .pulse-kpi-label.ant-typography,
+.pulse-shell.pulse-id .pulse-kpi .pulse-kpi-label {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+.pulse-shell.pulse-id .pulse-shell .psc-root,
+.pulse-id .psc-root {
+  left: 16px;
+  bottom: 96px;
+}
+
+/* Overview / live boards — paper, not glass */
+
+.pulse-id .pov {
+  font-family: Figtree, system-ui, sans-serif;
+  color: #142019;
+  max-width: 1180px;
+  padding: 8px 28px 32px;
+}
+
+.pulse-id .pov-app,
+.pulse-id .pov-app-bare {
+  display: block;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.pulse-id .pov-app-body {
+  padding: 8px 0 0;
+}
+
+.pulse-id .pov-kicker {
+  font-family: Fraunces, Georgia, serif;
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: #3a4a3e;
+  letter-spacing: -0.02em;
+}
+
+.pulse-id .pov-top h1 {
+  font-family: Fraunces, Georgia, serif;
+  font-size: 52px;
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  color: #142019;
+}
+
+.pulse-id .pov-cta,
+.pulse-id .plive-top-cta {
+  font-family: Figtree, system-ui, sans-serif;
+  border-radius: 999px;
+  background: #1a5f4a;
+  box-shadow: none;
+}
+
+.pulse-id .pov-timeline,
+.pulse-id .pov-glass,
+.pulse-id .pov-tasks,
+.pulse-id .pov-meet,
+.pulse-id .pov-progress {
+  border: 1px solid rgba(20, 32, 25, 0.12);
+  background: #eef3ec;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.pulse-id .pov-timeline {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.pulse-id .pov-step-pill {
+  border: 0;
+  background: transparent;
+  color: #3a4a3e;
+  border-radius: 0;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 0;
+}
+
+.pulse-id .pov-step-pill.is-now {
+  background: transparent;
+  color: #c45c26;
+  box-shadow: none;
+}
+
+.pulse-id .pov-step-pill.is-done {
+  background: transparent;
+  color: #142019;
+}
+
+.pulse-id .pov-step-pill.is-done b {
+  background: #1a5f4a;
+}
+
+.pulse-id .pov-status.is-auto { color: #6b4a9e; }
+.pulse-id .pov-status.is-track { color: #2c6a7a; }
+.pulse-id .pov-status.is-done { color: #1a5f4a; }
+.pulse-id .pov-status.is-wait { color: #b42318; }
+
+.pulse-id .pov-link {
+  color: #c45c26;
+}
+
+.pulse-id .plive-metric {
+  background: #eef3ec;
+  border: 1px solid rgba(20, 32, 25, 0.12);
+}
+
+.pulse-id .plive-checkin {
+  background: #1a5f4a !important;
+  box-shadow: none !important;
+}
+
+/* Beat week — signature */
+.pulse-beat {
+  margin: 8px 0 28px;
+}
+
+.pulse-beat-line {
+  display: block;
+  width: 100%;
+  height: 36px;
+  color: #c45c26;
+}
+
+.pulse-dayline {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.pulse-dayline li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px 12px;
+  border-top: 2px solid rgba(20, 32, 25, 0.14);
+  min-height: 84px;
+}
+
+.pulse-dayline li.is-now {
+  border-top-color: #c45c26;
+}
+
+.pulse-dayline li.is-on {
+  border-top-color: #1a5f4a;
+}
+
+.pulse-dayline b {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(20, 32, 25, 0.5);
+}
+
+.pulse-dayline em {
+  font-family: Fraunces, Georgia, serif;
+  font-style: normal;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.pulse-dayline small {
+  font-size: 11px;
+  color: rgba(20, 32, 25, 0.55);
+}
+
+.pulse-dayline li.is-now em {
+  color: #c45c26;
+}
+
+.pulse-id .pov-meet h3 {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id {
+  background: #101612;
+  color: #e7eee6;
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-wordmark,
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-space.is-on,
+:root[data-theme='dark'] .pulse-id .pov-top h1,
+:root[data-theme='dark'] .pulse-id .pulse-dayline em {
+  color: #e7eee6;
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-top.ant-layout-header {
+  background: rgba(16, 22, 18, 0.62) !important;
+  color: #e7eee6;
+  border-bottom-color: rgba(231, 238, 230, 0.1);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-space,
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-rail-item,
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-sub-tab {
+  color: rgba(231, 238, 230, 0.55);
+}
+
+.pulse-shell.pulse-id .pulse-ov-portrait-plate strong {
+  font-family: Figtree, system-ui, sans-serif;
+  color: #142019;
+}
+
+.pulse-shell.pulse-id .pulse-ov-portrait-plate span {
+  font-family: Figtree, system-ui, sans-serif;
+  color: rgba(20, 32, 25, 0.55);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-ov-portrait {
+  border: 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-ov-portrait-plate {
+  background: rgba(22, 28, 24, 0.55);
+  border: 0;
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-ov-portrait-plate strong {
+  color: #e7eee6;
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-ov-portrait-plate span {
+  color: rgba(231, 238, 230, 0.58);
+}
+
+.pulse-shell.pulse-id .ms-hello-logo {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+:root[data-theme='dark'] .pulse-id .pov-glass,
+:root[data-theme='dark'] .pulse-id .pov-tasks,
+:root[data-theme='dark'] .pulse-id .plive-metric {
+  background: #18211b;
+  border-color: rgba(231, 238, 230, 0.1);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .ms-hello-name {
+  color: #e7eee6;
+}
+
+@media (max-width: 980px) {
+  .pulse-dayline {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .pulse-id .pov-top h1 {
+    font-size: 36px;
+  }
+
+  .pulse-shell.pulse-id .pulse-feed .ms-hello-name {
+    font-size: 24px;
+  }
+}
+
+/* Overview cards: shared type, inset surfaces, no calendar changes. */
+.pulse-overview .pulse-ov-tile.is-today .ant-card,
+.pulse-overview .pulse-ov-tile.is-games .pulse-games-card,
+.pulse-overview .pulse-ov-tile.is-portrait .pulse-ov-portrait {
+  overflow: hidden;
+}
+
+.pulse-overview .pulse-ov-tile.is-checkin,
+.pulse-overview .pulse-ov-tile.is-checkin > .pulse-ov-tile-inner,
+.pulse-overview .pulse-ov-tile.is-checkin .ant-card,
+.pulse-overview .pulse-ov-tile.is-checkin .ant-card-body,
+.pulse-overview .pulse-ov-tile.is-checkin .pulse-checkin-card,
+.pulse-overview .pulse-ov-tile.is-checkin .pulse-checkin-main {
+  overflow: visible;
+}
+
+.pulse-overview .pulse-feed {
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+}
+
+.pulse-overview .pulse-ov-tile.is-today .ant-card-body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 16px 16px 28px;
+}
+
+.pulse-overview .ms-hello,
+.pulse-overview .ms-sched {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.pulse-overview .ms-hello {
+  align-items: center;
+  min-height: 0;
+  padding: 16px 18px;
+}
+
+.pulse-overview .ms-hello-copy {
+  gap: 0;
+  max-width: min(560px, 78%);
+}
+
+.pulse-scroll-surface .pulse-overview .ms-hello-greet {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: #3f3a36 !important;
+}
+
+.pulse-scroll-surface .pulse-overview .ms-hello-name {
+  margin-top: 2px;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  color: #142019 !important;
+}
+
+.pulse-scroll-surface .pulse-overview .ms-hello-line {
+  margin-top: 5px;
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #57534e !important;
+}
+
+.pulse-overview .ms-hello.is-morning .ms-sky {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 214, 153, 0.14) 52%, rgba(135, 196, 255, 0.2) 100%);
+}
+
+.pulse-overview .ms-hello.is-afternoon .ms-sky {
+  background: linear-gradient(90deg, transparent 0%, rgba(186, 220, 255, 0.14) 52%, rgba(120, 186, 245, 0.18) 100%);
+}
+
+.pulse-overview .ms-hello.is-evening .ms-sky {
+  background: linear-gradient(90deg, transparent 0%, rgba(203, 210, 220, 0.16) 52%, rgba(164, 176, 192, 0.22) 100%);
+}
+
+.pulse-overview .ms-sched {
+  padding: 12px 14px 12px;
+}
+
+.pulse-overview .ms-sched-head {
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pulse-scroll-surface .pulse-overview .ms-sched-title h3 {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #142019 !important;
+}
+
+.pulse-scroll-surface .pulse-overview .ms-sched-title span {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #44403c !important;
+}
+
+.pulse-overview .ms-sched-track {
+  min-width: 0;
+  width: 100%;
+}
+
+.pulse-overview .pulse-feed .ms-sched .ms-shift-bar {
+  display: flex;
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 36px;
+  margin: 0;
+  border-radius: 10px;
+  background: rgba(255, 252, 247, 0.9);
+  box-sizing: border-box;
+}
+
+.pulse-overview .ms-shift-copy {
+  padding: 6px 12px;
+}
+
+.pulse-overview .ms-shift-copy strong,
+.pulse-overview .ms-shift-copy span {
+  font-family: Figtree, system-ui, sans-serif;
+}
+
+.pulse-overview .ms-shift-copy strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #142019;
+}
+
+.pulse-overview .ms-shift-copy span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #57534e;
+}
+
+.pulse-overview .pulse-feed .ms-sched .ms-week {
+  margin-top: 10px;
+}
+
+.pulse-overview .ms-day-name,
+.pulse-overview .ms-day-num,
+.pulse-overview .ms-day-label small {
+  font-family: Figtree, system-ui, sans-serif;
+  text-align: center;
+}
+
+.pulse-overview .ms-day-label {
+  width: 100%;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.pulse-overview .ms-day-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #3f3a36;
+}
+
+.pulse-overview .ms-day-num {
+  min-width: 26px;
+  height: 26px;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #142019;
+}
+
+.pulse-overview .ms-day-label small {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulse-overview .ms-day.is-present small {
+  color: #145a46;
+}
+
+.pulse-overview .ms-day.is-absent small {
+  color: #b91c1c;
+}
+
+.pulse-overview .ms-day.is-weekend small {
+  color: #c45c26;
+}
+
+.pulse-overview .pulse-ov-tile.is-checkin .ant-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.pulse-overview .pulse-ov-tile.is-checkin .ant-card-body {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pulse-overview .pulse-checkin-meta .ant-typography,
+.pulse-overview .pulse-checkin-meta .ant-typography strong {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: #142019;
+}
+
+.pulse-overview .pulse-checkin-nudge {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #44403c;
+}
+
+.pulse-scroll-surface .pulse-overview .pulse-checkin-date {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  color: #292524 !important;
+}
+
+.pulse-overview .pulse-ov-portrait-plate {
+  padding: 10px 14px;
+  background: rgba(255, 252, 247, 0.78);
+}
+
+.pulse-overview .pulse-ov-portrait-plate strong {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.pulse-overview .pulse-ov-portrait-plate span {
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.pulse-overview .pdg {
+  gap: 10px;
+}
+
+.pulse-overview .pdg h2,
+.pulse-overview .pdg-kicker,
+.pulse-overview .pdg-stats span {
+  font-family: Figtree, system-ui, sans-serif;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-hello-greet,
+:root[data-theme='dark'] .pulse-overview .ms-hello-line {
+  color: rgba(231, 238, 230, 0.62) !important;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-hello-name,
+:root[data-theme='dark'] .pulse-overview .ms-sched-title h3,
+:root[data-theme='dark'] .pulse-overview .pdg h2,
+:root[data-theme='dark'] .pulse-overview .pulse-checkin-meta .ant-typography {
+  color: #e7eee6 !important;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-sched-title span,
+:root[data-theme='dark'] .pulse-overview .pulse-checkin-date,
+:root[data-theme='dark'] .pulse-overview .pulse-checkin-nudge {
+  color: rgba(231, 238, 230, 0.7) !important;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-shift-bar {
+  background: rgba(28, 25, 23, 0.88);
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-day-name {
+  color: rgba(231, 238, 230, 0.78);
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-day-num {
+  color: #e7eee6;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-day.is-present small {
+  color: #9fe1c3;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-day.is-absent small {
+  color: #f0a8a0;
+}
+
+:root[data-theme='dark'] .pulse-overview .ms-day.is-weekend small {
+  color: #e8a070;
+}
+
+:root[data-theme='dark'] .pulse-overview .pulse-ov-portrait-plate {
+  background: rgba(22, 28, 24, 0.72);
+}

@@ -1,0 +1,97 @@
+/* Live modules — same glass language as Overview. No green focus rings. */
+
+.plive-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.plive-metric {
+  border-radius: 18px;
+  padding: 12px 14px 14px;
+}
+
+.plive-metric p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(28, 24, 48, 0.5);
+}
+
+.plive-metric strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+  color: #161326;
+}
+
+.plive-metric span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(28, 24, 48, 0.48);
+}
+
+.plive-top-cta {
+  width: auto !important;
+  min-height: 40px !important;
+  padding: 0 16px !important;
+  border-radius: 12px !important;
+  flex-shrink: 0;
+}
+
+.plive-checkin {
+  background: #1a5f4a !important;
+  box-shadow: 0 8px 20px rgba(26, 95, 74, 0.28) !important;
+}
+
+.plive-checkin:hover,
+.plive-checkin:focus,
+.plive-checkin:focus-visible {
+  filter: brightness(1.05);
+  outline: none;
+  box-shadow: 0 8px 20px rgba(26, 95, 74, 0.28) !important;
+}
+
+.plive-nested .pulse-leave-page {
+  height: min(78vh, 860px);
+}
+
+.plive-nested .ant-card {
+  border-radius: 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.72) !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  box-shadow: none !important;
+}
+
+.plive-nested .ant-table,
+.plive-nested .ant-empty-description {
+  font-size: 13px;
+}
+
+.pulse-shell .pulse-body.pulse-body-live.ant-layout-content {
+  background: transparent !important;
+}
+
+.pulse-scroll-live {
+  overflow: auto;
+  min-height: 100%;
+  background: transparent;
+}
+
+@media (max-width: 980px) {
+  .plive-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+:root[data-theme='dark'] .plive-metric p,
+:root[data-theme='dark'] .plive-metric span {
+  color: rgba(243, 241, 250, 0.58);
+}
+
+:root[data-theme='dark'] .plive-metric strong {
+  color: #f3f1fa;
+}

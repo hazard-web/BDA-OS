@@ -88,6 +88,52 @@
   outline: none;
 }
 
+.af-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 20px;
+  text-align: center;
+}
+
+.af-profile .ant-avatar {
+  border: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.af-profile .ant-avatar.ant-avatar-image {
+  background: transparent;
+}
+
+.af-profile .ant-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.af-profile .ant-typography {
+  margin: 0 !important;
+}
+
+.af-profile-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.af-profile .ant-btn-primary.ant-btn-dangerous {
+  margin-top: 10px;
+  min-width: 140px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.af-panel-inner.is-pulse .af-section-label {
+  margin-top: 4px;
+}
+
 .af-section-label.ant-typography {
   display: block;
   margin: 0 0 10px;

@@ -200,9 +200,9 @@ export function getPulseOpenPath(user) {
   return PULSE_HOME
 }
 
-/** After company login / OAuth — land on Accounts. */
-export function getPostLoginPath() {
-  return '/account'
+/** After company login / OAuth — open Pulse. */
+export function getPostLoginPath(user) {
+  return getPulseOpenPath(user)
 }
 
 /** Remember last Pulse screen so reopen resumes there. */

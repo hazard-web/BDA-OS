@@ -1,0 +1,58 @@
+.pos-logo-load {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #fff;
+}
+
+.pos-logo-load.is-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  min-height: 0;
+}
+
+.pos-logo-load.is-fixed {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  min-height: 0;
+}
+
+.pos-logo-load-orbit {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: grid;
+  place-items: center;
+}
+
+.pos-logo-load-ring {
+  position: absolute;
+  inset: 0;
+  width: 80px;
+  height: 80px;
+  animation: pos-logo-spin 0.85s linear infinite;
+}
+
+.pos-logo-load-orbit .people-os-mark {
+  animation: pos-logo-breathe 1.35s ease-in-out infinite;
+}
+
+@keyframes pos-logo-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pos-logo-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pos-logo-load-ring,
+  .pos-logo-load-orbit .people-os-mark {
+    animation: none;
+  }
+}

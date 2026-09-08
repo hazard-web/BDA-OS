@@ -45,6 +45,7 @@ function publicUserFields(user) {
     firstName: plain.firstName || '',
     lastName: plain.lastName || '',
     displayName: plain.displayName || '',
+    avatarUrl: plain.avatarUrl || '',
     role: plain.role || 'admin',
     organizationId: plain.organizationId || plain._id,
     onboardingCompleted: plain.onboardingCompleted !== false,

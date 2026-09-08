@@ -3,17 +3,17 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 const ease = [0.22, 1, 0.36, 1]
 
-/** Soft enter for My Space overview sections. */
-export function PulseMotion({ children, className, delay = 0, y = 10, style }) {
+/** Soft enter for My Space overview sections. Use fade on glass so transform does not kill blur. */
+export function PulseMotion({ children, className, delay = 0, y = 10, style, fade = false }) {
   const reduce = useReducedMotion()
   if (reduce) return <div className={className} style={style}>{children}</div>
   return (
     <motion.div
       className={className}
       style={style}
-      initial={{ opacity: 0, y }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.38, delay, ease }}
+      initial={fade ? { opacity: 0 } : { opacity: 0, y }}
+      animate={fade ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      transition={{ duration: fade ? 0.32 : 0.38, delay, ease }}
     >
       {children}
     </motion.div>

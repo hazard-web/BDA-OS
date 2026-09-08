@@ -53,6 +53,23 @@ const shared = {
       contentFontSize: 32,
       titleFontSize: 13,
     },
+    Select: {
+      hoverBorderColor: '#D9D9D9',
+      activeBorderColor: '#D9D9D9',
+      activeOutlineColor: 'transparent',
+      optionActiveBg: '#E6EAF1',
+      optionSelectedBg: '#EAEEF4',
+      optionSelectedColor: '#1C1917',
+      optionSelectedFontWeight: 400,
+      // Paints an option that is both selected and keyboard-active.
+      controlItemBgActiveHover: '#E6EAF1',
+    },
+    DatePicker: {
+      hoverBorderColor: '#D9D9D9',
+      activeBorderColor: '#D9D9D9',
+      activeShadow: 'none',
+      activeOutlineColor: 'transparent',
+    },
   },
 }
 
@@ -98,6 +115,22 @@ export const darkTheme = {
       headerBg: '#241F1C',
       headerColor: '#A8A29E',
       rowHoverBg: '#241F1C',
+    },
+    Select: {
+      hoverBorderColor: '#3F3B36',
+      activeBorderColor: '#3F3B36',
+      activeOutlineColor: 'transparent',
+      optionActiveBg: '#332F2B',
+      optionSelectedBg: '#3A352F',
+      optionSelectedColor: '#F5F2EC',
+      optionSelectedFontWeight: 400,
+      controlItemBgActiveHover: '#332F2B',
+    },
+    DatePicker: {
+      hoverBorderColor: '#3F3B36',
+      activeBorderColor: '#3F3B36',
+      activeShadow: 'none',
+      activeOutlineColor: 'transparent',
     },
   },
 }

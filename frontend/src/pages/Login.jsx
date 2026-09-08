@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, ScanLine } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { toastWelcomeBack } from '../components/PosToast'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 import AuthShell from '../components/auth/AuthShell'
-import AuthSocialRow, { AuthSocialGrid } from '../components/auth/AuthSocialRow'
+import AuthSocialRow from '../components/auth/AuthSocialRow'
 import AuthMorphButton from '../components/auth/AuthMorphButton'
 import { AuthLogoLoader, useAuthRedirect } from '../components/auth/AuthLogoLoader'
 import { oauthStartUrl } from '../components/auth/oauthUrls'
@@ -15,7 +14,7 @@ import { getPostLoginPath } from '../utils/pulseEntry'
 import { companyEmailRequiredMessage, isCompanyEmail } from '../utils/companyDomain'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, endExit } = useAuth()
   const { redirecting, redirectTo, onRedirectClick } = useAuthRedirect()
   const [searchParams, setSearchParams] = useSearchParams()
   const [step, setStep] = useState(1)
@@ -25,6 +24,10 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const oauthToastShown = useRef(false)
+
+  useEffect(() => {
+    endExit?.()
+  }, [endExit])
 
   useEffect(() => {
     const err = searchParams.get('oauth_error')
@@ -85,7 +88,6 @@ export default function Login() {
       }
       const res = await api.post('/auth/login', payload)
       login(res.data.token, res.data.user)
-      toastWelcomeBack(res.data.user?.firstName || res.data.user?.displayName)
       redirectTo(getPostLoginPath(res.data.user), { replace: true })
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Invalid email or password.')
@@ -96,27 +98,28 @@ export default function Login() {
   return (
     <>
       <AuthLogoLoader show={redirecting} />
+      {/* Try smart sign-in — keep in codebase, hidden from the sign-in screen
+      <a href="/smart-signin" className="auth-smart" onClick={onRedirectClick('/smart-signin')}>
+        <ScanLine size={15} strokeWidth={2.4} />
+        Try smart sign-in
+        <span className="auth-sparks" aria-hidden="true">
+          <svg className="auth-spark auth-spark--lg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C12 6.627 17.373 12 24 12 17.373 12 12 17.373 12 24 12 17.373 6.627 12 0 12 6.627 12 12 6.627 12 0Z" />
+          </svg>
+          <svg className="auth-spark auth-spark--sm" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C12 6.627 17.373 12 24 12 17.373 12 12 17.373 12 24 12 17.373 6.627 12 0 12 6.627 12 12 6.627 12 0Z" />
+          </svg>
+        </span>
+      </a>
+      */}
       <AuthShell
         title="Sign in"
         subtitle="to access People OS"
-        headerRight={
-          <a href="/smart-signin" className="auth-smart" onClick={onRedirectClick('/smart-signin')}>
-            <ScanLine size={15} strokeWidth={2.4} />
-            Try smart sign-in
-            <span className="auth-sparks" aria-hidden="true">
-              <svg className="auth-spark auth-spark--lg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C12 6.627 17.373 12 24 12 17.373 12 12 17.373 12 24 12 17.373 6.627 12 0 12 6.627 12 12 6.627 12 0Z" />
-              </svg>
-              <svg className="auth-spark auth-spark--sm" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C12 6.627 17.373 12 24 12 17.373 12 12 17.373 12 24 12 17.373 6.627 12 0 12 6.627 12 12 6.627 12 0Z" />
-              </svg>
-            </span>
-          </a>
-        }
       >
-        {step === 'more' ? (
+        {/* {step === 'more' ? (
           <AuthSocialGrid onBack={() => setStep(1)} />
-        ) : step === 1 ? (
+        ) :  */}
+        {step === 1 ? (
           <form onSubmit={goNext}>
             {oauthError ? (
               <div className="auth-oauth-banner" role="alert">
@@ -140,7 +143,7 @@ export default function Login() {
               <AuthMorphButton loading={checkingEmail}>Next</AuthMorphButton>
             </div>
 
-            <AuthSocialRow onMore={() => setStep('more')} />
+            <AuthSocialRow />
           </form>
         ) : (
           <form onSubmit={handleSubmit}>

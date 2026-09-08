@@ -12,9 +12,52 @@ function statusClass(status) {
   if (status === 'Weekend') return 'is-weekend'
   if (status === 'Absent') return 'is-absent'
   if (status === 'Present') return 'is-present'
-  if (status === 'On Leave') return 'is-leave'
+  if (status === 'On Leave' || status === 'Leave applied') return 'is-leave'
   if (status === 'Holiday') return 'is-holiday'
   return ''
+}
+
+function formatLoggedDuration(day) {
+  const secs = Math.max(
+    0,
+    Math.floor(
+      Number(day.seconds) >= 0
+        ? Number(day.seconds) || 0
+        : (Number(day.hours) || 0) * 3600,
+    ),
+  )
+  if (secs <= 0) return null
+  if (secs < 60) return `${secs}s`
+  const hours = Math.floor(secs / 3600)
+  const mins = Math.floor((secs % 3600) / 60)
+  if (hours <= 0) return `${mins}m`
+  if (mins <= 0) return `${hours}h`
+  return `${hours}h ${String(mins).padStart(2, '0')}m`
+}
+
+/**
+ * Past workday with 0h and no leave → Absent.
+ * Leave applied/approved → leave label.
+ * Hours logged → show time (seconds when under 1m).
+ */
+function dayStatusLine(day) {
+  if (day.status === 'Weekend') return { text: 'Weekend', kind: 'Weekend' }
+  if (day.status === 'Holiday') return { text: 'Holiday', kind: 'Holiday' }
+  if (day.onLeave || day.status === 'On Leave' || day.status === 'Leave applied') {
+    return { text: day.leaveLabel || day.status || 'On Leave', kind: 'On Leave' }
+  }
+  if (day.status === 'Absent') return { text: 'Absent', kind: 'Absent' }
+
+  const label = formatLoggedDuration(day)
+  if (label) return { text: label, kind: 'Present' }
+
+  // 0 time on a past workday without leave = Absent
+  if (day.past && !day.weekend && !day.holiday) {
+    return { text: 'Absent', kind: 'Absent' }
+  }
+
+  if (day.today) return { text: '—', kind: '' }
+  return null
 }
 
 function ScheduleMark() {
@@ -36,6 +79,7 @@ function ScheduleMark() {
 export function usePulseWorkWeek({
   useSample = false,
   checkedInToday = false,
+  todaySeconds = 0,
   todayHours = 0,
 } = {}) {
   const range = useMemo(() => weekRange(new Date()), [])
@@ -43,6 +87,7 @@ export function usePulseWorkWeek({
   const [workDays, setWorkDays] = useState(DEFAULT_WORK_DAYS)
   const [holidays, setHolidays] = useState([])
   const [leaveDates, setLeaveDates] = useState([])
+  const [leaveByDate, setLeaveByDate] = useState({})
   const [leaveBalances, setLeaveBalances] = useState([])
   const [approvals, setApprovals] = useState([])
   const [announcements, setAnnouncements] = useState([])
@@ -56,6 +101,7 @@ export function usePulseWorkWeek({
       setWorkDays(DEFAULT_WORK_DAYS)
       setHolidays([])
       setLeaveDates([])
+      setLeaveByDate({})
       setLeaveBalances([])
       setApprovals([])
       setAnnouncements([])
@@ -77,6 +123,7 @@ export function usePulseWorkWeek({
         )
         setHolidays(Array.isArray(payload.holidays) ? payload.holidays : [])
         setLeaveDates(Array.isArray(payload.leaveDates) ? payload.leaveDates : [])
+        setLeaveByDate(payload.leaveByDate && typeof payload.leaveByDate === 'object' ? payload.leaveByDate : {})
         setLeaveBalances(Array.isArray(payload.leaveBalances) ? payload.leaveBalances : [])
         setApprovals(Array.isArray(payload.approvals) ? payload.approvals : [])
         setAnnouncements(Array.isArray(payload.announcements) ? payload.announcements : [])
@@ -109,11 +156,13 @@ export function usePulseWorkWeek({
         workDays,
         checkedInToday,
         leaveDates,
+        leaveByDate,
         holidays,
+        todaySeconds,
         todayHours,
         useSample,
       }),
-    [records, workDays, checkedInToday, leaveDates, holidays, todayHours, useSample],
+    [records, workDays, checkedInToday, leaveDates, leaveByDate, holidays, todaySeconds, todayHours, useSample],
   )
 
   return {
@@ -159,23 +208,26 @@ export default function PulseWorkSchedule({ week }) {
           <div className="ms-week-rail" aria-hidden="true">
             <span className="ms-week-line" />
           </div>
-          {days.map((day) => (
-            <div
-              key={day.key}
-              className={['ms-day', statusClass(day.status), day.today ? 'is-today' : '']
-                .filter(Boolean)
-                .join(' ')}
-              role="listitem"
-            >
-              <span className="ms-day-dash" aria-hidden="true" />
-              <span className="ms-day-dot" aria-hidden="true" />
-              <div className="ms-day-label">
-                <span className="ms-day-name">{day.label}</span>
-                <span className="ms-day-num">{day.num}</span>
-                {day.status ? <small>{day.status}</small> : null}
+          {days.map((day) => {
+            const line = dayStatusLine(day)
+            return (
+              <div
+                key={day.key}
+                className={['ms-day', statusClass(line?.kind || day.status), day.today ? 'is-today' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+                role="listitem"
+              >
+                <span className="ms-day-dash" aria-hidden="true" />
+                <span className="ms-day-dot" aria-hidden="true" />
+                <div className="ms-day-label">
+                  <span className="ms-day-name">{day.label}</span>
+                  <span className="ms-day-num">{day.num}</span>
+                  {line ? <small>{line.text}</small> : <small className="is-empty">&nbsp;</small>}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </article>

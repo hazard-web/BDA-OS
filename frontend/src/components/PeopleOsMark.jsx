@@ -1,35 +1,19 @@
-/** People OS brand mark - four-square grid (red / amber / green / blue). */
+/** People OS brand mark — four-square grid (red / amber / green / blue). */
 export default function PeopleOsMark({ size = 18, className = '', title = 'People OS' }) {
-  const gap = Math.max(1, Math.round(size * 0.08))
-  const cell = Math.floor((size - gap) / 2)
-  const radius = Math.max(1, Math.round(cell * 0.18))
-  const cellStyle = (background) => ({
-    display: 'block',
-    width: cell,
-    height: cell,
-    borderRadius: radius,
-    background,
-  })
-
   return (
-    <span
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 18 18"
       className={`people-os-mark${className ? ` ${className}` : ''}`}
+      xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label={title}
-      style={{
-        display: 'inline-grid',
-        gridTemplateColumns: `${cell}px ${cell}px`,
-        gap,
-        width: size,
-        height: size,
-        flexShrink: 0,
-        boxSizing: 'border-box',
-      }}
     >
-      <i style={cellStyle('#e42527')} />
-      <i style={cellStyle('#f5c400')} />
-      <i style={cellStyle('#21a05a')} />
-      <i style={cellStyle('#2b8aed')} />
-    </span>
+      <rect x="0" y="0" width="8" height="8" rx="1.6" fill="#e42527" />
+      <rect x="10" y="0" width="8" height="8" rx="1.6" fill="#f5c400" />
+      <rect x="0" y="10" width="8" height="8" rx="1.6" fill="#21a05a" />
+      <rect x="10" y="10" width="8" height="8" rx="1.6" fill="#2b8aed" />
+    </svg>
   )
 }

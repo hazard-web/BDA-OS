@@ -16,7 +16,6 @@ import {
   ClusterOutlined,
   CompassOutlined,
   FolderOpenOutlined,
-  GiftOutlined,
   GlobalOutlined,
   HeartOutlined,
   IdcardOutlined,
@@ -25,13 +24,12 @@ import {
   RocketOutlined,
   SolutionOutlined,
   ThunderboltOutlined,
-  UsergroupAddOutlined,
   AppstoreOutlined,
 } from '@ant-design/icons'
 import PulseInviteAdmin from './PulseInviteAdmin'
-import PulseCheckInAdmin from './PulseCheckInAdmin'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
+import PulseLiveModule, { PulseAnnouncementsBoard } from './PulseLiveWorkspace'
 
 export const BDA_LOGO = '/bda-logo.png'
 export const BDA_LOGO_WIDE = '/bda-logo-wide.png'
@@ -61,18 +59,10 @@ const SERVICES = [
   { key: 'travel', label: 'Travel', Icon: CompassOutlined, color: '#E67E22' },
   { key: 'tasks', label: 'Tasks', Icon: AuditOutlined, color: '#E42527' },
   { key: 'compensation', label: 'Compensation', Icon: BankOutlined, color: '#E42527' },
-  { key: 'general', label: 'General', Icon: IdcardOutlined, color: '#D4A017' },
+  { key: 'general', label: 'Additional', Icon: IdcardOutlined, color: '#D4A017' },
   { key: 'apps', label: 'App access', Icon: AppstoreOutlined, color: '#1A5F4A' },
   { key: 'okr', label: 'OKR', Icon: ClusterOutlined, color: '#D4A017' },
 ]
-
-function ComingSoon({ title }) {
-  return (
-    <Card size="small" className="pulse-org-card">
-      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={`${title} is coming soon`} />
-    </Card>
-  )
-}
 
 function ServiceTile({ item, active, onClick }) {
   const Icon = item.Icon
@@ -90,7 +80,7 @@ function ServiceTile({ item, active, onClick }) {
   )
 }
 
-function OverviewPanel({ user, onSoon, onTab }) {
+function OverviewPanel({ user, onSoon, onTab, liveProps }) {
   const [mainTab, setMainTab] = useState('services')
   const [service, setService] = useState(null)
 
@@ -100,21 +90,11 @@ function OverviewPanel({ user, onSoon, onTab }) {
 
   const serviceBody = useMemo(() => {
     if (!service) return null
-    if (service === 'attendance' || service === 'time') {
-      return <PulseCheckInAdmin />
-    }
-    if (service === 'general') {
-      return <PulseInviteAdmin />
-    }
-    if (service === 'onboarding') {
-      return <PulseOnboarding />
-    }
-    if (service === 'apps') {
-      return <PulseAppGrantsAdmin />
-    }
-    const label = SERVICES.find((s) => s.key === service)?.label || 'Service'
-    return <ComingSoon title={label} />
-  }, [service])
+    if (service === 'onboarding') return <PulseOnboarding />
+    if (service === 'apps') return <PulseAppGrantsAdmin />
+    const kind = service === 'general' ? 'additional' : service
+    return <PulseLiveModule kind={kind} scope="org" {...liveProps} />
+  }, [service, liveProps])
 
   return (
     <div className="pulse-org-overview">
@@ -242,9 +222,9 @@ function OverviewPanel({ user, onSoon, onTab }) {
 }
 
 /** Pulse Organization — org home with Ant Design. */
-export default function PulseOrganization({ user, tab = 'overview', onSoon, onTab }) {
+export default function PulseOrganization({ user, tab = 'overview', onSoon, onTab, liveProps, calendar }) {
   if (tab === 'overview') {
-    return <OverviewPanel user={user} onSoon={onSoon} onTab={onTab} />
+    return <OverviewPanel user={user} onSoon={onSoon} onTab={onTab} liveProps={liveProps} />
   }
 
   if (tab === 'onboarding') {
@@ -264,89 +244,28 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, onTa
   }
 
   if (tab === 'department-tree') {
-    return (
-      <div className="pulse-org-page">
-        <Card size="small" className="pulse-org-card" title="Department Tree">
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="Build departments to see the tree here"
-          />
-        </Card>
-      </div>
-    )
+    return <PulseLiveModule kind="departments" scope="org" {...liveProps} />
   }
 
   if (tab === 'announcements') {
-    return (
-      <div className="pulse-org-page">
-        <Card
-          size="small"
-          className="pulse-org-card"
-          title="Announcements"
-          extra={
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => onSoon('New announcement')}>
-              New
-            </Button>
-          }
-        >
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No announcements yet" />
-        </Card>
-      </div>
-    )
+    return <PulseAnnouncementsBoard name={user?.name || 'HR'} />
   }
 
   if (tab === 'policies') {
-    return (
-      <div className="pulse-org-page">
-        <Card size="small" className="pulse-org-card" title="Policies">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No policies published yet" />
-        </Card>
-      </div>
-    )
+    return <PulseLiveModule kind="policies" scope="org" {...liveProps} />
   }
 
   if (tab === 'birthdays') {
-    return (
-      <div className="pulse-org-page">
-        <Card size="small" className="pulse-org-card" title="Birthday Folks">
-          <Empty
-            image={<GiftOutlined style={{ fontSize: 40, color: '#1A5F4A' }} />}
-            description="No birthdays this week"
-          />
-        </Card>
-      </div>
-    )
+    return <PulseLiveModule kind="birthdays" scope="org" {...liveProps} />
   }
 
   if (tab === 'new-hires') {
-    return (
-      <div className="pulse-org-page">
-        <Card size="small" className="pulse-org-card" title="New Hires">
-          <Empty
-            image={<UsergroupAddOutlined style={{ fontSize: 40, color: '#1A5F4A' }} />}
-            description="No new hires to show"
-          />
-        </Card>
-      </div>
-    )
+    return <PulseLiveModule kind="new-hires" scope="org" {...liveProps} />
   }
 
   if (tab === 'calendar') {
-    return (
-      <div className="pulse-org-page">
-        <Card size="small" className="pulse-org-card" title="Calendar">
-          <Empty
-            image={<CalendarOutlined style={{ fontSize: 40, color: '#1A5F4A' }} />}
-            description="Organization calendar is coming soon"
-          />
-        </Card>
-      </div>
-    )
+    return calendar || <PulseLiveModule kind="reports" scope="org" {...liveProps} />
   }
 
-  return (
-    <div className="pulse-org-page">
-      <ComingSoon title={ORG_TABS.find((t) => t.key === tab)?.label || 'Section'} />
-    </div>
-  )
+  return <PulseLiveModule kind="reports" scope="org" {...liveProps} />
 }

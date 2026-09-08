@@ -1,6 +1,6 @@
-import PulseMark from './PulseMark'
+import PeopleOsMark from './PeopleOsMark'
 
-function periodForHour(hour) {
+export function periodForHour(hour) {
   if (hour >= 5 && hour < 12) return 'morning'
   if (hour >= 12 && hour < 17) return 'afternoon'
   return 'evening'
@@ -12,9 +12,18 @@ function greetingTitle(period) {
   return 'Good evening'
 }
 
-function greetingLine(period) {
-  if (period === 'morning') return 'Have a productive day.'
-  if (period === 'afternoon') return 'Keep the momentum going.'
+function greetingLine(period, weekday) {
+  if (period === 'morning') {
+    if (weekday === 1) return 'New week. Start it kindly.'
+    if (weekday === 5) return 'Friday — close the week well.'
+    if (weekday === 0 || weekday === 6) return 'A quieter morning. Take it easy.'
+    return 'The day is still unwritten.'
+  }
+  if (period === 'afternoon') {
+    if (weekday === 5) return 'Almost there. Finish it clean.'
+    return 'Keep the momentum going.'
+  }
+  if (weekday === 5) return "Week's nearly done. Ease out of it."
   return 'Ease into the rest of your evening.'
 }
 
@@ -47,21 +56,21 @@ function MoonMark() {
   )
 }
 
-/** Time-of-day greeting card with drifting clouds, sun, or moon. */
+/** Time-of-day greeting with drifting sky. */
 export default function PulseGreetingBanner({ name, hour = new Date().getHours() }) {
   const period = periodForHour(hour)
   const night = period === 'evening'
+  const weekday = new Date().getDay()
 
   return (
     <article className={`ms-card ms-hello is-${period}`}>
       <span className="ms-hello-logo" aria-hidden="true">
-        <PulseMark size={28} />
+        <PeopleOsMark size={26} title="People OS" />
       </span>
       <div className="ms-hello-copy">
-        <strong>
-          {greetingTitle(period)}, {name}
-        </strong>
-        <span>{greetingLine(period)}</span>
+        <span className="ms-hello-greet">{greetingTitle(period)}</span>
+        <strong className="ms-hello-name">{name}</strong>
+        <span className="ms-hello-line">{greetingLine(period, weekday)}</span>
       </div>
       <div className="ms-sky" aria-hidden="true">
         <Cloud className="ms-cloud ms-cloud-a" delay="0s" />

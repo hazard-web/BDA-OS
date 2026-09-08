@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import DocumentTitle from './components/DocumentTitle'
 import PulseLoading from './components/PulseLoading'
 import PulseCheckInHeartbeat from './components/PulseCheckInHeartbeat'
 import { useAuth } from './context/AuthContext'
+import { lockPulsePageZoom } from './utils/pulsePageZoom'
 
 import Login from './pages/Login'
 import ComingSoon from './pages/ComingSoon'
@@ -12,7 +14,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import VerifyAction from './pages/VerifyAction'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-import SmartSignIn from './pages/SmartSignIn'
+// import SmartSignIn from './pages/SmartSignIn'
 import OAuthCallback from './pages/OAuthCallback'
 import OAuthCreateAccount from './pages/OAuthCreateAccount'
 import HrSetup from './pages/HrSetup'
@@ -26,7 +28,7 @@ import AccountPortal from './pages/AccountPortal'
 
 /** Company User auth — Pulse only (no Rohit HR / Team Portal). */
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { user, loading, exitBusy } = useAuth()
   const location = useLocation()
   if (loading) {
     const onPulse =
@@ -36,6 +38,7 @@ function ProtectedRoute({ children }) {
     }
     return <div style={{ minHeight: '100vh', background: '#fff' }} aria-hidden="true" />
   }
+  if (!user && exitBusy) return <PulseLoading label="Signing out" />
   if (!user) return <Navigate to="/login" replace />
   return children
 }
@@ -45,11 +48,19 @@ function LegacyRedirect() {
   return <Navigate to="/pulse" replace />
 }
 
+function PulsePageZoomLock() {
+  const { pathname } = useLocation()
+  const onPulse = pathname === '/pulse' || pathname.startsWith('/pulse/')
+  useEffect(() => (onPulse ? lockPulsePageZoom() : undefined), [onPulse])
+  return null
+}
+
 export default function App() {
   return (
     <>
       <DocumentTitle />
       <PulseCheckInHeartbeat />
+      <PulsePageZoomLock />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
@@ -122,7 +133,7 @@ export default function App() {
         <Route path="/people" element={<Navigate to="/pulse" replace />} />
         <Route path="/people/home" element={<Navigate to="/pulse/home" replace />} />
 
-        <Route path="/smart-signin" element={<SmartSignIn />} />
+        {/* <Route path="/smart-signin" element={<SmartSignIn />} /> */}
         <Route path="/coming-soon" element={<ComingSoon />} />
         <Route path="/people-os" element={<PeopleOsLive />} />
         <Route path="/register" element={<Register />} />
@@ -165,8 +176,8 @@ export default function App() {
         <Route path="/profile" element={<LegacyRedirect />} />
         <Route path="/generate" element={<LegacyRedirect />} />
 
-        <Route path="/" element={<Navigate to="/account" replace />} />
-        <Route path="*" element={<Navigate to="/account" replace />} />
+        <Route path="/" element={<Navigate to="/pulse" replace />} />
+        <Route path="*" element={<Navigate to="/pulse" replace />} />
       </Routes>
     </>
   )
