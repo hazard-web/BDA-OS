@@ -26,16 +26,12 @@ const RESERVED_PORTAL_SEGMENTS = new Set([
   'reset-password',
   'verify',
   'verify-email',
+  'invite',
+  'onboard',
   'api',
 ])
 
 export const PULSE_HOME = '/pulse/home'
-
-const PULSE_SKIP_REMEMBER = new Set([
-  '/pulse',
-  '/pulse/getting-started',
-  `/pulse${PULSE_GETTING_STARTED_SUFFIX}`,
-])
 
 export function normalizePulsePortalId(portalId) {
   return String(portalId || '')
@@ -149,10 +145,6 @@ export function needsPulseGettingStartedGuide() {
   return getPulseSampleChoice() === '0' && !hasPulseGuideDismissed()
 }
 
-function isGettingStartedPath(path) {
-  return typeof path === 'string' && path.endsWith(PULSE_GETTING_STARTED_SUFFIX)
-}
-
 export function markPulseAccountCreated(portalId) {
   try {
     localStorage.setItem('pulseAccountCreated', normalizePulsePortalId(portalId) || '1')
@@ -175,6 +167,8 @@ export function hasPulseAccount(user) {
   }
 }
 
+const PULSE_RESUME_PATHS = new Set([PULSE_HOME, '/pulse/company'])
+
 /** Where to open Pulse from the apps launcher / deep links. */
 export function getPulseOpenPath(user) {
   if (!hasPulseAccount(user)) return '/pulse'
@@ -184,15 +178,7 @@ export function getPulseOpenPath(user) {
 
   try {
     const last = localStorage.getItem('pulseLastPath')
-    if (
-      last &&
-      last.startsWith('/') &&
-      last !== '/pulse' &&
-      !PULSE_SKIP_REMEMBER.has(last) &&
-      !isGettingStartedPath(last)
-    ) {
-      return last
-    }
+    if (last && PULSE_RESUME_PATHS.has(last)) return last
   } catch {
     /* ignore */
   }
@@ -200,17 +186,20 @@ export function getPulseOpenPath(user) {
   return PULSE_HOME
 }
 
-/** After company login / OAuth — open Pulse. */
+/** After company login / OAuth — always You Overview, not a leftover service tab. */
 export function getPostLoginPath(user) {
-  return getPulseOpenPath(user)
+  if (!hasPulseAccount(user)) return '/pulse'
+  if (!hasPulseSampleChoice() || needsPulseGettingStartedGuide()) {
+    return getPulseGettingStartedPath(user)
+  }
+  return PULSE_HOME
 }
 
-/** Remember last Pulse screen so reopen resumes there. */
+/** Remember last Pulse screen so reopen resumes there. Never persist service URLs. */
 export function rememberPulsePath(pathname) {
   if (!pathname) return
   const path = pathname.replace(/\/+$/, '') || '/'
-  if (PULSE_SKIP_REMEMBER.has(path) || isGettingStartedPath(path)) return
-  if (!(path.startsWith('/pulse') || /^\/[^/]+\/settings\//.test(path))) return
+  if (!PULSE_RESUME_PATHS.has(path)) return
   try {
     localStorage.setItem('pulseLastPath', path)
   } catch {

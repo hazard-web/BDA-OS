@@ -266,7 +266,7 @@ export default function PulseLiveModule({
   if (kind === 'onboarding') {
     if (org) {
       return (
-        <PulseGlassBoard title="Onboarding" kicker="Candidates" extra={<div className="plive-nested"><PulseOnboarding /></div>} />
+        <PulseGlassBoard title="Onboarding" kicker="Employees" extra={<div className="plive-nested"><PulseOnboarding /></div>} />
       )
     }
     return (

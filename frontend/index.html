@@ -88,6 +88,21 @@
         if (icon) icon.setAttribute('href', fav + '?v12');
         var apple = document.querySelector("link[rel='apple-touch-icon']");
         if (apple) apple.setAttribute('href', fav + '?v12');
+        var query = location.search || '';
+        var pulseBoot =
+          /(?:^|[?&])boot=1(?:&|$)/.test(query) ||
+          /(?:^|[?&])open=/.test(query);
+        if (
+          pulseBoot &&
+          /^\/pulse\/(home|onboarding|leave|attendance|time|apps)$/.test(path)
+        ) {
+          document.documentElement.classList.add('bda-open-boot');
+          var preload = document.createElement('link');
+          preload.rel = 'preload';
+          preload.as = 'image';
+          preload.href = '/bda-logo-lockup.png';
+          document.head.appendChild(preload);
+        }
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -102,6 +117,12 @@
       html, body { margin: 0; padding: 0; background: #fff; color: #1a1a1a; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       /* No green "Loading..." flash - keep blank until React paints */
       #root:empty { min-height: 100vh; background: #fff; }
+      html.bda-open-boot,
+      html.bda-open-boot body,
+      html.bda-open-boot #root,
+      html.bda-open-boot #root:empty {
+        background: #fcfcfa !important;
+      }
     </style>
   </head>
   <body>

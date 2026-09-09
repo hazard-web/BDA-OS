@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import api from '../api'
 import AuthShell from '../components/auth/AuthShell'
 import { AuthLogoLoader, useAuthRedirect } from '../components/auth/AuthLogoLoader'
-import { companyEmailRequiredMessage, isCompanyEmail } from '../utils/companyDomain'
+import { companyEmailRequiredMessage, isCompanyEmail, normalizeCompanyEmail } from '../utils/companyDomain'
 
 /**
  * Bootstrap only: creates the first Pulse admin when the database has zero users.
@@ -22,14 +22,19 @@ export default function Register() {
       toast.error('Password must be at least 6 characters.')
       return
     }
-    if (!isCompanyEmail(form.email)) {
+    const email = normalizeCompanyEmail(form.email)
+    if (!email) {
+      toast.error('Enter your email address')
+      return
+    }
+    if (!isCompanyEmail(email)) {
       toast.error(companyEmailRequiredMessage())
       return
     }
     setLoading(true)
     try {
       await api.post('/auth/register', {
-        email: form.email.trim().toLowerCase(),
+        email,
         password: form.password,
         companyName: form.companyName.trim(),
       })
@@ -64,7 +69,11 @@ export default function Register() {
           <div className="auth-field">
             <input
               className="auth-input"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
               autoFocus
               autoComplete="username"

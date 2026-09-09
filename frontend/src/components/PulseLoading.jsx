@@ -1,6 +1,6 @@
-import { AuthLogoLoader } from './auth/AuthLogoLoader'
+import BdaGateLoader from './BdaGateLoader'
 
-/** Pulse wait screen: same People OS mark as account login. */
+/** Pulse wait screen: People OS mark in BDA green. */
 export default function PulseLoading({ label = 'Loading' }) {
-  return <AuthLogoLoader show label={label} />
+  return <BdaGateLoader show label={label} />
 }

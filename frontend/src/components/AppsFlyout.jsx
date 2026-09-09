@@ -16,6 +16,7 @@ import {
 import { InfoCircleOutlined, SearchOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
 import { getPulseOpenPath } from '../utils/pulseEntry'
+import { goToLoginOrCloseTab } from '../utils/pulseAuthSync'
 import PulseMark from './PulseMark'
 import api from '../api'
 import './apps-flyout.css'
@@ -299,7 +300,7 @@ export default function AppsFlyout({
                         }
                         onClose()
                         logout()
-                        navigate('/login', { replace: true })
+                        goToLoginOrCloseTab(navigate)
                       }}
                     >
                       Sign Out

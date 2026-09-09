@@ -13,12 +13,19 @@ const TITLES = [
   ['/pulse/settings/service/getting-started', 'Getting Started'],
   ['/pulse/getting-started', 'Getting Started'],
   ['/pulse/notes', 'Notebook'],
+  ['/pulse/onboarding', 'Employee'],
+  ['/pulse/company', 'Company'],
+  ['/pulse/leave', 'Leave Tracker'],
+  ['/pulse/attendance', 'Attendance'],
+  ['/pulse/time', 'Time Tracker'],
+  ['/pulse/apps', 'App access'],
   ['/pulse/home', 'My Space'],
   ['/pulse', 'Pulse'],
   ['/people-os', 'People OS'],
   ['/verify-email', 'Verify email'],
   ['/reset-password', 'Reset password'],
   ['/invite', 'Accept invite'],
+  ['/onboard', 'Complete your details'],
   ['/register', 'Create admin'],
   ['/forgot', 'Forgot password'],
   ['/verify', 'Verify'],
@@ -58,6 +65,8 @@ function faviconForPath(pathname) {
     path === '/' ||
     path === '/pulse' ||
     path.startsWith('/pulse/') ||
+    path.startsWith('/onboard') ||
+    path.startsWith('/invite') ||
     path.startsWith('/people') ||
     /^\/[^/]+\/settings\/service\/getting-started$/.test(path)
   ) {

@@ -2,14 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
 import { HolderOutlined } from '@ant-design/icons'
-import {
-  Avatar,
-  Button,
-  Card,
-  Tag,
-  Typography,
-} from 'antd'
-import PulseGreetingBanner, { periodForHour } from './PulseGreetingBanner'
+import { Circle, Pause } from '@phosphor-icons/react'
+import { Avatar, Button, Card } from 'antd'
+import PulseGreetingBanner, { periodForHour, PulseSkyWash } from './PulseGreetingBanner'
 import PulseWorkSchedule from './PulseWorkSchedule'
 import PulseMySpaceCalendar from './PulseMySpaceCalendar'
 import PulseDeskGames from './PulseDeskGames'
@@ -122,46 +117,109 @@ function PortraitCard({ name, role, portraitSrc, user, initial, onPointerDown })
   )
 }
 
-function CheckinCard({ name, initial, checkedInAt, elapsed, checkBusy, onCheckIn }) {
+function checkInView(checkedInAt, elapsed) {
+  if (checkedInAt) {
+    return {
+      mode: 'live',
+      status: 'On the clock',
+      action: 'Check out',
+      busy: 'Checking out',
+    }
+  }
+  if (elapsed > 0) {
+    return {
+      mode: 'paused',
+      status: 'Paused',
+      action: 'Resume',
+      busy: 'Resuming',
+    }
+  }
+  return {
+    mode: 'idle',
+    status: 'Not started',
+    action: 'Check in',
+    busy: 'Checking in',
+  }
+}
+
+function ElapsedFace({ seconds, mode }) {
+  const stamp = formatElapsed(seconds)
+  const [hours, minutes, secs] = stamp.split(':')
+  const spoken =
+    mode === 'live'
+      ? `On the clock, ${stamp} elapsed`
+      : mode === 'paused'
+        ? `Paused, ${stamp} worked so far`
+        : `Not started, ${stamp}`
   return (
-    <Card className="pulse-checkin-card" size="small">
+    <p
+      className={`pulse-checkin-time is-${mode}`}
+      role="timer"
+      aria-live={mode === 'live' ? 'polite' : 'off'}
+      aria-label={spoken}
+    >
+      {mode === 'live' ? <Circle className="pulse-checkin-beat" weight="fill" size={10} aria-hidden="true" /> : null}
+      {mode === 'paused' ? <Pause className="pulse-checkin-pause" weight="fill" size={18} aria-hidden="true" /> : null}
+      <span>{hours}</span>
+      <span className="pulse-checkin-colon" aria-hidden="true">:</span>
+      <span>{minutes}</span>
+      <span className="pulse-checkin-colon" aria-hidden="true">:</span>
+      <span>{secs}</span>
+    </p>
+  )
+}
+
+function CheckinCard({ name, initial, avatarUrl, hour, checkedInAt, elapsed, checkBusy, onCheckIn }) {
+  const view = checkInView(checkedInAt, elapsed)
+  const period = periodForHour(hour)
+  return (
+    <Card
+      className={`pulse-checkin-card is-${view.mode} is-${period}`}
+      size="small"
+      aria-label={`${name}'s check-in`}
+    >
+      <PulseSkyWash hour={hour} />
       <PulseCheckinBuddy checkedIn={Boolean(checkedInAt)} />
       <div className="pulse-checkin-head">
-        <Avatar size={44} className="pulse-avatar">{initial}</Avatar>
-        <div className="pulse-checkin-meta">
-          <Typography.Text strong ellipsis>{name}</Typography.Text>
-          <Tag color={checkedInAt ? 'success' : elapsed > 0 ? 'default' : 'error'}>
-            {checkedInAt ? "You're in" : elapsed > 0 ? 'Day still open' : 'Ready when you are'}
-          </Tag>
+        <Avatar
+          size={40}
+          src={avatarUrl || undefined}
+          className="pulse-avatar pulse-checkin-face"
+          referrerPolicy="no-referrer"
+        >
+          {initial}
+        </Avatar>
+        <div className="pulse-checkin-who">
+          <strong>{name}</strong>
+          <span className={`pulse-checkin-status is-${view.mode}`}>{view.status}</span>
         </div>
+        <time className="pulse-checkin-date" dateTime={format(new Date(), 'yyyy-MM-dd')}>
+          {format(new Date(), 'EEE d MMM')}
+        </time>
       </div>
       <div className="pulse-checkin-main">
-        <div className={`pulse-checkin-time${checkedInAt ? ' is-live' : elapsed > 0 ? ' is-paused' : ' is-idle'}`} aria-live="polite">
-          {formatElapsed(elapsed)}
+        <div className="pulse-checkin-clock">
+          <ElapsedFace seconds={elapsed} mode={view.mode} />
         </div>
-        {!checkedInAt ? (
-          <p className="pulse-checkin-nudge">{elapsed > 0 ? 'Pick it up again' : 'Start today'}</p>
-        ) : (
-          <p className="pulse-checkin-nudge is-live">Day in motion</p>
-        )}
         <div className="pulse-checkin-cta-wrap">
           <Button
             type="primary"
             size="large"
             block
+            loading={checkBusy}
             disabled={checkBusy}
-            className={`pulse-checkin-cta${checkedInAt ? ' is-checked-in' : ''}`}
+            aria-busy={checkBusy}
+            className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}`}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation()
               onCheckIn()
             }}
           >
-            {checkedInAt ? 'Check-out' : 'Check-in'}
+            {checkBusy ? view.busy : view.action}
           </Button>
         </div>
       </div>
-      <p className="pulse-checkin-date">{format(new Date(), 'EEEE, d MMM')}</p>
     </Card>
   )
 }
@@ -343,6 +401,8 @@ export default function PulseOverviewHome({
         <CheckinCard
           name={name}
           initial={initial}
+          avatarUrl={user?.avatarUrl}
+          hour={hour}
           checkedInAt={checkedInAt}
           elapsed={elapsed}
           checkBusy={checkBusy}

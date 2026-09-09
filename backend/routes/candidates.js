@@ -1,22 +1,37 @@
+const crypto = require('crypto')
 const express = require('express')
 const { auth } = require('./auth')
 const Candidate = require('../models/Candidate')
+const User = require('../models/User')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
+const { assertAllowedCompanyEmail, completeCompanyEmail } = require('../utils/companyDomain')
+const { sendCandidateOnboardingEmail } = require('../utils/emailService')
+const { buildCandidateOnboardLink } = require('../utils/urlHelper')
+const { createAndSendOrgInvite, inviterDisplayName } = require('../utils/pulseOrgInvite')
 
 const router = express.Router()
 
-const STATUSES = ['Draft', 'Not started', 'In progress', 'Offer sent', 'Joined', 'Withdrawn']
+const STATUSES = ['Draft', 'Not started', 'In progress', 'Details received', 'Offer sent', 'Joined', 'Withdrawn']
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/jpg', 'image/webp']
+const ID_MIMES = [...PHOTO_MIMES, 'application/pdf']
 const LETTER_MIMES = [
   ...PHOTO_MIMES,
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]
+const ONBOARD_TTL_MS = 14 * 24 * 60 * 60 * 1000
 
 function isId(value) {
   return /^[a-fA-F0-9]{24}$/.test(String(value || ''))
+}
+
+function httpError(status, message, code) {
+  const err = new Error(message)
+  err.status = status
+  if (code) err.code = code
+  return err
 }
 
 function requireAdmin(req, res, next) {
@@ -68,8 +83,15 @@ function toListItem(doc) {
     tentativeJoiningDate: row.tentativeJoiningDate || null,
     photo: fileMeta(row.photo),
     offerLetter: fileMeta(row.offerLetter),
+    aadhaarFront: fileMeta(row.aadhaarFront),
+    aadhaarBack: fileMeta(row.aadhaarBack),
+    panFront: fileMeta(row.panFront),
+    panBack: fileMeta(row.panBack),
     addedByName: row.addedByName || '',
     modifiedByName: row.modifiedByName || '',
+    onboardingEmailSentAt: row.onboardingEmailSentAt || null,
+    employeeSubmittedAt: row.employeeSubmittedAt || null,
+    pulseInviteSentAt: row.pulseInviteSentAt || null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
@@ -86,6 +108,44 @@ function toDetail(doc) {
     experience: row.experience || [],
     photo: row.photo && row.photo.data ? row.photo : fileMeta(row.photo),
     offerLetter: row.offerLetter && row.offerLetter.data ? row.offerLetter : fileMeta(row.offerLetter),
+    aadhaarFront: row.aadhaarFront && row.aadhaarFront.data ? row.aadhaarFront : fileMeta(row.aadhaarFront),
+    aadhaarBack: row.aadhaarBack && row.aadhaarBack.data ? row.aadhaarBack : fileMeta(row.aadhaarBack),
+    panFront: row.panFront && row.panFront.data ? row.panFront : fileMeta(row.panFront),
+    panBack: row.panBack && row.panBack.data ? row.panBack : fileMeta(row.panBack),
+  }
+}
+
+function toPublicOnboard(doc, { companyName }) {
+  const detail = toDetail(doc)
+  return {
+    submitted: Boolean(doc.employeeSubmittedAt),
+    companyName: companyName || '',
+    firstName: detail.firstName,
+    lastName: detail.lastName,
+    email: detail.email,
+    officialEmail: detail.officialEmail,
+    phone: detail.phone,
+    countryCode: detail.countryCode,
+    aadhaar: detail.aadhaar,
+    pan: detail.pan,
+    photo: null,
+    aadhaarFront: null,
+    aadhaarBack: null,
+    panFront: null,
+    panBack: null,
+    presentAddress: detail.presentAddress,
+    permanentAddress: detail.permanentAddress,
+    sameAsPresent: detail.sameAsPresent,
+    experienceYears: detail.experienceYears,
+    skillSet: detail.skillSet,
+    highestQualification: detail.highestQualification,
+    additionalInfo: detail.additionalInfo,
+    education: detail.education,
+    experience: detail.experience,
+    tentativeJoiningDate: detail.tentativeJoiningDate,
+    department: detail.department,
+    title: detail.title,
+    workLocation: detail.workLocation,
   }
 }
 
@@ -101,19 +161,13 @@ function sanitizeFile(file, allowedMimes) {
   const size = Number(file.size) || 0
   const mime = cleanStr(file.mime).toLowerCase()
   if (size > MAX_FILE_BYTES) {
-    const err = new Error('File is larger than 5 MB')
-    err.status = 400
-    throw err
+    throw httpError(400, 'File is larger than 5 MB')
   }
   if (data && data.length > MAX_FILE_BYTES * 1.4) {
-    const err = new Error('File is larger than 5 MB')
-    err.status = 400
-    throw err
+    throw httpError(400, 'File is larger than 5 MB')
   }
   if (mime && allowedMimes.length && !allowedMimes.includes(mime) && !mime.startsWith('image/')) {
-    const err = new Error('This file type is not supported')
-    err.status = 400
-    throw err
+    throw httpError(400, 'This file type is not supported')
   }
   return { name, mime, size, data }
 }
@@ -145,31 +199,42 @@ function sanitizeRows(list, keys) {
     .filter(Boolean)
 }
 
-function pickPayload(body, { keepFiles }) {
+function pickAdminPayload(body, { keepFiles }) {
   const status = STATUSES.includes(body.status) ? body.status : undefined
   const payload = {
     firstName: cleanStr(body.firstName),
     lastName: cleanStr(body.lastName),
     email: cleanStr(body.email).toLowerCase(),
-    officialEmail: cleanStr(body.officialEmail).toLowerCase(),
+    officialEmail: completeCompanyEmail(body.officialEmail),
+    department: cleanStr(body.department),
+    sourceOfHire: cleanStr(body.sourceOfHire),
+    workLocation: cleanStr(body.workLocation),
+    title: cleanStr(body.title),
+    additionalInfo: cleanStr(body.additionalInfo),
+    tentativeJoiningDate: body.tentativeJoiningDate ? new Date(body.tentativeJoiningDate) : null,
+  }
+  if (status) payload.status = status
+  if (keepFiles && body.offerLetter !== undefined) {
+    payload.offerLetter = sanitizeFile(body.offerLetter, LETTER_MIMES)
+  }
+  return payload
+}
+
+function pickEmployeePayload(body, { keepFiles }) {
+  const payload = {
+    firstName: cleanStr(body.firstName),
+    lastName: cleanStr(body.lastName),
     phone: cleanStr(body.phone),
     countryCode: cleanStr(body.countryCode) || '+91',
-    uan: cleanStr(body.uan),
     aadhaar: cleanStr(body.aadhaar),
     pan: cleanStr(body.pan).toUpperCase(),
     presentAddress: sanitizeAddress(body.presentAddress),
     permanentAddress: sanitizeAddress(body.permanentAddress),
     sameAsPresent: Boolean(body.sameAsPresent),
     experienceYears: cleanStr(body.experienceYears),
-    sourceOfHire: cleanStr(body.sourceOfHire),
     skillSet: cleanStr(body.skillSet),
     highestQualification: cleanStr(body.highestQualification),
     additionalInfo: cleanStr(body.additionalInfo),
-    workLocation: cleanStr(body.workLocation),
-    title: cleanStr(body.title),
-    currentSalary: cleanStr(body.currentSalary),
-    department: cleanStr(body.department),
-    tentativeJoiningDate: body.tentativeJoiningDate ? new Date(body.tentativeJoiningDate) : null,
     education: sanitizeRows(body.education, [
       'schoolName',
       'degree',
@@ -185,19 +250,197 @@ function pickPayload(body, { keepFiles }) {
       'currentlyWorkHere',
     ]),
   }
-  if (status) payload.status = status
   if (payload.sameAsPresent) payload.permanentAddress = { ...payload.presentAddress }
   if (keepFiles) {
     if (body.photo !== undefined) payload.photo = sanitizeFile(body.photo, PHOTO_MIMES)
-    if (body.offerLetter !== undefined) payload.offerLetter = sanitizeFile(body.offerLetter, LETTER_MIMES)
+    if (body.aadhaarFront !== undefined) payload.aadhaarFront = sanitizeFile(body.aadhaarFront, ID_MIMES)
+    if (body.aadhaarBack !== undefined) payload.aadhaarBack = sanitizeFile(body.aadhaarBack, ID_MIMES)
+    if (body.panFront !== undefined) payload.panFront = sanitizeFile(body.panFront, ID_MIMES)
+    if (body.panBack !== undefined) payload.panBack = sanitizeFile(body.panBack, ID_MIMES)
   }
   return payload
+}
+
+function hasCardFile(file) {
+  return Boolean(file && (file.data || file.name))
+}
+
+function requireIdCards(payload, existing) {
+  const aadhaarFront = payload.aadhaarFront || existing?.aadhaarFront
+  const aadhaarBack = payload.aadhaarBack || existing?.aadhaarBack
+  const panFront = payload.panFront || existing?.panFront
+  const panBack = payload.panBack || existing?.panBack
+  if (!hasCardFile(aadhaarFront) || !hasCardFile(aadhaarBack) || !hasCardFile(panFront) || !hasCardFile(panBack)) {
+    throw httpError(400, 'Upload Aadhaar and PAN card (front and back)')
+  }
+}
+
+function requirePersonalEmail(row) {
+  const email = cleanStr(row.email).toLowerCase()
+  if (!email || !email.includes('@')) {
+    throw httpError(400, 'Personal email is required so we can send the details form')
+  }
+  row.email = email
+}
+
+function requireAdminHireFields(row) {
+  const officialEmail = completeCompanyEmail(row.officialEmail)
+  const domainCheck = assertAllowedCompanyEmail(officialEmail)
+  if (!domainCheck.ok) {
+    throw httpError(
+      400,
+      `Work email must be @${domainCheck.domain}. That address is the Pulse login.`,
+      'WORK_EMAIL_DOMAIN_REQUIRED',
+    )
+  }
+  if (!row.tentativeJoiningDate) {
+    throw httpError(400, 'Joining date is required')
+  }
+  if (!hasCardFile(row.offerLetter)) {
+    throw httpError(400, 'Upload the offer letter')
+  }
+  row.officialEmail = officialEmail
 }
 
 async function nextCandidateId(organizationId) {
   const count = await Candidate.countDocuments({ organizationId })
   return `CAND-${String(count + 1).padStart(4, '0')}`
 }
+
+async function resolveInviter(candidate) {
+  if (candidate.addedBy) {
+    const added = await User.findById(candidate.addedBy)
+    if (added) return added
+  }
+  return User.findById(candidate.organizationId)
+}
+
+async function companyNameFor(candidate) {
+  const inviter = await resolveInviter(candidate)
+  return (inviter && inviter.companyName) || 'BDA Technologies'
+}
+
+function issueOnboardingToken(candidate) {
+  candidate.onboardingToken = crypto.randomBytes(32).toString('hex')
+  candidate.onboardingTokenExpires = new Date(Date.now() + ONBOARD_TTL_MS)
+}
+
+async function findOnboardCandidate(token) {
+  const value = cleanStr(token)
+  if (!value || value.length < 16) return null
+  const row = await Candidate.findOne({ onboardingToken: value })
+  if (!row) return null
+  if (row.onboardingTokenExpires && row.onboardingTokenExpires < new Date()) return 'expired'
+  return row
+}
+
+async function sendPulseInviteForCandidate(candidate) {
+  const officialEmail = completeCompanyEmail(candidate.officialEmail)
+  const domainCheck = assertAllowedCompanyEmail(officialEmail)
+  if (!domainCheck.ok) {
+    throw httpError(
+      400,
+      `Work email must be @${domainCheck.domain}. That address is the Pulse login.`,
+      'WORK_EMAIL_DOMAIN_REQUIRED',
+    )
+  }
+  const inviter = await resolveInviter(candidate)
+  if (!inviter) {
+    throw httpError(400, 'Could not find an admin to send the Pulse invite')
+  }
+  const { invite, emailSent, inviteUrl, emailError } = await createAndSendOrgInvite({
+    email: officialEmail,
+    role: 'member',
+    organizationId: candidate.organizationId,
+    invitedBy: inviter._id,
+    companyName: inviter.companyName || '',
+    firstName: candidate.firstName,
+    lastName: candidate.lastName,
+    invitedByName: inviterDisplayName(inviter),
+  })
+  candidate.officialEmail = officialEmail
+  candidate.pulseInviteId = invite._id
+  candidate.pulseInviteSentAt = new Date()
+  if (candidate.status !== 'Joined') candidate.status = 'Offer sent'
+  await candidate.save()
+  return { emailSent, inviteUrl, officialEmail, emailError }
+}
+
+router.get('/onboard/:token', async (req, res) => {
+  try {
+    const row = await findOnboardCandidate(req.params.token)
+    if (row === 'expired') {
+      return res.status(400).json({ success: false, message: 'This link has expired. Ask HR to send it again.' })
+    }
+    if (!row) {
+      return res.status(400).json({ success: false, message: 'This link is invalid or already used' })
+    }
+    if (row.employeeSubmittedAt) {
+      const companyName = await companyNameFor(row)
+      return res.json({
+        success: true,
+        data: {
+          submitted: true,
+          companyName,
+          officialEmail: row.officialEmail || '',
+          firstName: row.firstName || '',
+        },
+      })
+    }
+    if (row.status === 'Not started') {
+      row.status = 'In progress'
+      await row.save()
+    }
+    const companyName = await companyNameFor(row)
+    res.json({ success: true, data: toPublicOnboard(row, { companyName }) })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load form' })
+  }
+})
+
+router.post('/onboard/:token', async (req, res) => {
+  try {
+    const row = await findOnboardCandidate(req.params.token)
+    if (row === 'expired') {
+      return res.status(400).json({ success: false, message: 'This link has expired. Ask HR to send it again.' })
+    }
+    if (!row) {
+      return res.status(400).json({ success: false, message: 'This link is invalid or already used' })
+    }
+    if (row.employeeSubmittedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'You already submitted these details.',
+      })
+    }
+
+    const payload = pickEmployeePayload(req.body || {}, { keepFiles: true })
+    if (!payload.firstName || !payload.lastName || !payload.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name, last name, and phone are required',
+      })
+    }
+    requireIdCards(payload, row)
+
+    Object.assign(row, payload)
+    row.employeeSubmittedAt = new Date()
+    row.status = 'Details received'
+    await row.save()
+
+    res.json({
+      success: true,
+      message: 'Details saved. HR will send sign-in instructions to your work email.',
+      data: {
+        submitted: true,
+        inviteSent: false,
+      },
+    })
+  } catch (err) {
+    const status = err.status || 500
+    res.status(status).json({ success: false, message: err.message || 'Failed to submit details' })
+  }
+})
 
 router.get('/', auth, requireAdmin, async (req, res) => {
   try {
@@ -248,6 +491,103 @@ router.get('/', auth, requireAdmin, async (req, res) => {
   }
 })
 
+router.post('/:id/send-onboarding', auth, requireAdmin, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid candidate' })
+    }
+    const organizationId = orgIdOf(req.user)
+    const row = await Candidate.findOne({ _id: req.params.id, organizationId })
+    if (!row) return res.status(404).json({ success: false, message: 'Candidate not found' })
+    if (row.employeeSubmittedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'This person already submitted details. Resend the Pulse invite instead.',
+      })
+    }
+
+    requirePersonalEmail(row)
+    issueOnboardingToken(row)
+    const onboardUrl = buildCandidateOnboardLink(row.onboardingToken)
+    const candidateName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim()
+
+    let emailSent = true
+    let emailError = ''
+    let devOnboardLink = null
+    try {
+      await sendCandidateOnboardingEmail({
+        to: row.email,
+        onboardUrl,
+        companyName: req.user.companyName,
+        candidateName,
+        invitedByName: actorName(req.user),
+      })
+    } catch (emailErr) {
+      console.error('Candidate onboarding email failed:', emailErr.message)
+      emailSent = false
+      emailError = emailErr.message || 'Email provider rejected the message'
+      devOnboardLink = onboardUrl
+    }
+
+    if (emailSent) {
+      row.onboardingEmailSentAt = new Date()
+      if (row.status === 'Draft' || !row.status) row.status = 'Not started'
+    }
+    row.modifiedBy = req.user._id
+    row.modifiedByName = actorName(req.user)
+    await row.save()
+
+    res.json({
+      success: true,
+      emailSent,
+      message: emailSent
+        ? `Details form sent to ${row.email}`
+        : `Record saved, but the email could not be sent. ${emailError}`,
+      data: {
+        ...toListItem(row),
+        ...(emailSent ? {} : { onboardUrl, devOnboardLink }),
+      },
+    })
+  } catch (err) {
+    const status = err.status || 500
+    res.status(status).json({ success: false, message: err.message || 'Failed to send details email' })
+  }
+})
+
+router.post('/:id/send-invite', auth, requireAdmin, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid candidate' })
+    }
+    const organizationId = orgIdOf(req.user)
+    const row = await Candidate.findOne({ _id: req.params.id, organizationId })
+    if (!row) return res.status(404).json({ success: false, message: 'Candidate not found' })
+    if (!row.employeeSubmittedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Wait until the employee submits personal details, then send the Pulse invite.',
+      })
+    }
+
+    requireAdminHireFields(row)
+    const sent = await sendPulseInviteForCandidate(row)
+    res.json({
+      success: true,
+      emailSent: sent.emailSent,
+      message: sent.emailSent
+        ? `Pulse invite sent to ${sent.officialEmail}`
+        : `Invite created, but the email could not be sent. ${sent.emailError || ''}`.trim(),
+      data: {
+        ...toListItem(row),
+        ...(sent.emailSent ? {} : { inviteUrl: sent.inviteUrl, devInviteLink: sent.inviteUrl }),
+      },
+    })
+  } catch (err) {
+    const status = err.status || 500
+    res.status(status).json({ success: false, message: err.message || 'Failed to send Pulse invite' })
+  }
+})
+
 router.get('/:id', auth, requireAdmin, async (req, res) => {
   try {
     if (!isId(req.params.id)) {
@@ -265,17 +605,8 @@ router.get('/:id', auth, requireAdmin, async (req, res) => {
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
     const organizationId = orgIdOf(req.user)
-    const asDraft = Boolean(req.body.draft)
-    const payload = pickPayload(req.body, { keepFiles: true })
-    if (!asDraft) {
-      if (!payload.firstName || !payload.lastName || !payload.email || !payload.phone) {
-        return res.status(400).json({
-          success: false,
-          message: 'First name, last name, email, and phone are required',
-        })
-      }
-    }
-    payload.status = asDraft ? 'Draft' : payload.status && payload.status !== 'Draft' ? payload.status : 'Not started'
+    const payload = pickAdminPayload(req.body || {}, { keepFiles: true })
+    payload.status = 'Draft'
     const name = actorName(req.user)
     const row = await Candidate.create({
       ...payload,
@@ -288,7 +619,7 @@ router.post('/', auth, requireAdmin, async (req, res) => {
     })
     res.status(201).json({
       success: true,
-      message: asDraft ? 'Draft saved' : 'Candidate added',
+      message: 'Draft saved',
       data: toListItem(row),
     })
   } catch (err) {
@@ -305,27 +636,18 @@ router.patch('/:id', auth, requireAdmin, async (req, res) => {
     const organizationId = orgIdOf(req.user)
     const row = await Candidate.findOne({ _id: req.params.id, organizationId })
     if (!row) return res.status(404).json({ success: false, message: 'Candidate not found' })
-    const asDraft = Boolean(req.body.draft)
-    const payload = pickPayload(req.body, { keepFiles: true })
-    if (!asDraft && req.body.draft !== true) {
-      const firstName = payload.firstName || row.firstName
-      const lastName = payload.lastName || row.lastName
-      const email = payload.email || row.email
-      const phone = payload.phone || row.phone
-      if (!firstName || !lastName || !email || !phone) {
-        return res.status(400).json({
-          success: false,
-          message: 'First name, last name, email, and phone are required',
-        })
-      }
+    const payload = pickAdminPayload(req.body || {}, { keepFiles: true })
+    delete payload.status
+    if (row.employeeSubmittedAt) {
+      delete payload.firstName
+      delete payload.lastName
+      delete payload.additionalInfo
     }
-    if (asDraft && !payload.status) payload.status = 'Draft'
-    if (!asDraft && payload.status === 'Draft') payload.status = 'Not started'
     Object.assign(row, payload)
     row.modifiedBy = req.user._id
     row.modifiedByName = actorName(req.user)
     await row.save()
-    res.json({ success: true, message: asDraft ? 'Draft saved' : 'Candidate updated', data: toListItem(row) })
+    res.json({ success: true, message: 'Saved', data: toListItem(row) })
   } catch (err) {
     const status = err.status || 500
     res.status(status).json({ success: false, message: err.message || 'Failed to update candidate' })

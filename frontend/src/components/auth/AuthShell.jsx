@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthPromo from './AuthPromo'
 import AuthBg from './AuthBg'
+import PeopleOsMark from '../PeopleOsMark'
 import './auth-shell.css'
 
 export default function AuthShell({
@@ -36,12 +37,7 @@ export default function AuthShell({
         <div className="auth-left">
           <div className="auth-top">
             <Link to="/login" className="auth-logo" aria-label="People OS home">
-              <span className="auth-mark" aria-hidden="true">
-                <i style={{ background: '#e42527' }} />
-                <i style={{ background: '#f5c400' }} />
-                <i style={{ background: '#21a05a' }} />
-                <i style={{ background: '#2b8aed' }} />
-              </span>
+              <PeopleOsMark size={28} />
               <span className="auth-logo-text">PEOPLE OS</span>
             </Link>
             {headerRight}

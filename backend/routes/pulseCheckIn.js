@@ -710,6 +710,73 @@ const NAMED_HOLIDAYS = {
   '2027-03-03': { name: 'Holi', kind: 'restricted' },
 };
 
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEK_HOUR_TARGET = 40;
+
+function dateToKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function weekStartKey(now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() - d.getDay());
+  return dateToKey(d);
+}
+
+function rollingHolidayWindow(now = new Date()) {
+  const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+  return { from, to: dateToKey(end) };
+}
+
+function collectHolidays(from, to, policyHolidays) {
+  const companyDates = new Set((policyHolidays || []).map(dayKeyOf).filter(Boolean));
+  const holidays = [];
+  const seen = new Set();
+  companyDates.forEach((date) => {
+    if (date < from || date > to) return;
+    const named = NAMED_HOLIDAYS[date];
+    holidays.push({
+      date,
+      name: named?.name || 'Holiday',
+      kind: 'company',
+    });
+    seen.add(date);
+  });
+  Object.entries(NAMED_HOLIDAYS).forEach(([date, meta]) => {
+    if (date < from || date > to || seen.has(date)) return;
+    holidays.push({ date, name: meta.name, kind: meta.kind });
+    seen.add(date);
+  });
+  holidays.sort((a, b) => a.date.localeCompare(b.date));
+  return holidays;
+}
+
+function holidayMeta(date) {
+  const [y, m, d] = String(date).split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${WEEKDAY_SHORT[dt.getDay()]} · ${d} ${MONTH_LABELS[m - 1]} ${y}`;
+}
+
+function dashRow(id, title, meta, extra = {}) {
+  return { id, title, meta, ...extra };
+}
+
+function staffLabel(row) {
+  const name = String(row?.fullName || '').trim();
+  if (name && !/^pending onboarding$/i.test(name)) return name;
+  return firstName('', row?.email);
+}
+
+function yearsOfService(join, now) {
+  if (!join || Number.isNaN(join.getTime())) return 0;
+  let years = now.getFullYear() - join.getFullYear();
+  const passed = now.getMonth() > join.getMonth()
+    || (now.getMonth() === join.getMonth() && now.getDate() >= join.getDate());
+  if (!passed) years -= 1;
+  return Math.max(0, years);
+}
+
 function firstName(value, email) {
   const name = String(value || '').trim();
   if (name) return name.split(/\s+/)[0];
@@ -769,25 +836,7 @@ router.get('/calendar', auth, async (req, res) => {
         .lean(),
     ]);
 
-    const companyDates = new Set((policy?.holidays || []).map(dayKeyOf).filter(Boolean));
-    const holidays = [];
-    const seen = new Set();
-    companyDates.forEach((date) => {
-      if (date < from || date > to) return;
-      const named = NAMED_HOLIDAYS[date];
-      holidays.push({
-        date,
-        name: named?.name || 'Holiday',
-        kind: 'company',
-      });
-      seen.add(date);
-    });
-    Object.entries(NAMED_HOLIDAYS).forEach(([date, meta]) => {
-      if (date < from || date > to || seen.has(date)) return;
-      holidays.push({ date, name: meta.name, kind: meta.kind });
-      seen.add(date);
-    });
-    holidays.sort((a, b) => a.date.localeCompare(b.date));
+    const holidays = collectHolidays(from, to, policy?.holidays);
     const holidaySet = new Set(holidays.map((row) => row.date));
 
     const teamLeave = leaves.map((row) => {
@@ -855,6 +904,304 @@ router.get('/calendar', auth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to load calendar' });
+  }
+});
+
+// GET /api/pulse-checkin/dashboard — My Space widget board (live)
+router.get('/dashboard', auth, async (req, res) => {
+  try {
+    const now = new Date();
+    const today = todayKey();
+    const orgId = orgIdOf(req.user);
+    const weekFrom = weekStartKey(now);
+    const weekTo = shiftKey(weekFrom, 6);
+    const monthFrom = `${today.slice(0, 7)}-01`;
+    const yearFrom = `${now.getFullYear()}-01-01`;
+    const holidayWindow = rollingHolidayWindow(now);
+    const workDays = Array.isArray(req.user.defaultWorkDays) && req.user.defaultWorkDays.length
+      ? req.user.defaultWorkDays
+      : [1, 2, 3, 4, 5];
+    const workDaySet = new Set(workDays.map((d) => Number(d)));
+    const staff = await linkedStaff(req.user);
+    const pendingQuery = isPulseAdmin(req.user)
+      ? { admin: orgId, status: 'Pending' }
+      : staff
+        ? { staff: staff._id, status: 'Pending' }
+        : null;
+
+    const [
+      weekDocs,
+      monthDocs,
+      policy,
+      announcements,
+      orgPeople,
+      yearLeaves,
+      pendingLeaves,
+      assignedTasks,
+    ] = await Promise.all([
+      PulseWorkDay.find({
+        user: req.user._id,
+        date: { $gte: weekFrom, $lte: weekTo },
+      }).lean(),
+      PulseWorkDay.find({
+        user: req.user._id,
+        date: { $gte: monthFrom, $lte: today },
+      }).lean(),
+      LeavePolicy.findOne({ user: orgId }).lean(),
+      Announcement.find({
+        user: orgId,
+        isActive: true,
+        $and: [
+          { $or: [{ startDate: null }, { startDate: { $lte: now } }] },
+          { $or: [{ endDate: null }, { endDate: { $gte: now } }] },
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .lean(),
+      Staff.find({ user: orgId })
+        .select('fullName email department dob joiningDate')
+        .limit(500)
+        .lean(),
+      staff
+        ? LeaveRequest.find({
+            staff: staff._id,
+            startDate: { $lte: new Date(`${now.getFullYear()}-12-31T23:59:59`) },
+            endDate: { $gte: new Date(`${yearFrom}T00:00:00`) },
+          })
+            .select('type startDate endDate status')
+            .lean()
+        : Promise.resolve([]),
+      pendingQuery
+        ? LeaveRequest.find(pendingQuery)
+            .sort({ createdAt: -1 })
+            .limit(8)
+            .populate('staff', 'fullName email')
+            .lean()
+        : Promise.resolve([]),
+      staff
+        ? AssignedTask.find({
+            staff: staff._id,
+            status: { $in: ['Pending', 'Accepted', 'In Progress'] },
+          })
+            .sort({ dueDate: 1, createdAt: -1 })
+            .limit(8)
+            .lean()
+        : Promise.resolve([]),
+    ]);
+
+    const holidaysRaw = collectHolidays(holidayWindow.from, holidayWindow.to, policy?.holidays);
+    const holidaySet = new Set(holidaysRaw.map((row) => row.date));
+    const weekByDate = new Map(weekDocs.map((row) => [row.date, row]));
+    const monthByDate = new Map(monthDocs.map((row) => [row.date, row]));
+    const weekLeave = new Set();
+    const monthLeave = new Set();
+    const usedByType = { Casual: 0, Sick: 0, Custom: 0 };
+
+    yearLeaves.forEach((row) => {
+      const keys = enumerateKeys(dayKeyOf(row.startDate), dayKeyOf(row.endDate));
+      if (row.status === 'Pending' || row.status === 'Approved') {
+        keys.forEach((key) => {
+          if (key >= weekFrom && key <= weekTo) weekLeave.add(key);
+          if (key >= monthFrom && key <= today) monthLeave.add(key);
+        });
+      }
+      if (row.status === 'Approved' && usedByType[row.type] != null) {
+        usedByType[row.type] += leaveDurationDays(row.startDate, row.endDate);
+      }
+    });
+
+    const casual = casualLeaveBalance(staff);
+    let weekPresent = 0;
+    let weekAbsent = 0;
+    enumerateKeys(weekFrom, weekTo).forEach((key) => {
+      const weekend = !workDaySet.has(weekdayOf(key));
+      if (weekend || holidaySet.has(key) || weekLeave.has(key) || key > today) return;
+      const row = weekByDate.get(key);
+      const presentDay = recordIsPresent(row) || (key === today && row?.status === 'active');
+      if (key === today && !presentDay) return;
+      if (presentDay) weekPresent += 1;
+      else weekAbsent += 1;
+    });
+
+    let present = 0;
+    let absent = 0;
+    let workdayCount = 0;
+    enumerateKeys(monthFrom, today).forEach((key) => {
+      const weekend = !workDaySet.has(weekdayOf(key));
+      if (weekend || holidaySet.has(key) || monthLeave.has(key)) return;
+      const row = monthByDate.get(key);
+      const isToday = key === today;
+      const presentDay = recordIsPresent(row) || (isToday && row?.status === 'active');
+      if (isToday && !presentDay) return;
+      workdayCount += 1;
+      if (presentDay) present += 1;
+      else absent += 1;
+    });
+
+    const weekHours = Math.round(
+      weekDocs.reduce((sum, row) => sum + msToHours(row.totalActiveMs), 0) * 100,
+    ) / 100;
+    const todayHours = msToHours(weekByDate.get(today)?.totalActiveMs);
+    const mtdPct = workdayCount > 0 ? Math.round((present / workdayCount) * 100) : null;
+    const monthLabel = `${MONTH_LABELS[now.getMonth()]} ${now.getFullYear()}`;
+
+    const thisMonth = now.getMonth();
+    const hireCutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
+    const birthday = [];
+    const newHires = [];
+    const workAnniv = [];
+    orgPeople.forEach((person) => {
+      const name = staffLabel(person);
+      const dept = person.department || 'Team';
+      if (person.dob) {
+        const dob = new Date(person.dob);
+        if (!Number.isNaN(dob.getTime()) && dob.getMonth() === thisMonth) {
+          const on = `${now.getFullYear()}-${String(dob.getMonth() + 1).padStart(2, '0')}-${String(dob.getDate()).padStart(2, '0')}`;
+          const isTodayBday = on === today;
+          birthday.push(dashRow(
+            `b-${person._id}`,
+            name,
+            `${isTodayBday ? 'Today' : `${dob.getDate()} ${MONTH_LABELS[dob.getMonth()]}`} · ${dept}`,
+            { on },
+          ));
+        }
+      }
+      if (person.joiningDate) {
+        const join = new Date(person.joiningDate);
+        if (!Number.isNaN(join.getTime())) {
+          const joinKey = dateToKey(join);
+          if (join >= hireCutoff && joinKey <= today) {
+            newHires.push(dashRow(
+              `n-${person._id}`,
+              name,
+              `Joined ${join.getDate()} ${MONTH_LABELS[join.getMonth()]} · ${dept}`,
+            ));
+          }
+          if (join.getMonth() === thisMonth) {
+            const years = yearsOfService(join, now);
+            if (years >= 1) {
+              const on = `${now.getFullYear()}-${String(join.getMonth() + 1).padStart(2, '0')}-${String(join.getDate()).padStart(2, '0')}`;
+              workAnniv.push(dashRow(
+                `w-${person._id}`,
+                `${name} · ${years} year${years === 1 ? '' : 's'}`,
+                `${join.getDate()} ${MONTH_LABELS[join.getMonth()]} · ${dept}`,
+                { on },
+              ));
+            }
+          }
+        }
+      }
+    });
+    birthday.sort((a, b) => String(a.on).localeCompare(String(b.on)));
+    workAnniv.sort((a, b) => String(a.on).localeCompare(String(b.on)));
+    newHires.sort((a, b) => String(a.meta).localeCompare(String(b.meta)));
+
+    const tasks = [
+      ...pendingLeaves.map((row) => dashRow(
+        String(row._id),
+        `${row.type || 'Leave'} · ${dayKeyOf(row.startDate)} – ${dayKeyOf(row.endDate)}`,
+        `Due ${dayKeyOf(row.startDate) || today} · ${row.staff?.fullName || row.staff?.email || 'Team'}`,
+        { to: 'leave' },
+      )),
+      ...assignedTasks.map((row) => dashRow(
+        `task-${row._id}`,
+        row.title,
+        `Due ${dayKeyOf(row.dueDate) || '—'}`,
+        { to: 'tasks' },
+      )),
+    ].slice(0, 8);
+
+    res.json({
+      success: true,
+      data: {
+        attendance: [
+          dashRow(
+            'att-week',
+            'This week',
+            `${weekPresent} present · ${weekAbsent} absent`,
+            { to: 'attendance' },
+          ),
+          dashRow(
+            'att-mtd',
+            'Month to date',
+            mtdPct == null
+              ? 'No workdays yet'
+              : `${mtdPct}% present · ${present} of ${workdayCount} days`,
+            { to: 'attendance' },
+          ),
+        ],
+        hours: [
+          dashRow(
+            'hours-week',
+            'This week',
+            `${weekHours} h of ${WEEK_HOUR_TARGET} h`,
+            { to: 'hours' },
+          ),
+          dashRow(
+            'hours-today',
+            'Today',
+            todayHours > 0 ? `${todayHours} h logged` : 'Not started',
+            { to: 'hours' },
+          ),
+        ],
+        leaveReport: [
+          dashRow(
+            'leave-casual',
+            'Casual leave',
+            `${casual.used} used · ${casual.remaining} left`,
+            { to: 'leave' },
+          ),
+          dashRow(
+            'leave-sick',
+            'Sick leave',
+            `${usedByType.Sick} used this year`,
+            { to: 'leave' },
+          ),
+          dashRow(
+            'leave-custom',
+            'Custom leave',
+            `${usedByType.Custom} used this year`,
+            { to: 'leave' },
+          ),
+        ],
+        holidays: holidaysRaw.map((row) => dashRow(
+          `h-${row.date}`,
+          row.name,
+          holidayMeta(row.date),
+          { on: row.date, to: 'holidays' },
+        )),
+        announcements: announcements.map((row) => dashRow(
+          String(row._id),
+          row.title,
+          row.message ? String(row.message).slice(0, 80) : (row.priority || 'All hands'),
+          { on: dayKeyOf(row.startDate || row.createdAt) || today },
+        )),
+        tasks,
+        birthday: birthday.slice(0, 8),
+        newHires: newHires.slice(0, 8),
+        workAnniv: workAnniv.slice(0, 8),
+        weddingAnniv: [],
+        files: [],
+        engagement: [],
+        favorites: [
+          dashRow('fav-overview', 'Overview', 'Check-in', { to: 'overview' }),
+          dashRow('fav-attendance', 'Attendance', `${weekPresent} present this week`, { to: 'attendance' }),
+          dashRow('fav-hours', 'Hours', `${weekHours} h this week`, { to: 'hours' }),
+          dashRow('fav-leave', 'Leave Tracker', `${casual.remaining} casual days left`, { to: 'leave' }),
+          dashRow('fav-calendar', 'Calendar', monthLabel, { to: 'calendar' }),
+        ],
+        quickLinks: [
+          dashRow('ql-leave', 'Apply leave', 'Leave Tracker', { to: 'leave' }),
+          dashRow('ql-calendar', 'Calendar', 'Month view', { to: 'calendar' }),
+          dashRow('ql-holidays', 'Holidays', 'This year', { to: 'holidays' }),
+          dashRow('ql-attendance', 'Attendance', 'My Space', { to: 'attendance' }),
+          dashRow('ql-hours', 'Hours', 'Logged from check-in', { to: 'hours' }),
+        ],
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load dashboard' });
   }
 });
 

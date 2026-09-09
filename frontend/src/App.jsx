@@ -1,10 +1,13 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import DocumentTitle from './components/DocumentTitle'
+import PulseAuthSync from './components/PulseAuthSync'
 import PulseLoading from './components/PulseLoading'
 import PulseCheckInHeartbeat from './components/PulseCheckInHeartbeat'
 import { useAuth } from './context/AuthContext'
 import { lockPulsePageZoom } from './utils/pulsePageZoom'
+import { closePulseAuxiliaryTab } from './utils/pulseAuthSync'
+import { isPulseAuxiliaryTab, isPulseOpenPath, PULSE_SHELL_PATHS } from './utils/pulseOpenPage'
 
 import Login from './pages/Login'
 import ComingSoon from './pages/ComingSoon'
@@ -24,6 +27,7 @@ import PeopleHome from './pages/PeopleHome'
 import PulseCheckInTimer from './pages/PulseCheckInTimer'
 import PulseNotes from './pages/PulseNotes'
 import AcceptInvite from './pages/AcceptInvite'
+import EmployeeOnboard from './pages/EmployeeOnboard'
 import AccountPortal from './pages/AccountPortal'
 
 /** Company User auth — Pulse only (no Rohit HR / Team Portal). */
@@ -31,6 +35,7 @@ function ProtectedRoute({ children }) {
   const { user, loading, exitBusy } = useAuth()
   const location = useLocation()
   if (loading) {
+    if (isPulseOpenPath(location.pathname, location.search)) return children
     const onPulse =
       location.pathname === '/pulse' || location.pathname.startsWith('/pulse/')
     if (onPulse) {
@@ -38,8 +43,14 @@ function ProtectedRoute({ children }) {
     }
     return <div style={{ minHeight: '100vh', background: '#fff' }} aria-hidden="true" />
   }
-  if (!user && exitBusy) return <PulseLoading label="Signing out" />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    if (exitBusy) return <PulseLoading label="Signing out" />
+    if (isPulseAuxiliaryTab(location.pathname)) {
+      closePulseAuxiliaryTab()
+      return <div style={{ minHeight: '100vh', background: '#fcfcfa' }} aria-hidden="true" />
+    }
+    return <Navigate to="/login" replace />
+  }
   return children
 }
 
@@ -59,6 +70,7 @@ export default function App() {
   return (
     <>
       <DocumentTitle />
+      <PulseAuthSync />
       <PulseCheckInHeartbeat />
       <PulsePageZoomLock />
       <Routes>
@@ -106,14 +118,17 @@ export default function App() {
           element={<Navigate to="/pulse/settings/service/getting-started" replace />}
         />
         <Route path="/pulse/checkin-timer" element={<PulseCheckInTimer />} />
-        <Route
-          path="/pulse/home"
-          element={
-            <ProtectedRoute>
-              <PeopleHome />
-            </ProtectedRoute>
-          }
-        />
+        {PULSE_SHELL_PATHS.map((path) => (
+          <Route
+            key={path}
+            path={path}
+            element={
+              <ProtectedRoute>
+                <PeopleHome />
+              </ProtectedRoute>
+            }
+          />
+        ))}
         <Route
           path="/pulse/notes"
           element={
@@ -138,6 +153,7 @@ export default function App() {
         <Route path="/people-os" element={<PeopleOsLive />} />
         <Route path="/register" element={<Register />} />
         <Route path="/invite/:token" element={<AcceptInvite />} />
+        <Route path="/onboard/:token" element={<EmployeeOnboard />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/verify" element={<VerifyAction />} />
         <Route path="/forgot" element={<ForgotPassword />} />
