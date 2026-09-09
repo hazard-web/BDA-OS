@@ -17,6 +17,7 @@ import {
   Typography,
 } from 'antd'
 import { DRAG_THRESHOLD, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
+import api from '../api'
 
 const STORAGE_KEY = 'pulseMySpaceDashWidgets'
 
@@ -84,21 +85,19 @@ const DEMO = {
     { id: 'n5', title: 'Ishita Khan', meta: 'Joined 14 Jul · People' },
   ],
   favorites: [
-    { id: 'f1', title: 'Attendance', meta: 'Module' },
-    { id: 'f2', title: 'Leave Tracker', meta: 'Module' },
-    { id: 'f3', title: 'Timesheets', meta: 'Module' },
-    { id: 'f4', title: 'Directory', meta: 'People' },
-    { id: 'f5', title: 'Payslips', meta: 'Finance' },
+    { id: 'f1', title: 'Attendance', meta: 'Module', to: 'attendance' },
+    { id: 'f2', title: 'Leave Tracker', meta: 'Module', to: 'leave' },
+    { id: 'f3', title: 'Hours', meta: 'Module', to: 'hours' },
+    { id: 'f4', title: 'Calendar', meta: 'My Space', to: 'calendar' },
+    { id: 'f5', title: 'Overview', meta: 'Check-in', to: 'overview' },
   ],
   quickLinks: [
-    { id: 'ql1', title: 'Employee handbook', meta: 'Policy · PDF' },
-    { id: 'ql2', title: 'Leave policy 2026', meta: 'HR · Doc' },
-    { id: 'ql3', title: 'Office map · Noida', meta: 'Facilities' },
-    { id: 'ql4', title: 'IT helpdesk', meta: 'Support portal' },
-    { id: 'ql5', title: 'Payroll calendar', meta: 'Finance' },
-    { id: 'ql6', title: 'Benefits enrollment', meta: 'HR' },
-    { id: 'ql7', title: 'Travel desk', meta: 'Ops' },
-    { id: 'ql8', title: 'Learning hub', meta: 'L&D' },
+    { id: 'ql1', title: 'Apply leave', meta: 'Leave Tracker', to: 'leave' },
+    { id: 'ql2', title: 'Calendar', meta: 'Month view', to: 'calendar' },
+    { id: 'ql3', title: 'Holidays', meta: 'This year', to: 'holidays' },
+    { id: 'ql4', title: 'Attendance', meta: 'My Space', to: 'attendance' },
+    { id: 'ql5', title: 'Hours', meta: 'Logged from check-in', to: 'hours' },
+    { id: 'ql6', title: 'Overview', meta: 'Check-in', to: 'overview' },
   ],
   announcements: [
     { id: 'a1', title: 'Independence Day — office closed', meta: '15 Aug · All hands', on: '2026-08-15' },
@@ -110,20 +109,28 @@ const DEMO = {
     { id: 'a7', title: 'Benefits enrollment window', meta: '4 Nov · HR', on: '2026-11-04' },
   ],
   leaveReport: [
-    { id: 'l1', title: 'Casual leave', meta: '6 used · 6 left' },
-    { id: 'l2', title: 'Sick leave', meta: '2 used · 6 left' },
-    { id: 'l3', title: 'Earned leave', meta: '5 used · 10 left' },
-    { id: 'l4', title: 'Comp-off', meta: '1 used · 2 left' },
-    { id: 'l5', title: 'Work from home', meta: '3 used · 9 left' },
-    { id: 'l6', title: 'Bereavement', meta: '0 used · 5 left' },
+    { id: 'l1', title: 'Casual leave', meta: '6 used · 6 left', to: 'leave' },
+    { id: 'l2', title: 'Sick leave', meta: '2 used · 6 left', to: 'leave' },
+    { id: 'l3', title: 'Earned leave', meta: '5 used · 10 left', to: 'leave' },
+    { id: 'l4', title: 'Comp-off', meta: '1 used · 2 left', to: 'leave' },
+    { id: 'l5', title: 'Work from home', meta: '3 used · 9 left', to: 'leave' },
+    { id: 'l6', title: 'Bereavement', meta: '0 used · 5 left', to: 'leave' },
+  ],
+  attendance: [
+    { id: 'at1', title: 'This week', meta: '4 present · 1 absent', to: 'attendance' },
+    { id: 'at2', title: 'Month to date', meta: '96% present · 18 of 19 days', to: 'attendance' },
+  ],
+  hours: [
+    { id: 'hr1', title: 'This week', meta: '32.5 h of 40 h', to: 'hours' },
+    { id: 'hr2', title: 'Today', meta: '7.2 h logged', to: 'hours' },
   ],
   holidays: [
-    { id: 'h1', title: 'Independence Day', meta: 'Fri · 15 Aug 2026', on: '2026-08-15' },
-    { id: 'h2', title: 'Gandhi Jayanti', meta: 'Fri · 2 Oct 2026', on: '2026-10-02' },
-    { id: 'h3', title: 'Diwali', meta: 'Thu · 29 Oct 2026', on: '2026-10-29' },
-    { id: 'h4', title: 'Christmas', meta: 'Fri · 25 Dec 2026', on: '2026-12-25' },
-    { id: 'h5', title: 'Republic Day', meta: 'Tue · 26 Jan 2027', on: '2027-01-26' },
-    { id: 'h6', title: 'Holi', meta: 'Wed · 3 Mar 2027', on: '2027-03-03' },
+    { id: 'h1', title: 'Independence Day', meta: 'Fri · 15 Aug 2026', on: '2026-08-15', to: 'holidays' },
+    { id: 'h2', title: 'Gandhi Jayanti', meta: 'Fri · 2 Oct 2026', on: '2026-10-02', to: 'holidays' },
+    { id: 'h3', title: 'Diwali', meta: 'Thu · 29 Oct 2026', on: '2026-10-29', to: 'holidays' },
+    { id: 'h4', title: 'Christmas', meta: 'Fri · 25 Dec 2026', on: '2026-12-25', to: 'holidays' },
+    { id: 'h5', title: 'Republic Day', meta: 'Tue · 26 Jan 2027', on: '2027-01-26', to: 'holidays' },
+    { id: 'h6', title: 'Holi', meta: 'Wed · 3 Mar 2027', on: '2027-03-03', to: 'holidays' },
   ],
   tasks: [
     { id: 't1', title: 'Approve casual leave — Asha Mehta', meta: 'Due today' },
@@ -174,6 +181,8 @@ const MY_WIDGETS = [
   { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No Files Found', showTotal: true, fileTabs: true, tone: 'slate' },
   { id: 'announcements', label: 'Announcements', dataKey: 'announcements', empty: 'No announcements in the next 3 months', addable: true, tone: 'gold' },
   { id: 'leaveReport', label: 'Leave Report', dataKey: 'leaveReport', empty: 'No leave data yet', tone: 'slate' },
+  { id: 'attendance', label: 'Attendance', dataKey: 'attendance', empty: 'No attendance yet', tone: 'green' },
+  { id: 'hours', label: 'Hours', dataKey: 'hours', empty: 'No hours logged yet', tone: 'teal' },
   { id: 'holidays', label: 'Upcoming Holidays', dataKey: 'holidays', empty: 'No holidays in the next 3 months', tone: 'terracotta' },
   { id: 'tasks', label: 'My Pending Tasks', dataKey: 'tasks', empty: 'There are no tasks available', badge: true, tone: 'green' },
   { id: 'workAnniv', label: 'Work Anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
@@ -232,6 +241,23 @@ const FILE_TABS = [
   { id: 'employee', label: 'Employee Files' },
 ]
 
+const EMPTY_DASH = {
+  birthday: [],
+  newHires: [],
+  favorites: [],
+  quickLinks: [],
+  announcements: [],
+  leaveReport: [],
+  attendance: [],
+  hours: [],
+  holidays: [],
+  tasks: [],
+  files: [],
+  workAnniv: [],
+  weddingAnniv: [],
+  engagement: [],
+}
+
 function DashListWidget({
   title,
   items = [],
@@ -251,6 +277,7 @@ function DashListWidget({
   placeholderHeight,
   floating,
   onGripPointerDown,
+  onRow,
   index = 0,
 }) {
   const visibleItems = fileTabs
@@ -364,23 +391,42 @@ function DashListWidget({
       ) : (
         <div className={fileTabs ? 'pulse-dash-files-body' : undefined}>
           <ul className="pulse-dash-rows">
-            {visibleItems.map((item) => (
-              <li key={item.id} className="pulse-dash-row">
-                {fileTabs ? (
-                  <span className="pulse-dash-file-ico" aria-hidden="true">
-                    <FileOutlined />
-                  </span>
-                ) : showAvatar ? (
-                  <span className="pulse-dash-avatar" aria-hidden="true">
-                    {rowInitial(item.title)}
-                  </span>
-                ) : null}
-                <div className="pulse-dash-row-copy">
-                  <p className="pulse-dash-row-title">{item.title}</p>
-                  {item.meta ? <p className="pulse-dash-row-meta">{item.meta}</p> : null}
-                </div>
-              </li>
-            ))}
+            {visibleItems.map((item) => {
+              const clickable = Boolean(item.to) && typeof onRow === 'function' && !floating
+              const body = (
+                <>
+                  {fileTabs ? (
+                    <span className="pulse-dash-file-ico" aria-hidden="true">
+                      <FileOutlined />
+                    </span>
+                  ) : showAvatar ? (
+                    <span className="pulse-dash-avatar" aria-hidden="true">
+                      {rowInitial(item.title)}
+                    </span>
+                  ) : null}
+                  <div className="pulse-dash-row-copy">
+                    <p className="pulse-dash-row-title">{item.title}</p>
+                    {item.meta ? <p className="pulse-dash-row-meta">{item.meta}</p> : null}
+                  </div>
+                </>
+              )
+              return (
+                <li key={item.id} className={`pulse-dash-row${clickable ? ' is-link' : ''}`}>
+                  {clickable ? (
+                    <button
+                      type="button"
+                      className="pulse-dash-row-hit"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => onRow(item)}
+                    >
+                      {body}
+                    </button>
+                  ) : (
+                    body
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -552,11 +598,12 @@ function CustomizePanel({ prefs, setPrefs, onClose }) {
 }
 
 /** My Space → Dashboard with sticky tools, customizable grip drag. */
-export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
+export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen }) {
   const soon = (label) => (typeof onSoon === 'function' ? onSoon(label) : undefined)
   const [prefs, setPrefs] = useState(() => readPrefs())
   const [customizeOpen, setCustomizeOpen] = useState(false)
   const [tick, setTick] = useState(0)
+  const [liveData, setLiveData] = useState(null)
   const [ghost, setGhost] = useState(null)
   const [fileTab, setFileTab] = useState('org')
   const cardRefs = useRef(new Map())
@@ -564,10 +611,38 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
   const ghostPosRef = useRef({ x: 0, y: 0 })
   const rafRef = useRef(0)
 
-  const data = useMemo(() => {
-    if (!useSample) return Object.fromEntries(Object.keys(DEMO).map((k) => [k, []]))
-    return filterWidgetData(DEMO)
+  useEffect(() => {
+    if (useSample) {
+      setLiveData(null)
+      return undefined
+    }
+    let cancelled = false
+    api.get('/pulse-checkin/dashboard')
+      .then((res) => {
+        if (cancelled) return
+        const payload = res.data?.data && typeof res.data.data === 'object' ? res.data.data : {}
+        setLiveData(filterWidgetData({ ...EMPTY_DASH, ...payload }))
+      })
+      .catch(() => {
+        if (!cancelled) setLiveData(EMPTY_DASH)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [useSample, tick])
+
+  const data = useMemo(() => {
+    if (useSample) return filterWidgetData(DEMO)
+    return liveData || EMPTY_DASH
+  }, [useSample, liveData])
+
+  const openRow = useCallback((item) => {
+    if (item?.to && typeof onOpen === 'function') {
+      onOpen(item.to)
+      return
+    }
+    if (typeof onSoon === 'function') onSoon(item?.to || item?.title || 'Dashboard')
+  }, [onOpen, onSoon])
 
   const catalog = useMemo(() => Object.fromEntries(MY_WIDGETS.map((w) => [w.id, w])), [])
 
@@ -707,8 +782,8 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
 
   const refresh = useCallback(() => {
     setTick((n) => n + 1)
-    soon('Refresh dashboard')
-  }, [soon])
+    if (useSample) soon('Refresh dashboard')
+  }, [soon, useSample])
 
   const draggingId = ghost && !ghost.pending ? ghost.id : null
   const dragWidget = draggingId ? catalog[draggingId] : null
@@ -791,6 +866,7 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true }) {
                 tone={widget.tone}
                 isPlaceholder={isSlot}
                 placeholderHeight={ghost?.height}
+                onRow={openRow}
                 cardRef={(el) => {
                   if (el) cardRefs.current.set(widget.id, el)
                   else cardRefs.current.delete(widget.id)

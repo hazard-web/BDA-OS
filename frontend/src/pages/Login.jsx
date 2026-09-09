@@ -11,7 +11,8 @@ import AuthMorphButton from '../components/auth/AuthMorphButton'
 import { AuthLogoLoader, useAuthRedirect } from '../components/auth/AuthLogoLoader'
 import { oauthStartUrl } from '../components/auth/oauthUrls'
 import { getPostLoginPath } from '../utils/pulseEntry'
-import { companyEmailRequiredMessage, isCompanyEmail } from '../utils/companyDomain'
+import { clearPulseLogoutOrigin } from '../utils/pulseAuthSync'
+import { companyEmailRequiredMessage, isCompanyEmail, normalizeCompanyEmail } from '../utils/companyDomain'
 
 export default function Login() {
   const { login, endExit } = useAuth()
@@ -26,6 +27,7 @@ export default function Login() {
   const oauthToastShown = useRef(false)
 
   useEffect(() => {
+    clearPulseLogoutOrigin()
     endExit?.()
   }, [endExit])
 
@@ -47,7 +49,7 @@ export default function Login() {
   const goNext = async (e) => {
     e.preventDefault()
     if (checkingEmail) return
-    const email = form.email.trim().toLowerCase()
+    const email = normalizeCompanyEmail(form.email)
     if (!email) {
       toast.error('Enter your email address')
       return
@@ -83,7 +85,7 @@ export default function Login() {
     flushSync(() => setLoading(true))
     try {
       const payload = {
-        email: form.email.trim().toLowerCase(),
+        email: normalizeCompanyEmail(form.email),
         password: form.password,
       }
       const res = await api.post('/auth/login', payload)
@@ -130,7 +132,11 @@ export default function Login() {
             <input
               id="admin-email"
               className="auth-input"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
               autoFocus
               autoComplete="username"

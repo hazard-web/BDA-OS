@@ -59,7 +59,6 @@ function MoonMark() {
 /** Time-of-day greeting with drifting sky. */
 export default function PulseGreetingBanner({ name, hour = new Date().getHours() }) {
   const period = periodForHour(hour)
-  const night = period === 'evening'
   const weekday = new Date().getDay()
 
   return (
@@ -72,12 +71,20 @@ export default function PulseGreetingBanner({ name, hour = new Date().getHours()
         <strong className="ms-hello-name">{name}</strong>
         <span className="ms-hello-line">{greetingLine(period, weekday)}</span>
       </div>
-      <div className="ms-sky" aria-hidden="true">
-        <Cloud className="ms-cloud ms-cloud-a" delay="0s" />
-        <Cloud className="ms-cloud ms-cloud-b" delay="-8s" />
-        <Cloud className="ms-cloud ms-cloud-c" delay="-14s" />
-        {night ? <MoonMark /> : <SunMark />}
-      </div>
+      <PulseSkyWash hour={hour} />
     </article>
+  )
+}
+
+export function PulseSkyWash({ hour = new Date().getHours() }) {
+  const period = periodForHour(hour)
+  const night = period === 'evening'
+  return (
+    <div className={`ms-sky is-${period}`} aria-hidden="true">
+      <Cloud className="ms-cloud ms-cloud-a" delay="0s" />
+      <Cloud className="ms-cloud ms-cloud-b" delay="-8s" />
+      <Cloud className="ms-cloud ms-cloud-c" delay="-14s" />
+      {night ? <MoonMark /> : <SunMark />}
+    </div>
   )
 }

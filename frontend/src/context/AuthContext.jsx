@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import api from '../api'
+import { broadcastPulseLogout, clearPulseLogoutOrigin } from '../utils/pulseAuthSync'
 import { clearWelcomeCurtainSeen } from '../utils/pulseWelcomeCurtain'
 
 const AuthContext = createContext()
@@ -28,6 +29,7 @@ export function AuthProvider({ children }) {
     api.invalidateCache?.('/auth/')
     clearWelcomeCurtainSeen()
     setUser(null)
+    broadcastPulseLogout()
   }, [])
 
   const fetchProfile = useCallback(async () => {
@@ -39,8 +41,6 @@ export function AuthProvider({ children }) {
       const res = await api.get('/auth/profile', { signal: controller.signal, __skipCache: true })
       setUser(res.data.user)
     } catch {
-      // Remove stale token so we don't loop on next load.
-      localStorage.removeItem('token')
       logout()
     } finally {
       clearTimeout(timer)
@@ -60,6 +60,7 @@ export function AuthProvider({ children }) {
   const login = useCallback((token, userData) => {
     localStorage.setItem('token', token)
     api.invalidateCache?.('/auth/')
+    clearPulseLogoutOrigin()
     setExitBusy(false)
     setUser(userData)
   }, [])

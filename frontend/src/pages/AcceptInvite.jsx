@@ -28,6 +28,11 @@ export default function AcceptInvite() {
         const res = await api.get(`/invites/accept/${token}`)
         if (cancelled) return
         setInvite(res.data.data)
+        setForm((f) => ({
+          ...f,
+          firstName: res.data.data.firstName || '',
+          lastName: res.data.data.lastName || '',
+        }))
       } catch (err) {
         if (cancelled) return
         setError(err.response?.data?.message || 'This invite is invalid or expired')

@@ -11,8 +11,9 @@ function lineStorageKey(email) {
 
 export function hasSeenWelcomeCurtain(email) {
   if (!email) return true
+  const key = welcomeCurtainStorageKey(email)
   try {
-    return sessionStorage.getItem(welcomeCurtainStorageKey(email)) === '1'
+    return localStorage.getItem(key) === '1' || sessionStorage.getItem(key) === '1'
   } catch {
     return false
   }
@@ -20,21 +21,36 @@ export function hasSeenWelcomeCurtain(email) {
 
 export function markWelcomeCurtainSeen(email) {
   if (!email) return
+  const key = welcomeCurtainStorageKey(email)
   try {
-    sessionStorage.setItem(welcomeCurtainStorageKey(email), '1')
+    localStorage.setItem(key, '1')
   } catch {
     /* ignore quota / private mode */
   }
+  try {
+    sessionStorage.setItem(key, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearPrefix(storage, prefix) {
+  const keys = []
+  for (let i = 0; i < storage.length; i += 1) {
+    const key = storage.key(i)
+    if (key?.startsWith(prefix)) keys.push(key)
+  }
+  keys.forEach((key) => storage.removeItem(key))
 }
 
 export function clearWelcomeCurtainSeen() {
   try {
-    const keys = []
-    for (let i = 0; i < sessionStorage.length; i += 1) {
-      const key = sessionStorage.key(i)
-      if (key?.startsWith(STORAGE_PREFIX)) keys.push(key)
-    }
-    keys.forEach((key) => sessionStorage.removeItem(key))
+    clearPrefix(localStorage, STORAGE_PREFIX)
+  } catch {
+    /* ignore */
+  }
+  try {
+    clearPrefix(sessionStorage, STORAGE_PREFIX)
   } catch {
     /* ignore */
   }

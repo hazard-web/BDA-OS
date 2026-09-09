@@ -6,13 +6,8 @@ import api from '../api'
 import PulseMark from '../components/PulseMark'
 import PulseLoading from '../components/PulseLoading'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
-import {
-  getPulseGettingStartedPath,
-  getPulseOpenPath,
-  hasPulseAccount,
-  hasPulseSampleChoice,
-  reopenPulseGuide,
-} from '../utils/pulseEntry'
+import { getPulseGettingStartedPath, getPostLoginPath, hasPulseAccount, hasPulseSampleChoice, reopenPulseGuide } from '../utils/pulseEntry'
+import { goToLoginOrCloseTab } from '../utils/pulseAuthSync'
 import './people-hub.css'
 import './pulse-antd.css'
 
@@ -67,7 +62,7 @@ export default function PeopleHub() {
   useEffect(() => {
     if (loading || !user) return
     if (!hasPulseAccount(user)) return
-    const next = getPulseOpenPath(user)
+    const next = getPostLoginPath(user)
     if (next && next !== '/pulse') {
       navigate(next, { replace: true })
     }
@@ -75,7 +70,7 @@ export default function PeopleHub() {
 
   const onSignOut = () => {
     logout()
-    navigate('/login')
+    goToLoginOrCloseTab(navigate)
   }
 
   const onCta = async () => {

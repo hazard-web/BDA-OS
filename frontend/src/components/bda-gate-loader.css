@@ -1,0 +1,54 @@
+.bda-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #fcfcfa;
+  color: #1c2418;
+}
+
+.bda-gate-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: min(280px, 82vw);
+}
+
+.pulse-open-under.is-gated {
+  pointer-events: none;
+  user-select: none;
+}
+
+.bda-gate-label {
+  margin: 0;
+  text-align: center;
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7368;
+}
+
+.bda-gate.is-out {
+  pointer-events: none;
+  animation: bda-gate-leave 0.38s ease forwards;
+}
+
+@keyframes bda-gate-leave {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bda-gate.is-out {
+    animation: none;
+    opacity: 0;
+  }
+}

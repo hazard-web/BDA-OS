@@ -1,18 +1,15 @@
 const express = require('express')
-const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const { auth } = require('./auth')
 const User = require('../models/User')
 const PulseInvite = require('../models/PulseInvite')
+const Candidate = require('../models/Candidate')
 const { isPulseAdmin, orgIdOf, publicUserWithApps, orgCompanyDomain } = require('../utils/pulseAuth')
 const { assertAllowedCompanyEmail, resolveCompanyDomain } = require('../utils/companyDomain')
-const { sendPulseInviteEmail } = require('../utils/emailService')
-const { buildInviteLink } = require('../utils/urlHelper')
+const { createAndSendOrgInvite } = require('../utils/pulseOrgInvite')
 const { DEFAULT_GENDER } = require('../utils/indiaLocation')
 
 const router = express.Router()
-
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 function requireAdmin(req, res, next) {
   if (!isPulseAdmin(req.user)) {
@@ -77,65 +74,17 @@ router.post('/', auth, requireAdmin, async (req, res) => {
       .trim()
       .toLowerCase()
     const role = req.body.role === 'admin' ? 'admin' : 'member'
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({ success: false, message: 'Valid email is required' })
-    }
-
     const organizationId = orgIdOf(req.user)
-    const domainCheck = assertAllowedCompanyEmail(email)
-    if (!domainCheck.ok) {
-      return res.status(400).json({
-        success: false,
-        code: 'COMPANY_DOMAIN_REQUIRED',
-        message: domainCheck.message,
-      })
-    }
-
-    const existingUser = await User.findOne({ email }).select('_id organizationId').lean()
-    if (existingUser) {
-      const sameOrg =
-        String(existingUser.organizationId || existingUser._id) === String(organizationId) ||
-        String(existingUser._id) === String(organizationId)
-      if (sameOrg) {
-        return res.status(400).json({ success: false, message: 'This person already has an account' })
-      }
-      return res.status(400).json({ success: false, message: 'Email is already registered' })
-    }
-
-    await PulseInvite.updateMany(
-      { organizationId, email, status: 'pending' },
-      { $set: { status: 'revoked' } },
-    )
-
-    const token = crypto.randomBytes(32).toString('hex')
-    const invite = await PulseInvite.create({
+    const { invite, inviteUrl, emailSent } = await createAndSendOrgInvite({
       email,
       role,
       organizationId,
       invitedBy: req.user._id,
       companyName: req.user.companyName || '',
-      token,
-      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+      invitedByName: inviterName(req.user),
     })
 
-    const inviteUrl = buildInviteLink(token)
-    let emailSent = true
-    let devInviteLink = null
-    try {
-      await sendPulseInviteEmail({
-        to: email,
-        inviteUrl,
-        companyName: req.user.companyName,
-        role,
-        invitedByName: inviterName(req.user),
-      })
-    } catch (emailErr) {
-      console.error('Pulse invite email failed:', emailErr.message)
-      emailSent = false
-      if (process.env.NODE_ENV !== 'production') {
-        devInviteLink = inviteUrl
-      }
-    }
+    const devInviteLink = !emailSent && process.env.NODE_ENV !== 'production' ? inviteUrl : null
 
     res.status(201).json({
       success: true,
@@ -150,7 +99,12 @@ router.post('/', auth, requireAdmin, async (req, res) => {
       },
     })
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message || 'Failed to send invite' })
+    const status = err.status || 500
+    res.status(status).json({
+      success: false,
+      code: err.code,
+      message: err.message || 'Failed to send invite',
+    })
   }
 })
 
@@ -187,6 +141,8 @@ router.get('/accept/:token', async (req, res) => {
         email: invite.email,
         role: invite.role,
         companyName: invite.companyName || '',
+        firstName: invite.firstName || '',
+        lastName: invite.lastName || '',
         expiresAt: invite.expiresAt,
       },
     })
@@ -232,11 +188,14 @@ router.post('/accept', async (req, res) => {
     }
     const companyDomain = resolveCompanyDomain()
 
+    const givenName = firstName || invite.firstName || ''
+    const familyName = lastName || invite.lastName || ''
+
     const user = new User({
       email: invite.email,
       password,
-      firstName,
-      lastName,
+      firstName: givenName,
+      lastName: familyName,
       role: invite.role,
       organizationId: invite.organizationId,
       companyName: (admin && admin.companyName) || invite.companyName || '',
@@ -262,6 +221,11 @@ router.post('/accept', async (req, res) => {
     invite.acceptedAt = new Date()
     invite.acceptedUser = user._id
     await invite.save()
+
+    await Candidate.updateMany(
+      { organizationId: invite.organizationId, officialEmail: invite.email },
+      { $set: { status: 'Joined' } },
+    )
 
     const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'fallback_secret', {
       expiresIn: '7d',

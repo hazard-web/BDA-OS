@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import api from '../api'
 import AuthShell from '../components/auth/AuthShell'
 import { AuthLogoLoader, useAuthRedirect } from '../components/auth/AuthLogoLoader'
+import { companyEmailRequiredMessage, isCompanyEmail, normalizeCompanyEmail } from '../utils/companyDomain'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -15,9 +16,19 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const nextEmail = normalizeCompanyEmail(email)
+    if (!nextEmail) {
+      toast.error('Enter your email address')
+      return
+    }
+    if (!isCompanyEmail(nextEmail)) {
+      toast.error(companyEmailRequiredMessage())
+      return
+    }
+    setEmail(nextEmail)
     setLoading(true)
     try {
-      const res = await api.post('/auth/forgot-password', { email })
+      const res = await api.post('/auth/forgot-password', { email: nextEmail })
       setSent(true)
       if (res?.data?.devResetLink) {
         setDevResetLink(res.data.devResetLink)
@@ -60,13 +71,17 @@ export default function ForgotPassword() {
             <input
               id="forgot-email"
               className="auth-input"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              autoComplete="email"
+              placeholder="you@bda.co.in"
+              autoComplete="username"
             />
           </div>
           <button type="submit" className="auth-btn" disabled={loading}>

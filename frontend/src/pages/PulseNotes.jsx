@@ -48,7 +48,6 @@ import {
   Typography,
 } from 'antd'
 import PulseMark from '../components/PulseMark'
-import PulseLoading from '../components/PulseLoading'
 import { useAuth } from '../context/AuthContext'
 import {
   NOTE_COLORS,
@@ -69,6 +68,7 @@ import {
 } from '../utils/pulseNotes'
 import { hasPulseAccount, hasPulseSampleChoice, getPulseGettingStartedPath } from '../utils/pulseEntry'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
+import { AuthLogoLoader, useAccountSignOut } from '../components/auth/AuthLogoLoader'
 import './pulse-antd.css'
 import './pulse-notes.css'
 
@@ -193,7 +193,8 @@ function ListHeader({ title, onSearch, starred, onStar, moreItems }) {
 
 export default function PulseNotes() {
   const navigate = useNavigate()
-  const { user, loading, logout } = useAuth()
+  const { user, loading } = useAuth()
+  const { signingOut, signOutLogo, beginSignOut } = useAccountSignOut()
   const today = pulseNotesDayKey()
   const [nav, setNav] = useState('all')
   const [notebooks, setNotebooks] = useState([{ id: 'my-notebook', name: 'My Notebook' }])
@@ -332,7 +333,7 @@ export default function PulseNotes() {
   }
 
   if (loading || !user || !hasPulseAccount(user) || !hasPulseSampleChoice()) {
-    return <PulseLoading />
+    return <AuthLogoLoader show label={signOutLogo ? 'Signing out' : 'Opening Pulse'} />
   }
 
   const selectedNav = nav.startsWith('board:') ? nav : nav
@@ -432,6 +433,7 @@ export default function PulseNotes() {
 
   return (
     <AntLayout className="pulse-shell pn-shell">
+      <AuthLogoLoader show={signOutLogo} label="Signing out" />
       <Header className="pulse-top">
         <button type="button" className="pulse-rail-logo pn-mark" onClick={() => navigate('/pulse/home')} aria-label="Pulse home">
           <PulseMark size={28} />
@@ -463,9 +465,10 @@ export default function PulseNotes() {
             <Button type="text" icon={<SettingOutlined />} onClick={() => navigate('/pulse/home')} />
           </Tooltip>
           <Dropdown
+            disabled={signingOut}
             menu={{
               items: [
-                { key: 'out', icon: <LogoutOutlined />, danger: true, label: 'Sign out', onClick: () => { logout(); navigate('/login') } },
+                { key: 'out', icon: <LogoutOutlined />, danger: true, label: signingOut ? 'Signing out' : 'Sign out', disabled: signingOut, onClick: () => beginSignOut() },
               ],
             }}
           >
