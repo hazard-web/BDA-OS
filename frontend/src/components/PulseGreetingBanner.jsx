@@ -62,7 +62,7 @@ export default function PulseGreetingBanner({ name, hour = new Date().getHours()
   return (
     <article className={`ms-card ms-hello is-${period}`}>
       <span className="ms-hello-logo">
-        <img src="/bda-logo-lockup.png" alt="BDA Technologies" />
+        <img src="/bda-logo.png" alt="BDA Technologies" />
       </span>
       <div className="ms-hello-copy">
         <span className="ms-hello-greet">{greetingTitle(period)}</span>
