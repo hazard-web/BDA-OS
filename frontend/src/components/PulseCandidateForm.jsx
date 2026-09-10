@@ -29,6 +29,7 @@ export const DEPARTMENTS = ['Engineering', 'Human Resources', 'Finance', 'Operat
 export const LOCATIONS = ['Ghaziabad', 'Noida', 'Delhi NCR', 'Bengaluru', 'Remote', 'Hybrid']
 export const TITLES = ['Software Engineer', 'HR Executive', 'Intern', 'Manager', 'Team Lead', 'Associate', 'Analyst']
 export const HIRE_SOURCES = ['Referral', 'Job board', 'Campus', 'Agency', 'Direct', 'Career page']
+export const GENDERS = ['Male', 'Female', 'Other']
 export const COUNTRY_CODES = [
   { value: '+91', label: '+91' },
   { value: '+1', label: '+1' },
@@ -200,6 +201,9 @@ export const emptyCandidate = {
   officialEmail: '',
   phone: '',
   countryCode: '+91',
+  dob: null,
+  gender: undefined,
+  emergencyContact: { name: '', relationship: '', phone: '' },
   uan: '',
   aadhaar: '',
   pan: '',
@@ -232,6 +236,9 @@ export function valuesFromCandidate(row) {
     ...emptyCandidate,
     ...row,
     countryCode: row.countryCode || '+91',
+    dob: row.dob ? dayjs(row.dob) : null,
+    gender: row.gender || undefined,
+    emergencyContact: { ...emptyCandidate.emergencyContact, ...(row.emergencyContact || {}) },
     photo: row.photo?.data || row.photo?.name ? row.photo : null,
     aadhaarFront: row.aadhaarFront?.data || row.aadhaarFront?.name ? row.aadhaarFront : null,
     aadhaarBack: row.aadhaarBack?.data || row.aadhaarBack?.name ? row.aadhaarBack : null,
@@ -254,6 +261,13 @@ export function payloadFromValues(values, { draft, mode = 'admin' } = {}) {
       lastName: values.lastName,
       phone: values.phone,
       countryCode: values.countryCode,
+      dob: values.dob ? (values.dob.toISOString ? values.dob.toISOString() : values.dob) : null,
+      gender: values.gender || '',
+      emergencyContact: {
+        name: values.emergencyContact?.name || '',
+        relationship: values.emergencyContact?.relationship || '',
+        phone: values.emergencyContact?.phone || '',
+      },
       aadhaar: values.aadhaar,
       pan: values.pan,
       photo: values.photo?.data ? values.photo : undefined,
@@ -296,10 +310,93 @@ export const EMPLOYEE_STEPS = [
 ]
 
 export const EMPLOYEE_STEP_FIELDS = {
-  you: ['firstName', 'lastName', 'phone'],
+  you: [
+    'firstName',
+    'lastName',
+    'phone',
+    'dob',
+    'gender',
+    ['emergencyContact', 'name'],
+    ['emergencyContact', 'phone'],
+  ],
   id: ['aadhaarFront', 'aadhaarBack', 'panFront', 'panBack'],
   address: [],
   work: [],
+}
+
+function dobDisabledDate(current) {
+  return Boolean(current && current.isAfter(dayjs(), 'day'))
+}
+
+function YouPersonalFields({ disabled, required }) {
+  const rules = required && !disabled
+  return (
+    <>
+      <Col xs={24} md={12}>
+        <Form.Item
+          name="dob"
+          label="Date of birth"
+          rules={rules ? [{ required: true, message: 'Date of birth is required' }] : []}
+        >
+          <DatePicker
+            format="DD-MMM-YYYY"
+            style={{ width: '100%' }}
+            placeholder="dd-MMM-yyyy"
+            disabled={disabled}
+            disabledDate={dobDisabledDate}
+            inputReadOnly
+          />
+        </Form.Item>
+      </Col>
+      <Col xs={24} md={12}>
+        <Form.Item
+          name="gender"
+          label="Gender"
+          rules={rules ? [{ required: true, message: 'Gender is required' }] : []}
+        >
+          <Select
+            placeholder="Select"
+            disabled={disabled}
+            options={GENDERS.map((item) => ({ value: item, label: item }))}
+          />
+        </Form.Item>
+      </Col>
+    </>
+  )
+}
+
+function EmergencyFields({ disabled, required }) {
+  const rules = required && !disabled
+  return (
+    <div className="ob-you-emergency">
+      <p className="ob-you-emergency-label">Emergency contact</p>
+      <Row gutter={16}>
+        <Col xs={24} md={12}>
+          <Form.Item
+            name={['emergencyContact', 'name']}
+            label="Name"
+            rules={rules ? [{ required: true, message: 'Name is required' }] : []}
+          >
+            <Input autoComplete="off" disabled={disabled} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={12}>
+          <Form.Item name={['emergencyContact', 'relationship']} label="Relationship">
+            <Input placeholder="e.g. Parent, Spouse" disabled={disabled} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={12}>
+          <Form.Item
+            name={['emergencyContact', 'phone']}
+            label="Phone"
+            rules={rules ? [{ required: true, message: 'Phone is required' }] : []}
+          >
+            <Input inputMode="tel" autoComplete="tel" disabled={disabled} />
+          </Form.Item>
+        </Col>
+      </Row>
+    </div>
+  )
 }
 
 function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = 'you' }) {
@@ -362,44 +459,54 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                   </Space.Compact>
                 </Form.Item>
               </Col>
+              <YouPersonalFields disabled={disabled} required={!disabled} />
             </Row>
             <Form.Item name="photo" label="Photo" className="ob-you-photo">
               <FileSlot kinds="image" disabled={disabled} compact />
             </Form.Item>
           </div>
+          <EmergencyFields disabled={disabled} required={!disabled} />
         </div>
       ) : (
-        <Row gutter={24}>
-          <Col xs={24} md={12}>
-            <Form.Item label="Phone" required={!disabled}>
-              <Space.Compact className="ob-phone">
-                <Form.Item name="countryCode" noStyle>
-                  <Select options={COUNTRY_CODES} style={{ width: 88 }} disabled={disabled} />
-                </Form.Item>
-                <Form.Item
-                  name="phone"
-                  noStyle
-                  rules={disabled ? [] : [{ required: true, message: 'Phone is required' }]}
-                >
-                  <Input inputMode="tel" autoComplete="tel" disabled={disabled} />
-                </Form.Item>
-              </Space.Compact>
-            </Form.Item>
-            <Form.Item name="aadhaar" label="Aadhaar card number">
-              <Input disabled={disabled} />
-            </Form.Item>
-            <Form.Item name="pan" label="PAN card number">
-              <Input placeholder="ABCDE1234F" disabled={disabled} />
-            </Form.Item>
-            <Form.Item name="photo" label="Photo">
-              <FileSlot
-                kinds="image"
-                disabled={disabled}
-                hint="Files supported: JPG, PNG, GIF, JPEG · Max. size is 5 MB"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
+        <>
+          <Row gutter={24}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Phone" required={!disabled}>
+                <Space.Compact className="ob-phone">
+                  <Form.Item name="countryCode" noStyle>
+                    <Select options={COUNTRY_CODES} style={{ width: 88 }} disabled={disabled} />
+                  </Form.Item>
+                  <Form.Item
+                    name="phone"
+                    noStyle
+                    rules={disabled ? [] : [{ required: true, message: 'Phone is required' }]}
+                  >
+                    <Input inputMode="tel" autoComplete="tel" disabled={disabled} />
+                  </Form.Item>
+                </Space.Compact>
+              </Form.Item>
+            </Col>
+            <YouPersonalFields disabled={disabled} required={!disabled} />
+            <Col span={24}>
+              <EmergencyFields disabled={disabled} required={!disabled} />
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="aadhaar" label="Aadhaar card number">
+                <Input disabled={disabled} />
+              </Form.Item>
+              <Form.Item name="pan" label="PAN card number">
+                <Input placeholder="ABCDE1234F" disabled={disabled} />
+              </Form.Item>
+              <Form.Item name="photo" label="Photo">
+                <FileSlot
+                  kinds="image"
+                  disabled={disabled}
+                  hint="Files supported: JPG, PNG, GIF, JPEG · Max. size is 5 MB"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </>
       )}
 
       <div className="ob-step" hidden={!show('id')}>

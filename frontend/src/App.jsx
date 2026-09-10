@@ -8,6 +8,7 @@ import { useAuth } from './context/AuthContext'
 import { lockPulsePageZoom } from './utils/pulsePageZoom'
 import { closePulseAuxiliaryTab } from './utils/pulseAuthSync'
 import { isPulseAuxiliaryTab, isPulseOpenPath, PULSE_SHELL_PATHS } from './utils/pulseOpenPage'
+import { APP_BASE, APP_NOTES, APP_TIMER, PULSE_HOME, isAppPath, toAppPath } from './utils/pulseEntry'
 
 import Login from './pages/Login'
 import ComingSoon from './pages/ComingSoon'
@@ -22,7 +23,8 @@ import OAuthCallback from './pages/OAuthCallback'
 import OAuthCreateAccount from './pages/OAuthCreateAccount'
 import HrSetup from './pages/HrSetup'
 import PeopleHub from './pages/PeopleHub'
-import PulseGettingStarted from './pages/PulseGettingStarted'
+// Getting Started — parked on branch `pulse/company-later-services`
+// import PulseGettingStarted from './pages/PulseGettingStarted'
 import PeopleHome from './pages/PeopleHome'
 import PulseCheckInTimer from './pages/PulseCheckInTimer'
 import PulseNotes from './pages/PulseNotes'
@@ -36,9 +38,7 @@ function ProtectedRoute({ children }) {
   const location = useLocation()
   if (loading) {
     if (isPulseOpenPath(location.pathname, location.search)) return children
-    const onPulse =
-      location.pathname === '/pulse' || location.pathname.startsWith('/pulse/')
-    if (onPulse) {
+    if (isAppPath(location.pathname)) {
       return <PulseLoading />
     }
     return <div style={{ minHeight: '100vh', background: '#fff' }} aria-hidden="true" />
@@ -56,13 +56,18 @@ function ProtectedRoute({ children }) {
 
 /** Old Rohit / HR / portal URLs → Pulse. */
 function LegacyRedirect() {
-  return <Navigate to="/pulse" replace />
+  return <Navigate to={APP_BASE} replace />
+}
+
+function PulseToBdaRedirect() {
+  const { pathname, search } = useLocation()
+  return <Navigate to={`${toAppPath(pathname)}${search || ''}`} replace />
 }
 
 function PulsePageZoomLock() {
   const { pathname } = useLocation()
-  const onPulse = pathname === '/pulse' || pathname.startsWith('/pulse/')
-  useEffect(() => (onPulse ? lockPulsePageZoom() : undefined), [onPulse])
+  const onApp = isAppPath(pathname)
+  useEffect(() => (onApp ? lockPulsePageZoom() : undefined), [onApp])
   return null
 }
 
@@ -86,38 +91,20 @@ export default function App() {
           }
         />
         <Route
-          path="/pulse"
+          path={APP_BASE}
           element={
             <ProtectedRoute>
               <PeopleHub />
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/:portalId/settings/service/getting-started"
-          element={
-            <ProtectedRoute>
-              <PulseGettingStarted />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/pulse/settings/service/getting-started"
-          element={
-            <ProtectedRoute>
-              <PulseGettingStarted />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/pulse/getting-started"
-          element={<Navigate to="/pulse/settings/service/getting-started" replace />}
-        />
-        <Route
-          path="/pulse/sample-data"
-          element={<Navigate to="/pulse/settings/service/getting-started" replace />}
-        />
-        <Route path="/pulse/checkin-timer" element={<PulseCheckInTimer />} />
+        {/* Getting Started — parked on branch `pulse/company-later-services`. Old URLs go to My Space welcome. */}
+        <Route path="/:portalId/settings/service/getting-started" element={<Navigate to={PULSE_HOME} replace />} />
+        <Route path={`${APP_BASE}/settings/service/getting-started`} element={<Navigate to={PULSE_HOME} replace />} />
+        <Route path={`${APP_BASE}/getting-started`} element={<Navigate to={PULSE_HOME} replace />} />
+        <Route path={`${APP_BASE}/sample-data`} element={<Navigate to={PULSE_HOME} replace />} />
+        <Route path={`${APP_BASE}/time`} element={<Navigate to={`${APP_BASE}/hours`} replace />} />
+        <Route path={APP_TIMER} element={<PulseCheckInTimer />} />
         {PULSE_SHELL_PATHS.map((path) => (
           <Route
             key={path}
@@ -130,13 +117,15 @@ export default function App() {
           />
         ))}
         <Route
-          path="/pulse/notes"
+          path={APP_NOTES}
           element={
             <ProtectedRoute>
               <PulseNotes />
             </ProtectedRoute>
           }
         />
+        <Route path="/pulse/*" element={<PulseToBdaRedirect />} />
+        <Route path="/pulse" element={<Navigate to={APP_BASE} replace />} />
         <Route
           path="/account/*"
           element={
@@ -145,8 +134,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/people" element={<Navigate to="/pulse" replace />} />
-        <Route path="/people/home" element={<Navigate to="/pulse/home" replace />} />
+        <Route path="/people" element={<Navigate to={APP_BASE} replace />} />
+        <Route path="/people/home" element={<Navigate to={PULSE_HOME} replace />} />
 
         {/* <Route path="/smart-signin" element={<SmartSignIn />} /> */}
         <Route path="/coming-soon" element={<ComingSoon />} />
@@ -192,8 +181,8 @@ export default function App() {
         <Route path="/profile" element={<LegacyRedirect />} />
         <Route path="/generate" element={<LegacyRedirect />} />
 
-        <Route path="/" element={<Navigate to="/pulse" replace />} />
-        <Route path="*" element={<Navigate to="/pulse" replace />} />
+        <Route path="/" element={<Navigate to={APP_BASE} replace />} />
+        <Route path="*" element={<Navigate to={APP_BASE} replace />} />
       </Routes>
     </>
   )

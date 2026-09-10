@@ -67,7 +67,7 @@ const CATEGORIES = [
       { id: 'performance', name: 'Performance', to: '/performance', Icon: TrendingUp, color: '#ea580c' },
       { id: 'support', name: 'Staff Support', to: '/staff-support', Icon: LifeBuoy, color: '#0284c7' },
       { id: 'announcements', name: 'Announcements', to: '/settings', Icon: Megaphone, color: '#db2777' },
-      { id: 'company', name: 'Organization', to: '/settings', Icon: Settings, color: '#475569' },
+      { id: 'company', name: 'Company', to: '/settings', Icon: Settings, color: '#475569' },
     ],
   },
   {
@@ -201,7 +201,7 @@ export default function AppsDirectory() {
           </>
         ) : null}
 
-        <p className="pad-all-label">All People OS apps</p>
+        <p className="pad-all-label">All BDA OS apps</p>
         <p className="pad-org">
           {user?.companyName ? `Workspace · ${user.companyName}` : 'Your HR & project workspace'}
         </p>

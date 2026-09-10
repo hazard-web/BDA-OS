@@ -29,7 +29,7 @@ function Plaque({ companyName, step, onStep, complete }) {
     <aside className="ob-public-plaque">
       <div className="ob-public-brand">
         <div className="ob-public-logo">
-          <img src="/bda-logo.png" alt="" width="72" height="72" />
+          <img src="/bda-logo-lockup.png" alt="BDA Technologies" />
         </div>
         <h1 className="ob-public-org">{org}</h1>
       </div>
@@ -141,8 +141,9 @@ export default function EmployeeOnboard() {
     } catch (err) {
       if (err?.errorFields) {
         const names = err.errorFields.map((item) => String(item.name?.[0] || ''))
-        if (names.some((name) => EMPLOYEE_STEP_FIELDS.you.includes(name))) setStep('you')
-        else if (names.some((name) => EMPLOYEE_STEP_FIELDS.id.includes(name))) setStep('id')
+        const roots = (fields) => fields.map((item) => (Array.isArray(item) ? item[0] : item))
+        if (names.some((name) => roots(EMPLOYEE_STEP_FIELDS.you).includes(name))) setStep('you')
+        else if (names.some((name) => roots(EMPLOYEE_STEP_FIELDS.id).includes(name))) setStep('id')
         return
       }
       message.error(err?.response?.data?.message || err.message || 'Could not submit details')
@@ -182,7 +183,7 @@ export default function EmployeeOnboard() {
       <Shell companyName={companyName} step="work" complete>
         <div className="ob-public-sheet is-note">
           <h2>Details received</h2>
-          <p>HR will send your Pulse invite to your work email.</p>
+          <p>HR will send your BDA OS invite to your work email.</p>
         </div>
       </Shell>
     )

@@ -139,7 +139,7 @@ export function AuthSocialGrid({ onBack }) {
         ))}
       </div>
       <button type="button" className="auth-social-home" onClick={onBack}>
-        Sign in with People OS
+        Sign in with BDA OS
         <span aria-hidden="true">›</span>
       </button>
     </div>

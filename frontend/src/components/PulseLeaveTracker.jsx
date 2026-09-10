@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
 import {
   App,
@@ -10,7 +11,6 @@ import {
   Form,
   Input,
   Modal,
-  Progress,
   Select,
   Table,
   Tag,
@@ -24,9 +24,11 @@ import {
   DownloadOutlined,
   DownOutlined,
   EllipsisOutlined,
+  FileTextOutlined,
   FilterOutlined,
   InfoCircleFilled,
   LeftOutlined,
+  PaperClipOutlined,
   PlusOutlined,
   RightOutlined,
   SearchOutlined,
@@ -280,6 +282,76 @@ function leaveDurationDays(start, end) {
   if (!start?.isValid?.() || !end?.isValid?.()) return null
   if (end.isBefore(start, 'day')) return null
   return end.diff(start, 'day') + 1
+}
+
+const ATTACH_MAX = 5 * 1024 * 1024
+
+function readLeaveFile(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > ATTACH_MAX) {
+      reject(new Error('Max. size is 5 MB'))
+      return
+    }
+    const mime = String(file.type || '').toLowerCase()
+    const ok = mime.startsWith('image/') || mime === 'application/pdf' || mime.includes('word')
+    if (!ok) {
+      reject(new Error('Use PDF, Word, or an image'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      resolve({
+        name: file.name,
+        mime: file.type,
+        size: file.size,
+        data: reader.result,
+      })
+    }
+    reader.onerror = () => reject(new Error('Could not read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function LeaveAttach({ value, onChange, disabled }) {
+  const { message } = App.useApp()
+  const pick = async (file) => {
+    try {
+      onChange(await readLeaveFile(file))
+    } catch (err) {
+      message.error({ content: err.message || 'Could not attach file', className: 'pulse-message' })
+    }
+    return false
+  }
+
+  return (
+    <div className="pulse-leave-attach">
+      {value?.name ? (
+        <div className="pulse-leave-attach-file">
+          <FileTextOutlined />
+          <span>{value.name}</span>
+          <Button
+            type="text"
+            size="small"
+            icon={<CloseOutlined />}
+            aria-label="Remove attachment"
+            disabled={disabled}
+            onClick={() => onChange(null)}
+          />
+        </div>
+      ) : (
+        <Upload
+          accept="image/*,.pdf,.doc,.docx,application/pdf"
+          maxCount={1}
+          showUploadList={false}
+          beforeUpload={pick}
+          disabled={disabled}
+        >
+          <Button icon={<UploadOutlined />} disabled={disabled}>Attach file</Button>
+        </Upload>
+      )}
+      <p className="pulse-leave-attach-hint">PDF, Word, or image · Max 5 MB</p>
+    </div>
+  )
 }
 
 function LeaveEmpty({ title, actionLabel, onAction }) {
@@ -642,7 +714,7 @@ export default function PulseLeaveTracker({
   sample = false,
   casualBalance,
   mainTab = 'mydata',
-  myTab = 'summary',
+  myTab = 'requests',
   onMyTabChange,
 }) {
   const { message } = App.useApp()
@@ -767,16 +839,12 @@ export default function PulseLeaveTracker({
     if (!sample && casualBalance) setCasual(casualBalance)
   }, [sample, casualBalance])
 
-  const remaining = Math.max(0, Number(casual.remaining ?? (casual.total - casual.used)) || 0)
   const applyStartDate = Form.useWatch('startDate', form)
   const applyEndDate = Form.useWatch('endDate', form)
   const applyLeaveDays = useMemo(
     () => leaveDurationDays(applyStartDate, applyEndDate),
     [applyStartDate, applyEndDate],
   )
-  const used = Math.max(0, Number(casual.used) || 0)
-  const total = Number(casual.total) || CASUAL_ANNUAL
-  const usedPct = total > 0 ? Math.round((used / total) * 100) : 0
 
   const filteredRequests = useMemo(() => {
     return requests.filter((row) => {
@@ -859,6 +927,31 @@ export default function PulseLeaveTracker({
         ellipsis: true,
       },
       {
+        title: 'File',
+        key: 'file',
+        width: 88,
+        render: (_, row) => {
+          if (!row.attachment?.name) return '—'
+          if (row.attachment.url) {
+            return (
+              <a
+                className="pulse-leave-file-link"
+                href={row.attachment.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <PaperClipOutlined /> {row.attachment.name}
+              </a>
+            )
+          }
+          return (
+            <span className="pulse-leave-file-name">
+              <PaperClipOutlined /> {row.attachment.name}
+            </span>
+          )
+        },
+      },
+      {
         title: 'Status',
         dataIndex: 'status',
         width: 110,
@@ -886,6 +979,11 @@ export default function PulseLeaveTracker({
     [],
   )
 
+  const closeAdd = () => {
+    setAddOpen(false)
+    form.resetFields()
+  }
+
   const onSubmit = async (values) => {
     if (sample) return
     setSubmitting(true)
@@ -896,9 +994,9 @@ export default function PulseLeaveTracker({
         endDate: values.endDate.format('YYYY-MM-DD'),
         teamEmailId: values.teamEmailId,
         reason: values.reason,
+        attachment: values.attachment || null,
       })
-      form.resetFields()
-      setAddOpen(false)
+      closeAdd()
       message.success({
         content: res.data?.notified
           ? `Leave request submitted · ${values.teamEmailId} notified`
@@ -1505,40 +1603,6 @@ export default function PulseLeaveTracker({
   }
 
   const renderMyData = () => {
-    if (myTab === 'shift') {
-      return (
-        <LeaveCard>
-          <LeaveEmpty title="Shift schedule is coming soon." />
-        </LeaveCard>
-      )
-    }
-
-    if (myTab === 'summary') {
-      return (
-        <div className="pulse-leave-summary">
-          <div className="pulse-leave-summary-grid">
-            <article className="pulse-leave-summary-card is-tracked">
-              <span className="pulse-leave-summary-label">Casual leave</span>
-              <strong>{remaining}</strong>
-              <small>of {total} days left</small>
-              <Progress percent={usedPct} strokeColor="#1a5f4a" size="small" showInfo={false} />
-              <Tag color="green" bordered={false}>Tracked · {used} used</Tag>
-            </article>
-            <article className="pulse-leave-summary-card is-muted">
-              <span className="pulse-leave-summary-label">Sick leave</span>
-              <strong>—</strong>
-              <small>Not tracked yet</small>
-            </article>
-            <article className="pulse-leave-summary-card is-muted">
-              <span className="pulse-leave-summary-label">Medical leave</span>
-              <strong>—</strong>
-              <small>Not tracked yet</small>
-            </article>
-          </div>
-        </div>
-      )
-    }
-
     return (
       <>
         <div className="pulse-leave-toolbar">
@@ -1555,14 +1619,6 @@ export default function PulseLeaveTracker({
               className={filterActive ? 'is-on' : ''}
               onClick={openFilter}
             />
-            <Dropdown
-              trigger={['click']}
-              placement="bottomRight"
-              rootClassName="pulse-leave-more-menu"
-              menu={moreMenu(exportRequests, filteredRequests.length > 0)}
-            >
-              <Button icon={<EllipsisOutlined />} aria-label="More options" />
-            </Dropdown>
           </div>
         </div>
         <LeaveCard
@@ -1616,12 +1672,14 @@ export default function PulseLeaveTracker({
           />
           <span>{teamRangeLabel}</span>
         </div>
-        <Button
-          icon={<FilterOutlined />}
-          aria-label="Filter"
-          className={filterActive ? 'is-on' : ''}
-          onClick={openFilter}
-        />
+        <div className="pulse-leave-toolbar-right">
+          <Button
+            icon={<FilterOutlined />}
+            aria-label="Filter"
+            className={filterActive ? 'is-on' : ''}
+            onClick={openFilter}
+          />
+        </div>
       </div>
       <LeaveCard>
         <LeaveEmpty title="No team members on leave this week" />
@@ -1629,6 +1687,7 @@ export default function PulseLeaveTracker({
     </>
   )
 
+  // Holidays — parked on branch `pulse/company-later-services`. Restore the tab in PeopleHome.jsx to ship it.
   const renderHolidays = () => (
     <>
       <div className="pulse-leave-toolbar pulse-leave-toolbar-center">
@@ -1719,24 +1778,26 @@ export default function PulseLeaveTracker({
         <div className="pulse-leave-panel">
           {mainTab === 'mydata' ? renderMyData() : null}
           {mainTab === 'team' ? renderTeam() : null}
+          {/* Holidays — parked on branch `pulse/company-later-services`. Restore the tab in PeopleHome.jsx to ship it. */}
           {mainTab === 'holidays' ? renderHolidays() : null}
         </div>
       </div>
 
-      <Modal
-        title="Apply Leave"
+      <Drawer
+        title="Add Request"
+        placement="right"
+        width={560}
         open={addOpen}
-        onCancel={() => setAddOpen(false)}
+        onClose={closeAdd}
         destroyOnHidden
-        centered={false}
-        className="pulse-leave-modal"
-        rootClassName="pulse-leave-modal-root"
+        closable={false}
+        rootClassName="pulse-leave-add-drawer"
         footer={(
           <div className="pulse-leave-apply-foot">
             <Button type="primary" loading={submitting} onClick={() => form.submit()}>
               Submit
             </Button>
-            <Button onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={closeAdd}>Cancel</Button>
           </div>
         )}
       >
@@ -1844,10 +1905,26 @@ export default function PulseLeaveTracker({
               >
                 <Input.TextArea rows={4} />
               </Form.Item>
+              <Form.Item name="attachment" label="Attachment">
+                <LeaveAttach disabled={sample} />
+              </Form.Item>
             </Form>
           </div>
         </div>
-      </Modal>
+      </Drawer>
+      {addOpen
+        ? createPortal(
+            <button
+              type="button"
+              className="pulse-leave-drawer-close"
+              aria-label="Close"
+              onClick={closeAdd}
+            >
+              <CloseOutlined />
+            </button>,
+            document.body,
+          )
+        : null}
 
       <Modal
         title="Holidays Gallery"

@@ -10,16 +10,11 @@ import {
   DesktopOutlined,
   IdcardOutlined,
   InfoCircleOutlined,
-  KeyOutlined,
-  LockOutlined,
   MailOutlined,
-  MobileOutlined,
   PhoneOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
   SafetyCertificateOutlined,
-  SearchOutlined,
-  SettingOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -38,7 +33,6 @@ import {
   Input,
   Layout as AntLayout,
   List,
-  Menu,
   Modal,
   Popconfirm,
   Row,
@@ -56,7 +50,7 @@ import AppsFlyout from '../components/AppsFlyout'
 import LinkedAppsPanel from '../components/LinkedAppsPanel'
 import './account-portal.css'
 
-const { Header, Sider, Content } = AntLayout
+const { Header, Content } = AntLayout
 
 const NAV = [
   {
@@ -69,59 +63,61 @@ const NAV = [
       { id: 'mobile', label: 'Mobile Numbers', icon: <PhoneOutlined /> },
     ],
   },
-  {
-    id: 'security',
-    label: 'Security',
-    icon: <KeyOutlined />,
-    children: [
-      { id: 'password', label: 'Password' },
-      { id: 'additional-verification', label: 'Additional verification' },
-      { id: 'geo-fencing', label: 'Geo-fencing' },
-      { id: 'account-recovery', label: 'Account Recovery' },
-      { id: 'allowed-ip', label: 'Allowed IP Address' },
-      { id: 'app-passwords', label: 'App Passwords' },
-      { id: 'device-signins', label: 'Device Sign-ins' },
-    ],
-  },
-  {
-    id: 'mfa',
-    label: 'Multi-factor auth',
-    icon: <MobileOutlined />,
-    children: [{ id: 'mfa-modes', label: 'MFA Modes' }],
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: <SettingOutlined />,
-    children: [
-      { id: 'preferences', label: 'Preferences' },
-      { id: 'notifications', label: 'Notifications' },
-      { id: 'authorized-websites', label: 'Authorized Websites' },
-      { id: 'linked-accounts', label: 'Linked Accounts' },
-      { id: 'close-account', label: 'Close Account' },
-    ],
-  },
-  {
-    id: 'sessions',
-    label: 'Sessions',
-    icon: <DesktopOutlined />,
-    children: [
-      { id: 'active-sessions', label: 'Active Sessions' },
-      { id: 'activity-history', label: 'Activity History' },
-      { id: 'connected-apps', label: 'Connected Apps' },
-      { id: 'app-signins', label: 'App Sign-Ins' },
-    ],
-  },
-  { id: 'groups', label: 'Groups', icon: <TeamOutlined /> },
-  {
-    id: 'privacy',
-    label: 'Privacy',
-    icon: <LockOutlined />,
-    children: [
-      { id: 'data-processing', label: 'Data Processing Addendum' },
-      { id: 'manage-contacts', label: 'Manage Your Contacts' },
-    ],
-  },
+  // Security, MFA, Settings, Sessions, Groups, Privacy — parked on branch `pulse/company-later-services`.
+  // Restore the NAV items below to ship them.
+  // {
+  //   id: 'security',
+  //   label: 'Security',
+  //   icon: <KeyOutlined />,
+  //   children: [
+  //     { id: 'password', label: 'Password' },
+  //     { id: 'additional-verification', label: 'Additional verification' },
+  //     { id: 'geo-fencing', label: 'Geo-fencing' },
+  //     { id: 'account-recovery', label: 'Account Recovery' },
+  //     { id: 'allowed-ip', label: 'Allowed IP Address' },
+  //     { id: 'app-passwords', label: 'App Passwords' },
+  //     { id: 'device-signins', label: 'Device Sign-ins' },
+  //   ],
+  // },
+  // {
+  //   id: 'mfa',
+  //   label: 'Multi-factor auth',
+  //   icon: <MobileOutlined />,
+  //   children: [{ id: 'mfa-modes', label: 'MFA Modes' }],
+  // },
+  // {
+  //   id: 'settings',
+  //   label: 'Settings',
+  //   icon: <SettingOutlined />,
+  //   children: [
+  //     { id: 'preferences', label: 'Preferences' },
+  //     { id: 'notifications', label: 'Notifications' },
+  //     { id: 'authorized-websites', label: 'Authorized Websites' },
+  //     { id: 'linked-accounts', label: 'Linked Accounts' },
+  //     { id: 'close-account', label: 'Close Account' },
+  //   ],
+  // },
+  // {
+  //   id: 'sessions',
+  //   label: 'Sessions',
+  //   icon: <DesktopOutlined />,
+  //   children: [
+  //     { id: 'active-sessions', label: 'Active Sessions' },
+  //     { id: 'activity-history', label: 'Activity History' },
+  //     { id: 'connected-apps', label: 'Connected Apps' },
+  //     { id: 'app-signins', label: 'App Sign-Ins' },
+  //   ],
+  // },
+  // { id: 'groups', label: 'Groups', icon: <TeamOutlined /> },
+  // {
+  //   id: 'privacy',
+  //   label: 'Privacy',
+  //   icon: <LockOutlined />,
+  //   children: [
+  //     { id: 'data-processing', label: 'Data Processing Addendum' },
+  //     { id: 'manage-contacts', label: 'Manage Your Contacts' },
+  //   ],
+  // },
 ]
 
 const PROFILE_SECTIONS = new Set(['personal', 'email', 'mobile'])
@@ -133,12 +129,6 @@ function findNavItem(sectionId) {
     if (child) return { parent: item, child }
   }
   return null
-}
-
-function isParentActive(item, section) {
-  if (item.id === 'profile') return PROFILE_SECTIONS.has(section)
-  if (item.children?.some((c) => c.id === section)) return true
-  return section === item.id
 }
 
 const HELP_DOCS = [
@@ -164,24 +154,24 @@ function displayUserId(id) {
 }
 
 const SECTION_BLURBS = {
-  password: 'Change your People OS account password and review recent password activity.',
+  password: 'Change your BDA OS account password and review recent password activity.',
   'additional-verification': 'Add an extra verification step for sensitive account actions.',
   'geo-fencing': 'Restrict sign-in access to approved geographic regions.',
   'account-recovery': 'Configure recovery options if you lose access to your account.',
   'allowed-ip': 'Allow sign-ins only from trusted IP addresses.',
   'app-passwords': 'Generate app-specific passwords for legacy apps that cannot use SSO.',
   'device-signins': 'Review devices that have recently signed in to your account.',
-  'mfa-modes': 'Choose how you verify your identity when signing in to People OS.',
+  'mfa-modes': 'Choose how you verify your identity when signing in to BDA OS.',
   preferences: 'Language, timezone, and display preferences for your account.',
   notifications: 'Choose which account alerts and product updates you receive.',
-  'authorized-websites': 'Websites and domains authorized to use your People OS identity.',
-  'linked-accounts': 'Google and other providers linked for sign-in to People OS.',
-  'close-account': 'Permanently close your People OS administrator account.',
-  'active-sessions': 'Devices and browsers currently signed in to People OS Accounts.',
+  'authorized-websites': 'Websites and domains authorized to use your BDA OS identity.',
+  'linked-accounts': 'Google and other providers linked for sign-in to BDA OS.',
+  'close-account': 'Permanently close your BDA OS administrator account.',
+  'active-sessions': 'Devices and browsers currently signed in to BDA OS.',
   'activity-history': 'Recent sign-in and security activity on your account.',
-  'connected-apps': 'See apps assigned in Pulse and Sign in with Google apps imported from Google Workspace.',
-  'app-signins': 'Apps you have signed into with People OS Accounts or Google.',
-  'data-processing': 'Review how People OS processes personal data for your organization.',
+  'connected-apps': 'See apps assigned in BDA OS and Sign in with Google apps imported from Google Workspace.',
+  'app-signins': 'Apps you have signed into with BDA OS or Google.',
+  'data-processing': 'Review how BDA OS processes personal data for your organization.',
   'manage-contacts': 'Manage contact details used for account communication and recovery.',
 }
 
@@ -363,9 +353,7 @@ export default function AccountPortal({ embedded = false }) {
   const [primaryModalOpen, setPrimaryModalOpen] = useState(false)
   const [emailPrimaryModal, setEmailPrimaryModal] = useState(null)
   const [form, setForm] = useState({})
-  const [navQuery, setNavQuery] = useState('')
   const mainRef = useRef(null)
-  const sideRef = useRef(null)
   const appsBtnRef = useRef(null)
   const ignoreSpyUntil = useRef(0)
 
@@ -392,6 +380,10 @@ export default function AccountPortal({ embedded = false }) {
   )
 
   useEffect(() => {
+    if (!findNavItem(section) && !PROFILE_SECTIONS.has(section)) setSection('personal')
+  }, [section])
+
+  useEffect(() => {
     if (!user) return
     setForm({
       firstName: user.firstName || '',
@@ -408,7 +400,8 @@ export default function AccountPortal({ embedded = false }) {
 
   useEffect(() => {
     const nextSection = params.get('section')
-    if (nextSection) setSection(nextSection)
+    if (nextSection && (findNavItem(nextSection) || PROFILE_SECTIONS.has(nextSection))) setSection(nextSection)
+    else if (nextSection) setSection('personal')
     const err = params.get('oauth_error')
     if (err) toast.error(err)
   }, [params])
@@ -638,41 +631,6 @@ export default function AccountPortal({ embedded = false }) {
     ? 'Profile'
     : openParent?.label || (section === 'groups' ? 'Groups' : 'Account')
   const touchedLabel = relativeFrom(user.updatedAt || user.createdAt)
-  const openKeys = NAV.filter((item) => isParentActive(item, section) && item.children).map((item) => item.id)
-
-  const menuItems = useMemo(() => {
-    const toItem = (item) => (
-      item.children
-        ? {
-            key: item.id,
-            icon: item.icon,
-            label: item.label,
-            children: item.children.map((child) => ({
-              key: child.id,
-              icon: child.icon,
-              label: child.label,
-            })),
-          }
-        : { key: item.id, icon: item.icon, label: item.label }
-    )
-
-    const query = navQuery.trim().toLowerCase()
-    if (query) {
-      const hits = []
-      NAV.forEach((item) => {
-        if (item.label.toLowerCase().includes(query)) hits.push(toItem({ ...item, children: undefined }))
-        item.children?.forEach((child) => {
-          if (child.label.toLowerCase().includes(query)) {
-            hits.push({ key: child.id, icon: child.icon || item.icon, label: child.label })
-          }
-        })
-      })
-      return hits
-    }
-
-    return NAV.map(toItem)
-  }, [navQuery])
-
   const goNav = (key) => {
     if (String(key).startsWith('g-')) return
     const parent = NAV.find((item) => item.id === key)
@@ -718,7 +676,7 @@ export default function AccountPortal({ embedded = false }) {
                   type="text"
                   ref={appsBtnRef}
                   icon={<AppstoreOutlined />}
-                  aria-label="Open People OS apps"
+                  aria-label="Open BDA OS apps"
                   onClick={() => setAppsOpen(true)}
                 />
               </Tooltip>
@@ -745,7 +703,7 @@ export default function AccountPortal({ embedded = false }) {
           <Typography.Text type="secondary">{user.email}</Typography.Text>
           <Typography.Text type="secondary">
             User ID : {displayUserId(user._id)}{' '}
-            <Tooltip title="Your unique People OS account identifier">
+            <Tooltip title="Your unique BDA OS account identifier">
               <InfoCircleOutlined />
             </Tooltip>
           </Typography.Text>
@@ -771,34 +729,7 @@ export default function AccountPortal({ embedded = false }) {
       </Drawer>
 
       <AntLayout className="acc-mid">
-        <Sider className="acc-side" width={268} theme="light" trigger={null}>
-          <div className="acc-side-inner" ref={sideRef}>
-            <Input
-              allowClear
-              size="middle"
-              prefix={<SearchOutlined />}
-              placeholder="Find a setting"
-              value={navQuery}
-              onChange={(event) => setNavQuery(event.target.value)}
-              className="acc-nav-search"
-            />
-            <Menu
-              mode="inline"
-              selectable
-              selectedKeys={[section]}
-              openKeys={navQuery ? [] : openKeys}
-              items={menuItems}
-              inlineIndent={18}
-              onClick={({ key }) => goNav(key)}
-              onOpenChange={(keys) => {
-                if (navQuery) return
-                const added = keys.find((key) => !openKeys.includes(key))
-                if (added) goNav(added)
-              }}
-            />
-          </div>
-        </Sider>
-
+        {/* Sidebar (Find a setting + Profile/Security/…) — parked on `pulse/company-later-services`. */}
         <Content className="acc-main" ref={mainRef}>
           <div className="acc-stack">
             <div className="acc-page-head">
@@ -1064,7 +995,7 @@ export default function AccountPortal({ embedded = false }) {
               {openParent.children.map((child) => (
                 <Card key={child.id} id={`acc-${child.id}`} className="acc-card" bordered={false} title={child.label}>
                   <Typography.Paragraph type="secondary" className="acc-lead">
-                    {SECTION_BLURBS[child.id] || `${child.label} settings for your People OS account.`}
+                    {SECTION_BLURBS[child.id] || `${child.label} settings for your BDA OS account.`}
                   </Typography.Paragraph>
                   {child.id === 'password' ? (
                     <Link to="/forgot">
@@ -1206,7 +1137,7 @@ export default function AccountPortal({ embedded = false }) {
         confirmLoading={saving}
       >
         <Typography.Paragraph>
-          This will make <Typography.Text strong>{emailPrimaryModal}</Typography.Text> your primary email address. You will use it to sign in to People OS.
+          This will make <Typography.Text strong>{emailPrimaryModal}</Typography.Text> your primary email address. You will use it to sign in to BDA OS.
         </Typography.Paragraph>
       </Modal>
     </AntLayout>

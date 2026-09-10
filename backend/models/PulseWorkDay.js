@@ -43,6 +43,15 @@ const sessionSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const taskEntrySchema = new mongoose.Schema(
+  {
+    description: { type: String, required: true, trim: true },
+    project: { type: String, default: 'BDA OS', trim: true },
+    minutes: { type: Number, required: true, min: 1 },
+  },
+  { _id: true },
+);
+
 const pulseWorkDaySchema = new mongoose.Schema(
   {
     user: {
@@ -59,6 +68,9 @@ const pulseWorkDaySchema = new mongoose.Schema(
     timesheetLogged: { type: Boolean, default: false },
     timesheetLoggedAt: Date,
     timesheetHours: { type: Number, default: 0 },
+    timesheetSubmitted: { type: Boolean, default: false },
+    timesheetSubmittedAt: Date,
+    taskEntries: [taskEntrySchema],
     status: {
       type: String,
       enum: ['idle', 'active', 'stopped', 'closed'],

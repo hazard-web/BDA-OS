@@ -1,13 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { App, Input, Modal } from 'antd'
+import { App, Button, DatePicker, Input, Modal, Select } from 'antd'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import PulseGlassBoard from './PulseGlassBoard'
-import PulseCheckInAdmin from './PulseCheckInAdmin'
+import PulseTimesheetForm from './PulseTimesheetForm'
+import PulseTimesheetAdmin from './PulseTimesheetAdmin'
+import PulseAttendanceAdmin from './PulseAttendanceAdmin'
 import PulseInviteAdmin from './PulseInviteAdmin'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
 import PulseLeaveTracker from './PulseLeaveTracker'
+import api from '../api'
 import { getPulseSampleChoice } from '../utils/pulseEntry'
+import { PULSE_CHECKIN_EVENT } from '../utils/pulseCheckIn'
+import {
+  ATTENDANCE_PERIODS,
+  DEFAULT_WORK_DAYS,
+  buildRangeDays,
+  periodRange,
+} from '../utils/pulseWorkWeek'
+import { hoursLabel } from '../utils/pulseCalendar'
 
 const STORE_KEY = 'pulseLiveBoards.v1'
 
@@ -66,15 +79,230 @@ function promptAdd(message, onOk) {
   })
 }
 
-function attendanceRows(weekDays, name, checkedInAt) {
-  return (weekDays || []).slice(0, 7).map((day) => ({
-    key: day.key,
-    task: `${day.label} ${day.num}`,
-    owner: name,
-    due: format(day.date, 'd MMM'),
-    status: day.status || (day.today ? (checkedInAt ? 'Checked in' : 'Open') : day.present ? 'Present' : 'Open'),
-    done: Boolean(day.present || day.status === 'Weekend' || day.status === 'Holiday'),
-  }))
+function attendanceRows(days, name, checkedInAt) {
+  return (days || []).map((day) => {
+    const status = day.status || (day.today ? (checkedInAt ? 'Checked in' : 'Open') : day.present ? 'Present' : 'Open')
+    return {
+      key: day.key,
+      task: `${format(day.date, 'EEE')} ${format(day.date, 'd MMM')}`,
+      owner: name,
+      due: format(day.date, 'd MMM yyyy'),
+      status,
+      done: Boolean(day.present || day.onLeave || ['Weekend', 'Holiday'].includes(status)),
+    }
+  })
+}
+
+const ATT_PAGE_SIZE = 20
+
+function decorateSampleDay(day, checkedInAt) {
+  if (day.weekend) return { ...day, status: 'Weekend', present: false }
+  if (day.holiday) return { ...day, status: 'Holiday', present: false }
+  if (day.today) {
+    const live = Boolean(checkedInAt)
+    return { ...day, status: live ? 'Checked in' : 'Open', present: live }
+  }
+  if (!day.past) return { ...day, status: 'Open', present: false }
+  const absent = day.date.getDay() === 1 && day.date.getDate() <= 7
+  return {
+    ...day,
+    status: absent ? 'Absent' : 'Present',
+    present: !absent,
+    hours: absent ? 0 : 8,
+    seconds: absent ? 0 : 8 * 3600,
+  }
+}
+
+function useAttendanceHistory({ period, custom, sample, checkedInAt, todaySeconds }) {
+  const range = useMemo(() => periodRange(period, new Date(), custom), [period, custom])
+  const [payload, setPayload] = useState({
+    records: [],
+    workDays: DEFAULT_WORK_DAYS,
+    holidays: [],
+    leaveDates: [],
+    leaveByDate: {},
+  })
+
+  useEffect(() => {
+    if (sample) return undefined
+    let cancelled = false
+    api
+      .get('/pulse-checkin/overview', { params: { from: range.from, to: range.to } })
+      .then((res) => {
+        if (cancelled) return
+        const data = res.data?.data || {}
+        setPayload({
+          records: Array.isArray(data.days) ? data.days : [],
+          workDays: Array.isArray(data.workDays) && data.workDays.length ? data.workDays : DEFAULT_WORK_DAYS,
+          holidays: Array.isArray(data.holidays) ? data.holidays : [],
+          leaveDates: Array.isArray(data.leaveDates) ? data.leaveDates : [],
+          leaveByDate: data.leaveByDate && typeof data.leaveByDate === 'object' ? data.leaveByDate : {},
+        })
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPayload({
+            records: [],
+            workDays: DEFAULT_WORK_DAYS,
+            holidays: [],
+            leaveDates: [],
+            leaveByDate: {},
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sample, range.from, range.to])
+
+  useEffect(() => {
+    if (sample) return undefined
+    const onChange = () => {
+      api
+        .get('/pulse-checkin/overview', { params: { from: range.from, to: range.to } })
+        .then((res) => {
+          const data = res.data?.data || {}
+          setPayload({
+            records: Array.isArray(data.days) ? data.days : [],
+            workDays: Array.isArray(data.workDays) && data.workDays.length ? data.workDays : DEFAULT_WORK_DAYS,
+            holidays: Array.isArray(data.holidays) ? data.holidays : [],
+            leaveDates: Array.isArray(data.leaveDates) ? data.leaveDates : [],
+            leaveByDate: data.leaveByDate && typeof data.leaveByDate === 'object' ? data.leaveByDate : {},
+          })
+        })
+        .catch(() => {})
+    }
+    window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
+    return () => window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
+  }, [sample, range.from, range.to, checkedInAt])
+
+  const days = useMemo(() => {
+    const built = buildRangeDays({
+      start: range.start,
+      end: range.end,
+      records: payload.records,
+      workDays: payload.workDays,
+      checkedInToday: Boolean(checkedInAt),
+      leaveDates: payload.leaveDates,
+      leaveByDate: payload.leaveByDate,
+      holidays: payload.holidays,
+      todaySeconds,
+      useSample: sample,
+    })
+    return sample ? built.map((day) => decorateSampleDay(day, checkedInAt)) : built
+  }, [range.start, range.end, payload, checkedInAt, todaySeconds, sample])
+
+  return { days, range }
+}
+
+function PulseAttendanceBoard({
+  name,
+  checkedInAt,
+  elapsed,
+  checkBusy,
+  onCheckIn,
+  leaveLeft,
+  mtdPct,
+  sample,
+}) {
+  const [period, setPeriod] = useState('week')
+  const [customRange, setCustomRange] = useState(() => [dayjs().startOf('month'), dayjs()])
+  const [page, setPage] = useState(1)
+  const custom = useMemo(() => {
+    if (period !== 'custom' || !customRange?.[0] || !customRange?.[1]) return null
+    return { start: customRange[0].toDate(), end: customRange[1].toDate() }
+  }, [period, customRange])
+  const { days, range } = useAttendanceHistory({
+    period,
+    custom,
+    sample,
+    checkedInAt,
+    todaySeconds: Math.max(0, Math.floor(Number(elapsed) || 0)),
+  })
+
+  useEffect(() => {
+    setPage(1)
+  }, [range.from, range.to])
+
+  const rows = useMemo(() => attendanceRows(days, name, checkedInAt), [days, name, checkedInAt])
+  const scored = days.filter((day) => !day.weekend && !day.holiday && !day.onLeave && (day.past || (day.today && day.present)))
+  const presentCount = scored.filter((day) => day.present).length
+  const absentCount = scored.filter((day) => !day.present).length
+  const pct = scored.length ? Math.round((presentCount / scored.length) * 100) : mtdPct
+  const lastPage = Math.max(1, Math.ceil(rows.length / ATT_PAGE_SIZE))
+  const safePage = Math.min(page, lastPage)
+  const paged = rows.slice((safePage - 1) * ATT_PAGE_SIZE, safePage * ATT_PAGE_SIZE)
+  const start = rows.length === 0 ? 0 : (safePage - 1) * ATT_PAGE_SIZE + 1
+  const end = Math.min(safePage * ATT_PAGE_SIZE, rows.length)
+  const periodLabel = ATTENDANCE_PERIODS.find((item) => item.value === period)?.label || 'This week'
+
+  return (
+    <div className="pulse-att-page">
+      <PulseGlassBoard
+        lead={(
+          <div className="pulse-att-period">
+            <Select
+              value={period}
+              onChange={setPeriod}
+              options={ATTENDANCE_PERIODS}
+              className="pulse-att-select"
+              classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
+              aria-label="Attendance period"
+            />
+            {period === 'custom' ? (
+              <DatePicker.RangePicker
+                value={customRange}
+                allowClear={false}
+                format="DD-MMM-YYYY"
+                className="pulse-att-range"
+                classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
+                disabledDate={(value) => value && value.isAfter(dayjs(), 'day')}
+                onChange={(next) => {
+                  if (next?.[0] && next?.[1]) setCustomRange(next)
+                }}
+              />
+            ) : null}
+          </div>
+        )}
+        ctaLabel={checkBusy ? 'Working…' : checkedInAt ? 'Check out' : 'Check in'}
+        checkIn
+        onCta={onCheckIn}
+        metrics={[
+          { label: 'Present', value: String(presentCount), hint: `${absentCount} absent` },
+          { label: 'Today', value: checkedInAt ? 'In' : 'Out', hint: checkedInAt ? 'Timer running' : 'Day still open' },
+          { label: 'Attendance', value: pct == null ? '—' : `${pct}%`, hint: periodLabel },
+          { label: 'Leave left', value: String(leaveLeft), hint: 'Days' },
+        ]}
+        groups={[{
+          title: range.label,
+          hint: `${rows.length} day${rows.length === 1 ? '' : 's'}`,
+          rows: paged,
+          empty: 'No attendance in this period.',
+        }]}
+        extra={rows.length > ATT_PAGE_SIZE ? (
+          <div className="pulse-att-pager">
+            <span>{start}–{end} of {rows.length}</span>
+            <div>
+              <Button
+                type="text"
+                icon={<LeftOutlined />}
+                aria-label="Previous page"
+                disabled={safePage <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              />
+              <Button
+                type="text"
+                icon={<RightOutlined />}
+                aria-label="Next page"
+                disabled={safePage >= lastPage}
+                onClick={() => setPage((value) => Math.min(lastPage, value + 1))}
+              />
+            </div>
+          </div>
+        ) : null}
+      />
+    </div>
+  )
 }
 
 export default function PulseLiveModule({
@@ -128,7 +356,7 @@ export default function PulseLiveModule({
     { key: 'c2', task: 'September cycle', owner: 'Finance', due: '30 Sep', status: 'On track', done: false },
   ])
   const performance = useBoard(org ? 'org-perf' : 'perf', [
-    { key: 'p1', task: 'Q3 goal: ship Pulse live', owner: name, due: '30 Sep', status: 'On track', done: false },
+    { key: 'p1', task: 'Q3 goal: ship BDA OS live', owner: name, due: '30 Sep', status: 'On track', done: false },
     { key: 'p2', task: 'Manager 1:1 notes', owner: name, due: 'Every 2 weeks', status: 'Done', done: true },
     { key: 'p3', task: 'Peer feedback round', owner: org ? 'People' : name, due: '15 Sep', status: 'Waiting', done: false },
   ])
@@ -151,18 +379,6 @@ export default function PulseLiveModule({
   const week = attendanceRows(weekDays, name, checkedInAt)
   const present = week.filter((row) => row.done).length
   const absent = week.filter((row) => String(row.status).toLowerCase() === 'absent').length
-  const liveTimesheet = (timesheetRows || []).map((row, index) => ({
-    key: row.key || `ts-${index}`,
-    task: `${row.project || 'People OS'} · ${row.task || 'Hours'}`,
-    owner: name,
-    due: `${row.hours || 0} h`,
-    status: Number(row.hours) > 0 ? 'On track' : 'Draft',
-    done: Number(row.hours) > 0,
-  }))
-  const timesheetBoard = liveTimesheet.length ? liveTimesheet : [
-    { key: 'ts0', task: 'People OS · Internal product', owner: name, due: `${weekHours || 0} h`, status: weekHours ? 'Draft' : 'Waiting', done: false },
-  ]
-
   const addNamed = (board, prefix) => {
     promptAdd(`Add ${prefix}`, (title) => {
       board.add({ task: title, owner: name, due: 'Today', status: 'Waiting' })
@@ -172,75 +388,37 @@ export default function PulseLiveModule({
 
   if (kind === 'attendance') {
     if (org) {
-      return (
-        <PulseGlassBoard
-          title="Attendance"
-          kicker="Organization"
-          metrics={[
-            { label: 'This week', value: `${present}/${week.length || 7}`, hint: 'Days logged' },
-            { label: 'Absent', value: String(absent), hint: 'Needs follow-up' },
-            { label: 'MTD', value: mtdPct == null ? '—' : `${mtdPct}%`, hint: 'Present rate' },
-            { label: 'Check-ins', value: 'Live', hint: 'Org audit below' },
-          ]}
-          extra={<div className="plive-nested"><PulseCheckInAdmin /></div>}
-        />
-      )
+      return <PulseAttendanceAdmin />
     }
     return (
-      <PulseGlassBoard
-        title="Attendance"
-        kicker="My Space"
-        ctaLabel={checkBusy ? 'Working…' : checkedInAt ? 'Check out' : 'Check in'}
-        checkIn
-        onCta={onCheckIn}
-        metrics={[
-          { label: 'This week', value: `${present} present`, hint: `${absent} absent` },
-          { label: 'Today', value: checkedInAt ? 'In' : 'Out', hint: checkedInAt ? 'Timer running' : 'Day still open' },
-          { label: 'MTD', value: mtdPct == null ? '—' : `${mtdPct}%`, hint: 'Attendance' },
-          { label: 'Leave left', value: String(leaveLeft), hint: 'Days' },
-        ]}
-        groups={[{ title: 'This week', hint: 'Tap a day to mark progress', rows: week, empty: 'Week loads after check-in.' }]}
-        extra={(
-          <p className="pov-empty">
-            <button type="button" className="pov-link" onClick={onOpenCalendar}>Open calendar</button>
-            {' · '}
-            <button type="button" className="pov-link" onClick={onOpenTimesheet}>Timesheet</button>
-          </p>
-        )}
+      <PulseAttendanceBoard
+        name={name}
+        checkedInAt={checkedInAt}
+        elapsed={elapsed}
+        checkBusy={checkBusy}
+        onCheckIn={onCheckIn}
+        leaveLeft={leaveLeft}
+        mtdPct={mtdPct}
+        sample={demo}
       />
     )
   }
 
   if (kind === 'time' || kind === 'timesheet') {
     if (org) {
-      return (
-        <PulseGlassBoard
-          title="Time tracker"
-          kicker="Organization"
-          metrics={[
-            { label: 'Hours', value: `${weekHours || 0}h`, hint: 'This week (you)' },
-            { label: 'Target', value: '40h', hint: 'Full week' },
-            { label: 'Status', value: weekHours ? 'Draft' : 'Open', hint: 'Close Friday' },
-            { label: 'Audit', value: 'Live', hint: 'Check-in log' },
-          ]}
-          extra={<div className="plive-nested"><PulseCheckInAdmin /></div>}
-        />
-      )
+      return <PulseTimesheetAdmin />
     }
     return (
-      <PulseGlassBoard
-        title="Timesheets"
-        kicker="Week in progress"
-        ctaLabel="Submit timesheet"
-        onCta={() => message.success('Timesheet submitted for review')}
-        metrics={[
-          { label: 'Logged', value: `${weekHours || 0}h`, hint: 'This week' },
-          { label: 'Target', value: '40h', hint: 'Friday close' },
-          { label: 'Entries', value: String(timesheetBoard.length), hint: 'Projects' },
-          { label: 'Status', value: weekHours ? 'Draft' : 'Open', hint: 'Not submitted' },
-        ]}
-        groups={[{ title: 'This week', hint: 'Hours follow check-in', rows: timesheetBoard }]}
-      />
+      <div className="pulse-ts-page">
+        <PulseTimesheetForm
+          name={name}
+          checkedInAt={checkedInAt}
+          elapsed={elapsed}
+          weekHours={weekHours}
+          timesheetRows={timesheetRows}
+          sample={demo}
+        />
+      </div>
     )
   }
 
@@ -383,8 +561,8 @@ export default function PulseLiveModule({
       return (
         <PulseGlassBoard
           title="Leave tracker"
-          kicker="Organization"
-          ctaLabel="Open My Space leave"
+          kicker="Company"
+          ctaLabel="Open leave"
           onCta={onOpenLeave}
           extra={(
             <div className="plive-nested">
@@ -410,7 +588,7 @@ export default function PulseLiveModule({
         kicker="Live snapshot"
         metrics={[
           { label: 'Attendance', value: mtdPct == null ? '—' : `${mtdPct}%`, hint: 'MTD' },
-          { label: 'Hours', value: `${weekHours || 0}h`, hint: 'This week' },
+          { label: 'Hours', value: hoursLabel(weekHours), hint: 'This week' },
           { label: 'Leave', value: String(leaveLeft), hint: 'Days left' },
           { label: 'Open items', value: String(tasks.rows.filter((row) => !row.done).length), hint: 'Tasks' },
         ]}
@@ -485,7 +663,7 @@ export default function PulseLiveModule({
   return (
     <PulseGlassBoard
       title="Workspace"
-      kicker="Pulse"
+      kicker="BDA OS"
       groups={[{ title: 'Ready', rows: tasks.rows }]}
     />
   )
@@ -500,7 +678,7 @@ export function PulseAnnouncementsBoard({ name = 'HR' }) {
   return (
     <PulseGlassBoard
       title="Announcements"
-      kicker="Organization"
+      kicker="Company"
       ctaLabel="New"
       onCta={() => {
         promptAdd('Announcement title', (title) => {

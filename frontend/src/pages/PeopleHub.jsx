@@ -6,7 +6,7 @@ import api from '../api'
 import PulseMark from '../components/PulseMark'
 import PulseLoading from '../components/PulseLoading'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
-import { getPulseGettingStartedPath, getPostLoginPath, hasPulseAccount, hasPulseSampleChoice, reopenPulseGuide } from '../utils/pulseEntry'
+import { APP_BASE, getPostLoginPath, hasPulseAccount, markPulseAccountCreated, PULSE_HOME, suggestedPulseSetupPayload } from '../utils/pulseEntry'
 import { goToLoginOrCloseTab } from '../utils/pulseAuthSync'
 import './people-hub.css'
 import './pulse-antd.css'
@@ -30,7 +30,7 @@ const HELP_LINKS = [
   { label: 'Price Quote', href: '/coming-soon?app=Pricing' },
 ]
 
-/** Pulse welcome landing — Ant Design, aligned with Pulse shell theme. */
+/** Pulse welcome landing — Ant Design, aligned with BDA OS shell theme. */
 export default function PeopleHub() {
   const { user, loading, logout, updateProfile } = useAuth()
   const navigate = useNavigate()
@@ -63,7 +63,7 @@ export default function PeopleHub() {
     if (loading || !user) return
     if (!hasPulseAccount(user)) return
     const next = getPostLoginPath(user)
-    if (next && next !== '/pulse') {
+    if (next && next !== APP_BASE) {
       navigate(next, { replace: true })
     }
   }, [user, loading, navigate])
@@ -76,30 +76,39 @@ export default function PeopleHub() {
   const onCta = async () => {
     if (creating) return
 
-    const nextPath = getPulseGettingStartedPath(user)
-    const firstTime = !hasPulseAccount(user)
-
-    if (firstTime) {
+    if (!hasPulseAccount(user)) {
       setCreating(true)
+      const payload = suggestedPulseSetupPayload(user)
       try {
-        localStorage.removeItem('pulseSampleData')
-        localStorage.removeItem('pulseLastPath')
-        localStorage.removeItem('pulseGuideDismissed')
-      } catch {
-        /* ignore */
+        const res = await api.post('/auth/pulse-setup', payload)
+        const portalId = payload.portalId
+        markPulseAccountCreated(portalId)
+        updateProfile?.({
+          ...res.data.user,
+          pulseSetupCompleted: true,
+          pulsePortalId: portalId,
+        })
+      } catch (err) {
+        if (err.response?.data?.code === 'PORTAL_EXISTS') {
+          const retry = { ...payload, portalId: `${payload.portalId}hq`.slice(0, 50) }
+          try {
+            const res = await api.post('/auth/pulse-setup', retry)
+            markPulseAccountCreated(retry.portalId)
+            updateProfile?.({
+              ...res.data.user,
+              pulseSetupCompleted: true,
+              pulsePortalId: retry.portalId,
+            })
+          } catch {
+            markPulseAccountCreated(payload.portalId)
+          }
+        } else {
+          markPulseAccountCreated(payload.portalId)
+        }
       }
-      await new Promise((resolve) => setTimeout(resolve, 1100))
-      navigate(nextPath)
-      return
     }
 
-    if (!hasPulseSampleChoice()) {
-      navigate(nextPath)
-      return
-    }
-
-    reopenPulseGuide()
-    navigate(nextPath)
+    navigate(PULSE_HOME)
   }
 
   if (loading || !user || !profileChecked) {
@@ -122,11 +131,11 @@ export default function PeopleHub() {
           <div className="pp-left-inner">
             <Title level={1} className="pp-title">
               <span className="pp-hello">Hello, {displayName}!</span>
-              <span className="pp-welcome">Welcome to Pulse</span>
+              <span className="pp-welcome">Welcome to BDA OS</span>
             </Title>
 
             <Paragraph className="pp-intro" type="secondary">
-              Pulse is an online HR solution that lets you track and automate all your HR
+              BDA OS is an online HR solution that lets you track and automate all your HR
               processes while enabling you to provide an exceptional employee experience.
             </Paragraph>
 
@@ -188,25 +197,25 @@ export default function PeopleHub() {
           <Flex vertical align="center" className="pp-right-inner">
             {creating ? (
               <Flex vertical align="center" gap={22} className="pp-creating" role="status" aria-live="polite">
-                <PulseMark size={108} title="Pulse" />
+                <PulseMark size={108} title="BDA OS" />
                 <Space>
                   <Spin size="small" />
-                  <Text strong>Creating your Pulse account...</Text>
+                  <Text strong>Creating your BDA OS account...</Text>
                 </Space>
               </Flex>
             ) : (
               <>
                 <div className="pp-right-mark">
-                  <PulseMark size={108} title="Pulse" />
+                  <PulseMark size={108} title="BDA OS" />
                 </div>
                 <Title level={3} className="pp-cta-title">
                   You&apos;re just a step away from delivering the best HR service experience
                 </Title>
                 <Button type="primary" size="large" block className="pp-cta" onClick={onCta}>
-                  Get started with Pulse
+                  Get started with BDA OS
                 </Button>
                 <Paragraph type="secondary" className="pp-right-note">
-                  If your organization already has a Pulse account, please contact your HR
+                  If your organization already has a BDA OS account, please contact your HR
                   administrator to send the invitation.
                 </Paragraph>
               </>

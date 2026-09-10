@@ -39,25 +39,40 @@ import PulseCandidateForm, {
 import './pulse-onboarding.css'
 
 const ALL_COLUMNS = [
-  { key: 'firstName', title: 'First name' },
-  { key: 'lastName', title: 'Last name' },
-  { key: 'email', title: 'Email ID' },
-  { key: 'officialEmail', title: 'Official Email' },
-  { key: 'status', title: 'Onboarding Status' },
-  { key: 'department', title: 'Department' },
-  { key: 'sourceOfHire', title: 'Source of Hire' },
-  { key: 'pan', title: 'PAN card number' },
-  { key: 'aadhaar', title: 'Aadhaar card number' },
-  { key: 'phone', title: 'Phone' },
-  { key: 'workLocation', title: 'Location' },
-  { key: 'title', title: 'Title' },
-  { key: 'experienceYears', title: 'Experience' },
-  { key: 'skillSet', title: 'Skill Set' },
-  { key: 'highestQualification', title: 'Highest Qualification' },
-  { key: 'currentSalary', title: 'Current Salary' },
-  { key: 'additionalInfo', title: 'Additional information' },
-  { key: 'tentativeJoiningDate', title: 'Tentative Joining Date' },
-  { key: 'candidateId', title: 'Employee ID' },
+  { key: 'firstName', title: 'First name', width: 140 },
+  { key: 'lastName', title: 'Last name', width: 140 },
+  { key: 'email', title: 'Email ID', width: 200 },
+  { key: 'phone', title: 'Phone', width: 150, kind: 'phone' },
+  { key: 'dob', title: 'Date of birth', width: 140 },
+  { key: 'gender', title: 'Gender', width: 110 },
+  { key: 'emergencyName', title: 'Emergency name', width: 160 },
+  { key: 'emergencyRelationship', title: 'Emergency relationship', width: 170 },
+  { key: 'emergencyPhone', title: 'Emergency phone', width: 150 },
+  { key: 'photo', title: 'Photo', width: 140, kind: 'file' },
+  { key: 'aadhaar', title: 'Aadhaar card number', width: 170 },
+  { key: 'pan', title: 'PAN card number', width: 150 },
+  { key: 'aadhaarFront', title: 'Aadhaar front', width: 140, kind: 'file' },
+  { key: 'aadhaarBack', title: 'Aadhaar back', width: 140, kind: 'file' },
+  { key: 'panFront', title: 'PAN front', width: 140, kind: 'file' },
+  { key: 'panBack', title: 'PAN back', width: 140, kind: 'file' },
+  { key: 'presentAddressLine', title: 'Present address', width: 240 },
+  { key: 'permanentAddressLine', title: 'Permanent address', width: 240 },
+  { key: 'experienceYears', title: 'Experience', width: 130 },
+  { key: 'skillSet', title: 'Skill Set', width: 180 },
+  { key: 'highestQualification', title: 'Highest Qualification', width: 180 },
+  { key: 'educationSummary', title: 'Education', width: 220 },
+  { key: 'experienceSummary', title: 'Work history', width: 220 },
+  { key: 'additionalInfo', title: 'Additional information', width: 200 },
+  { key: 'officialEmail', title: 'Official Email', width: 190 },
+  { key: 'status', title: 'Onboarding Status', width: 160 },
+  { key: 'department', title: 'Department', width: 140 },
+  { key: 'sourceOfHire', title: 'Source of Hire', width: 140 },
+  { key: 'workLocation', title: 'Location', width: 140 },
+  { key: 'title', title: 'Title', width: 150 },
+  { key: 'currentSalary', title: 'Current Salary', width: 140 },
+  { key: 'tentativeJoiningDate', title: 'Joining date', width: 150 },
+  { key: 'candidateId', title: 'Employee ID', width: 130 },
+  { key: 'offerLetter', title: 'Offer letter', width: 150, kind: 'file' },
 ]
 
 const LOCKED_KEYS = ['firstName', 'lastName', 'email']
@@ -96,6 +111,20 @@ function dash(value) {
     }
   }
   return value
+}
+
+function fileDash(value) {
+  if (!value) return '—'
+  if (typeof value === 'string') return dash(value)
+  return dash(value.name || (value.hasFile ? 'Uploaded' : ''))
+}
+
+function cellText(col, record) {
+  if (col.kind === 'phone') {
+    return dash([record.countryCode, record.phone].filter(Boolean).join(' '))
+  }
+  if (col.kind === 'file') return fileDash(record[col.key])
+  return dash(record[col.key])
 }
 
 function EmptyArt() {
@@ -322,17 +351,17 @@ export default function PulseOnboarding() {
           title: 'Invite created — email not sent',
           message: res.data?.message || 'Invite created, but the email could not be sent',
           link: inviteLink || '',
-          linkLabel: 'Pulse invite link',
+          linkLabel: 'BDA OS invite link',
         })
         await load()
         return
       }
-      message.success(res.data?.message || 'Pulse invite sent')
+      message.success(res.data?.message || 'BDA OS invite sent')
       closeForm()
       await load()
     } catch (err) {
       if (err?.errorFields) return
-      message.error(err?.response?.data?.message || err.message || 'Could not send Pulse invite')
+      message.error(err?.response?.data?.message || err.message || 'Could not send BDA OS invite')
     } finally {
       setSending(false)
     }
@@ -427,7 +456,7 @@ export default function PulseOnboarding() {
               fieldList.map((col) => (
                 <label key={col.key} className="ob-view-item">
                   <Checkbox
-                    checked={Boolean(draftVisible[col.key])}
+                    checked={draftVisible[col.key] !== false}
                     onChange={(e) => toggleColumn(col.key, e.target.checked)}
                   />
                   <span>{col.title}</span>
@@ -494,15 +523,15 @@ export default function PulseOnboarding() {
         />
       ),
     },
-    ...ALL_COLUMNS.filter((col) => LOCKED_KEYS.includes(col.key) || visible[col.key]).map((col) => ({
+    ...ALL_COLUMNS.filter((col) => LOCKED_KEYS.includes(col.key) || visible[col.key] !== false).map((col) => ({
       title: col.title,
       dataIndex: col.key,
       key: col.key,
       ellipsis: true,
       className: LOCKED_KEYS.includes(col.key) ? 'ob-lock-col' : undefined,
       fixed: LOCKED_KEYS.includes(col.key) ? 'left' : undefined,
-      width: col.key === 'email' ? 180 : col.key === 'firstName' || col.key === 'lastName' ? 140 : 160,
-      sorter: (a, b) => String(a[col.key] || '').localeCompare(String(b[col.key] || '')),
+      width: col.width || 160,
+      sorter: (a, b) => String(cellText(col, a) || '').localeCompare(String(cellText(col, b) || '')),
       showSorterTooltip: false,
       ...(col.key === 'status'
         ? {
@@ -510,7 +539,7 @@ export default function PulseOnboarding() {
             onFilter: (value, record) => record.status === value,
             render: (v) => <Tag color={STATUS_COLOR[v] || 'default'}>{v || '—'}</Tag>,
           }
-        : { render: (v) => dash(v) }),
+        : { render: (_, record) => cellText(col, record) }),
     })),
     {
       key: '_actions',
@@ -596,7 +625,7 @@ export default function PulseOnboarding() {
                     <p>
                       Add an employee and send a details form to their personal email. After they submit, their
                       information appears here. Then fill work email, joining date, and offer letter, and send the
-                      Pulse invite to their work email.
+                      BDA OS invite to their work email.
                     </p>
                   </div>
                 }
@@ -678,7 +707,7 @@ export default function PulseOnboarding() {
           <Space wrap>
             {editing?.employeeSubmittedAt ? (
               <Button type="primary" loading={sending} onClick={sendPulseInvite}>
-                {editing?.pulseInviteSentAt ? 'Resend Pulse invite' : 'Send Pulse invite'}
+                {editing?.pulseInviteSentAt ? 'Resend BDA OS invite' : 'Send BDA OS invite'}
               </Button>
             ) : (
               <Button type="primary" loading={sending} onClick={sendDetailsEmail}>
@@ -704,9 +733,9 @@ export default function PulseOnboarding() {
         {editing?.onboardingEmailSentAt || editing?.employeeSubmittedAt || editing?.pulseInviteSentAt ? (
           <p className="ob-form-status">
             {editing.pulseInviteSentAt
-              ? 'Pulse invite sent to their work email.'
+              ? 'BDA OS invite sent to their work email.'
               : editing.employeeSubmittedAt
-                ? 'Details received. Fill work email, joining date, and offer letter, then send the Pulse invite.'
+                ? 'Details received. Fill work email, joining date, and offer letter, then send the BDA OS invite.'
                 : editing.onboardingEmailSentAt
                   ? 'Details form emailed to their personal inbox. Waiting for them to submit.'
                   : null}

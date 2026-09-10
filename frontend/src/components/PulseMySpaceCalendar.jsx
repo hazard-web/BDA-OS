@@ -1,20 +1,26 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Calendar } from 'antd'
 import calendarEn from 'antd/es/calendar/locale/en_US'
-import { CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react'
 import dayjs from 'dayjs'
 import { format } from 'date-fns'
 import api from '../api'
 import {
   NAMED_HOLIDAYS,
   SAMPLE_TEAM_LEAVE,
-  clockLabel,
   holidayMap,
   hoursLabel,
   leaveByDay,
 } from '../utils/pulseCalendar'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function yearOptions(center) {
+  const start = center - 8
+  return Array.from({ length: 17 }, (_, i) => start + i)
+}
 
 const CALENDAR_LOCALE = {
   ...calendarEn,
@@ -42,10 +48,61 @@ function dayCaption(value, holiday, team, mine) {
   return `${when} · Ordinary working day`
 }
 
+function PickMenu({ anchorRef, className, children }) {
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = anchorRef.current
+      if (!el) return
+      const box = el.getBoundingClientRect()
+      setPos({ top: box.bottom + 6, left: box.left })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [anchorRef])
+
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <div className={className} role="listbox" style={{ top: pos.top, left: pos.left }}>
+      {children}
+    </div>,
+    document.body,
+  )
+}
+
 function CalendarToolbar({ value, onChange }) {
+  const [open, setOpen] = useState(null)
+  const wrapRef = useRef(null)
+  const monthRef = useRef(null)
+  const yearRef = useRef(null)
   const goMonth = (delta) => onChange(value.add(delta, 'month'))
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (event) => {
+      if (wrapRef.current?.contains(event.target)) return
+      if (event.target.closest?.('.pulse-cal-pick-menu')) return
+      setOpen(null)
+    }
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(null)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   return (
-    <div className="pulse-cal-toolbar">
+    <div className="pulse-cal-toolbar" ref={wrapRef}>
       <div className="pulse-cal-stepper" role="group" aria-label="Calendar month">
         <button type="button" className="pulse-cal-step" aria-label="Previous month" onClick={() => goMonth(-1)}>
           <CaretLeft size={14} weight="bold" />
@@ -54,7 +111,74 @@ function CalendarToolbar({ value, onChange }) {
           <CaretRight size={14} weight="bold" />
         </button>
       </div>
-      <span className="pulse-cal-period">{value.format('MMM YYYY')}</span>
+      <div className="pulse-cal-pickers">
+        <div className="pulse-cal-pick">
+          <button
+            ref={monthRef}
+            type="button"
+            className={`pulse-cal-pick-btn${open === 'month' ? ' is-open' : ''}`}
+            aria-haspopup="listbox"
+            aria-expanded={open === 'month'}
+            aria-label="Choose month"
+            onClick={() => setOpen((next) => (next === 'month' ? null : 'month'))}
+          >
+            <span>{value.format('MMM')}</span>
+            <CaretDown size={12} weight="bold" />
+          </button>
+          {open === 'month' ? (
+            <PickMenu anchorRef={monthRef} className="pulse-cal-pick-menu is-months">
+              {MONTHS.map((label, monthIndex) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="option"
+                  aria-selected={value.month() === monthIndex}
+                  className={value.month() === monthIndex ? 'is-on' : undefined}
+                  onClick={() => {
+                    onChange(value.month(monthIndex))
+                    setOpen(null)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </PickMenu>
+          ) : null}
+        </div>
+        <div className="pulse-cal-pick">
+          <button
+            ref={yearRef}
+            type="button"
+            className={`pulse-cal-pick-btn${open === 'year' ? ' is-open' : ''}`}
+            aria-haspopup="listbox"
+            aria-expanded={open === 'year'}
+            aria-label="Choose year"
+            onClick={() => setOpen((next) => (next === 'year' ? null : 'year'))}
+          >
+            <span>{value.format('YYYY')}</span>
+            <CaretDown size={12} weight="bold" />
+          </button>
+          {open === 'year' ? (
+            <PickMenu anchorRef={yearRef} className="pulse-cal-pick-menu is-years">
+              {yearOptions(value.year()).map((year) => (
+                <button
+                  key={year}
+                  type="button"
+                  role="option"
+                  aria-selected={value.year() === year}
+                  className={value.year() === year ? 'is-on' : undefined}
+                  onClick={() => {
+                    onChange(value.year(year))
+                    setOpen(null)
+                  }}
+                >
+                  {year}
+                </button>
+              ))}
+            </PickMenu>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }
@@ -161,7 +285,6 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
   const selected = board.days[selectedKey] || {}
   const selectedHoliday = holidays.get(selectedKey)
   const selectedTeam = teamByDay.get(selectedKey) || []
-  const selectedHours = Number(selected.hours) || 0
 
   const marksFor = (current) => {
     const key = dayKey(current)
@@ -255,51 +378,7 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
       />
       {compact ? (
         <p className="pulse-cal-caption">{dayCaption(value, selectedHoliday, selectedTeam, selected)}</p>
-      ) : (
-        <section className="pulse-cal-daylog" aria-live="polite">
-          <header>
-            <strong>{value.format('dddd, D MMM')}</strong>
-            {selectedHoliday ? (
-              <span className="pulse-cal-chip is-holiday">
-                {selectedHoliday.name}
-              </span>
-            ) : null}
-          </header>
-          <div className="pulse-cal-daylog-grid">
-            <div>
-              <h3>Time log</h3>
-              {selected.sessions?.length ? (
-                <ul>
-                  {selected.sessions.map((session, index) => (
-                    <li key={`${selectedKey}-${index}`}>
-                      <span>{clockLabel(session.in)} – {session.out ? clockLabel(session.out) : 'now'}</span>
-                      <b>{hoursLabel(session.hours)}</b>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>{selected.absent ? 'Marked absent. No time logged.' : selected.onLeave ? 'You are on leave.' : selected.weekend ? 'Weekend.' : selectedHoliday ? 'Office closed.' : 'No time logged this day.'}</p>
-              )}
-              {selectedHours > 0 ? <p className="pulse-cal-daylog-total">Total {hoursLabel(selectedHours)}</p> : null}
-            </div>
-            <div>
-              <h3>Who is off</h3>
-              {selectedTeam.length ? (
-                <ul>
-                  {selectedTeam.map((row) => (
-                    <li key={row.id}>
-                      <span>{row.name}</span>
-                      <b>{row.type}</b>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Nobody on leave.</p>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
+      ) : null}
     </div>
   )
 }

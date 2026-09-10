@@ -84,14 +84,14 @@ export default function SmartSignIn() {
 
       <div className={`ssi-card${expanded ? ' is-expanded' : ''}`}>
         <section className="ssi-left">
-          <a href="/login" className="ssi-brand" aria-label="People OS home" onClick={onRedirectClick('/login')}>
+          <a href="/login" className="ssi-brand" aria-label="BDA OS home" onClick={onRedirectClick('/login')}>
             <span className="ssi-mark" aria-hidden="true">
               <i style={{ background: '#e42527' }} />
               <i style={{ background: '#f5c400' }} />
               <i style={{ background: '#21a05a' }} />
               <i style={{ background: '#408dfb' }} />
             </span>
-            <span className="ssi-brand-text">PEOPLE OS</span>
+            <span className="ssi-brand-text">BDA OS</span>
           </a>
 
           <h1 className="ssi-title">Smart Sign-in</h1>

@@ -65,7 +65,7 @@ export default function AcceptInvite() {
         lastName: form.lastName.trim(),
       })
       login(res.data.token, res.data.user)
-      toast.success('Welcome to Pulse')
+      toast.success('Welcome to BDA OS')
       redirectTo(getPostLoginPath(res.data.user), { replace: true })
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not accept invite')
@@ -100,7 +100,7 @@ export default function AcceptInvite() {
 
   return (
     <>
-      <AuthLogoLoader show={redirecting || saving} label={saving ? 'Creating account' : 'Opening Pulse'} />
+      <AuthLogoLoader show={redirecting || saving} label={saving ? 'Creating account' : 'Opening BDA OS'} />
       <AuthShell
         title="Accept invite"
         subtitle={

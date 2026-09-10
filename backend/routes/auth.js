@@ -94,7 +94,7 @@ router.post('/register', async (req, res, next) => {
       return res.status(403).json({
         success: false,
         code: 'INVITE_ONLY',
-        message: 'Pulse is invite-only. Ask your admin for an invite link.',
+        message: 'BDA OS is invite-only. Ask your admin for an invite link.',
       });
     }
 
@@ -456,7 +456,7 @@ router.put('/profile', auth, async (req, res, next) => {
         if (taken) {
           return res.status(409).json({
             success: false,
-            message: `${taken.email} is already linked to another People OS account.`,
+            message: `${taken.email} is already linked to another BDA OS account.`,
           });
         }
       }
@@ -632,7 +632,7 @@ router.post('/pulse-setup', auth, async (req, res, next) => {
     delete safe.resetPasswordToken;
     delete safe.resetPasswordExpires;
 
-    res.json({ success: true, message: 'Pulse account ready', user: safe });
+    res.json({ success: true, message: 'BDA OS account ready', user: safe });
   } catch (err) {
     if (err && err.code === 11000) {
       return res.status(400).json({

@@ -85,7 +85,7 @@ export default function Register() {
           <div className="auth-field">
             <input
               className="auth-input"
-              placeholder="Organization name (optional)"
+              placeholder="Company name (optional)"
               value={form.companyName}
               onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
             />

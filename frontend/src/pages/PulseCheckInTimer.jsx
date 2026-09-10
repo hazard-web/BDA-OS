@@ -15,7 +15,7 @@ export default function PulseCheckInTimer() {
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
-    document.title = 'Pulse · Working'
+    document.title = 'BDA OS · Working'
   }, [])
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function PulseCheckInTimer() {
     const tick = () => {
       const next = getElapsedSeconds(email)
       setElapsed(next)
-      document.title = `Pulse · ${formatElapsed(next)}`
+      document.title = `BDA OS · ${formatElapsed(next)}`
     }
     tick()
     const id = window.setInterval(tick, 1000)
@@ -74,7 +74,7 @@ export default function PulseCheckInTimer() {
     <div className="pulse-checkin-timer" role="timer" aria-live="polite">
       <span className="pulse-checkin-timer-dot" aria-hidden="true" />
       <div className="pulse-checkin-timer-meta">
-        <div className="pulse-checkin-timer-label">Pulse · Working</div>
+        <div className="pulse-checkin-timer-label">BDA OS · Working</div>
         <div className="pulse-checkin-timer-time">{formatElapsed(elapsed)}</div>
       </div>
     </div>

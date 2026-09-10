@@ -14,12 +14,14 @@ import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
 import PulseLiveModule from './PulseLiveWorkspace'
 import { openPulsePage } from '../utils/pulseOpenPage'
+// Company setup form — parked with Getting Started on `pulse/company-later-services`
+// import PulseCompanyInfoForm from './PulseCompanyInfoForm'
 // Later build — restore from branch `pulse/company-later-services`
 // import PulseInviteAdmin from './PulseInviteAdmin'
 // import { PulseAnnouncementsBoard } from './PulseLiveWorkspace'
 
-export const BDA_LOGO = '/bda-logo.png'
-export const BDA_LOGO_WIDE = '/bda-logo-wide.png'
+export const BDA_LOGO = '/bda-logo-lockup.png'
+export const BDA_LOGO_WIDE = '/bda-logo-lockup.png'
 
 export const ORG_TABS = [
   { key: 'overview', label: 'Overview' },
@@ -44,7 +46,7 @@ const SERVICES = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined, hint: 'Employees' },
   { key: 'leave', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Apply and requests' },
   { key: 'attendance', label: 'Attendance', Icon: CarryOutOutlined, hint: 'Org check-in' },
-  { key: 'time', label: 'Time Tracker', Icon: ThunderboltOutlined, hint: 'Hours from check-in' },
+  { key: 'companyTime', label: 'Time Tracker', Icon: ThunderboltOutlined, hint: 'Tasks and check-in' },
   { key: 'apps', label: 'App access', Icon: AppstoreOutlined, hint: 'Assigned apps' },
 ]
 
@@ -116,8 +118,8 @@ function OverviewPanel({ user }) {
         <aside className="pulse-org-identity">
           <Card size="small" className="pulse-org-card pulse-org-profile">
             <div className="pulse-org-brand">
-              <div className="pulse-org-logo">
-                <img src={logoSrc} alt={`${orgName} logo`} width="72" height="72" />
+              <div className={`pulse-org-logo${logoSrc === BDA_LOGO ? ' is-lockup' : ''}`}>
+                <img src={logoSrc} alt={`${orgName} logo`} />
               </div>
               <h1 className="pulse-org-name">{orgName}</h1>
               <p className="pulse-org-place">{location}</p>
@@ -158,7 +160,7 @@ function OverviewPanel({ user }) {
   )
 }
 
-/** Pulse Organization — org home aligned with Overview. */
+/** Organization — org home aligned with Overview. */
 export default function PulseOrganization({ user, tab = 'overview', onSoon, onTab, liveProps }) {
   if (tab === 'overview') {
     return (
@@ -186,16 +188,35 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, onTa
 
   if (tab === 'apps') {
     return (
-      <div className="pulse-org-page">
-        <PulseAppGrantsAdmin />
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <div className="pulse-org-apps">
+            <PulseAppGrantsAdmin />
+          </div>
+        </div>
       </div>
     )
   }
 
   if (tab === 'attendance') {
     return (
-      <div className="pulse-org-page">
-        <PulseLiveModule kind="attendance" scope="org" {...liveProps} />
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <PulseLiveModule kind="attendance" scope="org" {...liveProps} />
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'time') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <PulseLiveModule kind="time" scope="org" {...liveProps} />
+        </div>
       </div>
     )
   }
