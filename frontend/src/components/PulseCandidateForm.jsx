@@ -319,7 +319,7 @@ export const EMPLOYEE_STEP_FIELDS = {
     ['emergencyContact', 'name'],
     ['emergencyContact', 'phone'],
   ],
-  id: ['aadhaarFront', 'aadhaarBack', 'panFront', 'panBack'],
+  id: ['aadhaarFront', 'aadhaarBack', 'panFront'],
   address: [],
   work: [],
 }
@@ -549,7 +549,7 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                 <Input placeholder="ABCDE1234F" disabled={disabled} />
               </Form.Item>
             ) : null}
-            <div className="ob-id-sides">
+            <div className="ob-id-sides ob-id-sides-single">
               <Form.Item
                 name="panFront"
                 label="Front"
@@ -557,14 +557,6 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                 rules={docRules('Upload PAN front')}
               >
                 <FileSlot kinds="id" label="PAN front" hint="Front" disabled={disabled} compact={publicLayout} />
-              </Form.Item>
-              <Form.Item
-                name="panBack"
-                label="Back"
-                required={Boolean(requireDocs && !disabled)}
-                rules={docRules('Upload PAN back')}
-              >
-                <FileSlot kinds="id" label="PAN back" hint="Back" disabled={disabled} compact={publicLayout} />
               </Form.Item>
             </div>
           </div>

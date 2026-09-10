@@ -16,16 +16,17 @@ function hoursLabel(ms) {
 function eventTag(type) {
   switch (type) {
     case 'CHECK_IN':
+      return <Tag color="success">Checked in</Tag>
     case 'RESUME':
-      return <Tag color="success">{type === 'RESUME' ? 'Resume' : 'Check-in'}</Tag>
+      return <Tag color="success">Checked in again</Tag>
     case 'CHECK_OUT':
-      return <Tag color="warning">Check-out</Tag>
+      return <Tag color="warning">Checked out</Tag>
     case 'MIDNIGHT_CLOSE':
-      return <Tag color="processing">Timesheet close</Tag>
+      return <Tag color="processing">Day closed</Tag>
     case 'TARGET_REACHED':
       return <Tag color="blue">9h target</Tag>
     default:
-      return <Tag>{type || 'Event'}</Tag>
+      return <Tag>{type || 'Activity'}</Tag>
   }
 }
 

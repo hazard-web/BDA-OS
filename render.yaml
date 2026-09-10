@@ -4,9 +4,13 @@
 # Deploy: Render Dashboard → New → Blueprint → this repo → this file
 # Or New → Web Service with the same settings (Root Directory = backend).
 #
-# After the first deploy, set MONGODB_URI in the dashboard (Atlas DB peopleos_uat).
+# After the first deploy, set MONGODB_URI in the dashboard to Atlas DB peopleos_uat
+# (shared with local development). Production must use a separate DB (e.g. peopleos_prod).
+#
+# Deploy: Render Dashboard → New → Blueprint → this repo → this file
+# Or New → Web Service with the same settings (Root Directory = backend).
+#
 # Then on Vercel people-os-uat set VITE_API_BASE_URL to the Render origin and redeploy.
-
 services:
   - type: web
     name: people-os-api-uat
@@ -38,5 +42,7 @@ services:
           name: people-os-api-uat
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+      - key: APP_ENV
+        value: uat
       - key: MONGODB_URI
         sync: false

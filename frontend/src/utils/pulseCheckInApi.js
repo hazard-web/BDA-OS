@@ -32,16 +32,22 @@ export async function syncPulseCheckInEvent(kind, { email, activeMs, date } = {}
       location,
     }
     if (kind === 'check-in') {
-      await api.post('/pulse-checkin/check-in', body)
+      const res = await api.post('/pulse-checkin/check-in', body)
+      return res.data?.data || null
     } else if (kind === 'check-out') {
-      await api.post('/pulse-checkin/check-out', body)
+      const res = await api.post('/pulse-checkin/check-out', body)
+      return res.data?.data || null
     } else if (kind === 'finalize') {
-      await api.post('/pulse-checkin/finalize-day', body)
+      const res = await api.post('/pulse-checkin/finalize-day', body)
+      return res.data?.data || null
     } else if (kind === 'sync') {
-      await api.post('/pulse-checkin/sync', body)
+      const res = await api.post('/pulse-checkin/sync', body)
+      return res.data?.data || null
     }
+    return null
   } catch {
     /* offline / unauthorized — keep local session */
+    return null
   }
 }
 

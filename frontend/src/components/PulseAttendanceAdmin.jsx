@@ -48,17 +48,17 @@ function attendanceLabel(row) {
 function eventLabel(type) {
   switch (type) {
     case 'CHECK_IN':
-      return 'Check-in'
+      return 'Checked in'
     case 'RESUME':
-      return 'Resume'
+      return 'Checked in again'
     case 'CHECK_OUT':
-      return 'Check-out'
+      return 'Checked out'
     case 'MIDNIGHT_CLOSE':
       return 'Day closed'
     case 'TARGET_REACHED':
       return '9h target'
     default:
-      return type || 'Event'
+      return type || 'Activity'
   }
 }
 
@@ -68,11 +68,11 @@ function eventTag(type) {
     case 'RESUME':
       return <Tag color="success">{eventLabel(type)}</Tag>
     case 'CHECK_OUT':
-      return <Tag color="warning">Check-out</Tag>
+      return <Tag color="warning">{eventLabel(type)}</Tag>
     case 'MIDNIGHT_CLOSE':
-      return <Tag color="processing">Day closed</Tag>
+      return <Tag color="processing">{eventLabel(type)}</Tag>
     case 'TARGET_REACHED':
-      return <Tag color="blue">9h target</Tag>
+      return <Tag color="blue">{eventLabel(type)}</Tag>
     default:
       return <Tag>{eventLabel(type)}</Tag>
   }
@@ -204,6 +204,11 @@ export default function PulseAttendanceAdmin() {
                 <div>
                   <p>Worked</p>
                   <strong>{clockLabel(row.totalActiveMs)}</strong>
+                  {row.anomaly?.flagged ? (
+                    <em className="pulse-ts-anomaly" title={row.anomaly.reason || 'Hours exceed session wall time'}>
+                      Review
+                    </em>
+                  ) : null}
                 </div>
               </div>
 
@@ -257,6 +262,9 @@ export default function PulseAttendanceAdmin() {
               <div>
                 <p>Worked</p>
                 <strong>{clockLabel(selected.totalActiveMs)}</strong>
+                {selected.anomaly?.flagged ? (
+                  <p className="pulse-ts-anomaly-note">{selected.anomaly.reason || 'Hours exceed session wall time'}</p>
+                ) : null}
               </div>
             </div>
 

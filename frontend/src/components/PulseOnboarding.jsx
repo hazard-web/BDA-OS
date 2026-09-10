@@ -42,6 +42,7 @@ const ALL_COLUMNS = [
   { key: 'firstName', title: 'First name', width: 140 },
   { key: 'lastName', title: 'Last name', width: 140 },
   { key: 'email', title: 'Email ID', width: 200 },
+  { key: 'status', title: 'Onboarding Status', width: 160 },
   { key: 'phone', title: 'Phone', width: 150, kind: 'phone' },
   { key: 'dob', title: 'Date of birth', width: 140 },
   { key: 'gender', title: 'Gender', width: 110 },
@@ -54,7 +55,6 @@ const ALL_COLUMNS = [
   { key: 'aadhaarFront', title: 'Aadhaar front', width: 140, kind: 'file' },
   { key: 'aadhaarBack', title: 'Aadhaar back', width: 140, kind: 'file' },
   { key: 'panFront', title: 'PAN front', width: 140, kind: 'file' },
-  { key: 'panBack', title: 'PAN back', width: 140, kind: 'file' },
   { key: 'presentAddressLine', title: 'Present address', width: 240 },
   { key: 'permanentAddressLine', title: 'Permanent address', width: 240 },
   { key: 'experienceYears', title: 'Experience', width: 130 },
@@ -64,7 +64,6 @@ const ALL_COLUMNS = [
   { key: 'experienceSummary', title: 'Work history', width: 220 },
   { key: 'additionalInfo', title: 'Additional information', width: 200 },
   { key: 'officialEmail', title: 'Official Email', width: 190 },
-  { key: 'status', title: 'Onboarding Status', width: 160 },
   { key: 'department', title: 'Department', width: 140 },
   { key: 'sourceOfHire', title: 'Source of Hire', width: 140 },
   { key: 'workLocation', title: 'Location', width: 140 },
@@ -75,18 +74,18 @@ const ALL_COLUMNS = [
   { key: 'offerLetter', title: 'Offer letter', width: 150, kind: 'file' },
 ]
 
-const LOCKED_KEYS = ['firstName', 'lastName', 'email']
+const LOCKED_KEYS = ['firstName', 'lastName', 'email', 'status']
 const OPTIONAL_COLUMNS = ALL_COLUMNS.filter((col) => !LOCKED_KEYS.includes(col.key))
 const ALL_ON = Object.fromEntries(ALL_COLUMNS.map((col) => [col.key, true]))
 
 const STATUS_COLOR = {
   Draft: 'default',
   'Not started': 'gold',
-  'In progress': 'blue',
+  'In progress': 'processing',
   'Details received': 'purple',
   'Offer sent': 'cyan',
-  Joined: 'green',
-  Withdrawn: 'red',
+  Joined: 'success',
+  Withdrawn: 'error',
 }
 
 function employeeName(row) {
@@ -411,11 +410,11 @@ export default function PulseOnboarding() {
   const closeViewEdit = () => {
     setViewOpen(false)
     setViewQuery('')
-    setDraftVisible({ ...visible, firstName: true, lastName: true, email: true })
+    setDraftVisible({ ...visible, firstName: true, lastName: true, email: true, status: true })
   }
 
   const saveViewEdit = () => {
-    setVisible({ ...draftVisible, firstName: true, lastName: true, email: true })
+    setVisible({ ...draftVisible, firstName: true, lastName: true, email: true, status: true })
     setViewOpen(false)
     setViewQuery('')
   }
@@ -431,7 +430,7 @@ export default function PulseOnboarding() {
       open={viewOpen}
       onOpenChange={(next) => {
         if (next) {
-          setDraftVisible({ ...visible, firstName: true, lastName: true, email: true })
+          setDraftVisible({ ...visible, firstName: true, lastName: true, email: true, status: true })
           setViewQuery('')
         }
         setViewOpen(next)
@@ -537,7 +536,11 @@ export default function PulseOnboarding() {
         ? {
             filters: statusFilters,
             onFilter: (value, record) => record.status === value,
-            render: (v) => <Tag color={STATUS_COLOR[v] || 'default'}>{v || '—'}</Tag>,
+            render: (v) => (
+              <Tag color={STATUS_COLOR[v] || 'default'} className="ob-status-tag">
+                {v || 'Draft'}
+              </Tag>
+            ),
           }
         : { render: (_, record) => cellText(col, record) }),
     })),
@@ -730,16 +733,25 @@ export default function PulseOnboarding() {
           </Space>
         }
       >
-        {editing?.onboardingEmailSentAt || editing?.employeeSubmittedAt || editing?.pulseInviteSentAt ? (
-          <p className="ob-form-status">
-            {editing.pulseInviteSentAt
-              ? 'BDA OS invite sent to their work email.'
-              : editing.employeeSubmittedAt
-                ? 'Details received. Fill work email, joining date, and offer letter, then send the BDA OS invite.'
-                : editing.onboardingEmailSentAt
-                  ? 'Details form emailed to their personal inbox. Waiting for them to submit.'
-                  : null}
-          </p>
+        {editing?._id ? (
+          <div className="ob-form-status-row">
+            <Tag color={STATUS_COLOR[editing.status] || 'default'} className="ob-status-tag">
+              {editing.status || 'Draft'}
+            </Tag>
+            {editing?.onboardingEmailSentAt || editing?.employeeSubmittedAt || editing?.pulseInviteSentAt ? (
+              <p className="ob-form-status">
+                {editing.pulseInviteSentAt
+                  ? 'BDA OS invite sent to their work email.'
+                  : editing.employeeSubmittedAt
+                    ? 'Details received. Fill work email, joining date, and offer letter, then send the BDA OS invite.'
+                    : editing.onboardingEmailSentAt
+                      ? 'Details form emailed to their personal inbox. Waiting for them to submit.'
+                      : null}
+              </p>
+            ) : (
+              <p className="ob-form-status">Onboarding status for this employee</p>
+            )}
+          </div>
         ) : null}
         <PulseCandidateForm form={form} mode="admin" reviewEmployee={Boolean(editing?.employeeSubmittedAt)} />
       </Drawer>

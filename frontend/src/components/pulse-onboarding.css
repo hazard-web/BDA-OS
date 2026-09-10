@@ -463,6 +463,10 @@
   gap: 12px;
 }
 
+.ob-id-sides.ob-id-sides-single {
+  grid-template-columns: 1fr;
+}
+
 .ob-id-sides .ant-form-item {
   margin-bottom: 0;
 }
@@ -919,6 +923,27 @@
   color: #57534e;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.ob-form-status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.ob-form-status-row .ob-form-status {
+  margin: 0;
+  flex: 1;
+}
+
+.ob-status-tag {
+  margin-inline-end: 0;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 0 10px;
 }
 
 .ob-hire-banner {
