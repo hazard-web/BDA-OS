@@ -27,7 +27,17 @@ export const INDIA_STATES = [
 export const COUNTRIES = ['India', 'United States', 'United Kingdom', 'Singapore', 'United Arab Emirates']
 export const DEPARTMENTS = ['Engineering', 'Human Resources', 'Finance', 'Operations', 'Sales', 'Design', 'Product', 'Support']
 export const LOCATIONS = ['Ghaziabad', 'Noida', 'Delhi NCR', 'Bengaluru', 'Remote', 'Hybrid']
-export const TITLES = ['Software Engineer', 'HR Executive', 'Intern', 'Manager', 'Team Lead', 'Associate', 'Analyst']
+export const TITLES = [
+  'Software Engineer (QA)',
+  'Software Engineer (Developer)',
+  'HR Executive',
+  'Intern (QA)',
+  'Intern (Developer)',
+  'Manager',
+  'Team Lead',
+  'Associate',
+  'Analyst',
+]
 export const HIRE_SOURCES = ['Referral', 'Job board', 'Campus', 'Agency', 'Direct', 'Career page']
 export const GENDERS = ['Male', 'Female', 'Other']
 export const COUNTRY_CODES = [
