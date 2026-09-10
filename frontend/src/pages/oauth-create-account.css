@@ -37,85 +37,8 @@
   background: #fff;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   overflow: hidden;
-  padding: 0 28px 18px;
+  padding: 28px 28px 18px;
   box-sizing: border-box;
-}
-
-/* Brand header with soft circular backdrop */
-.oca-brands {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin: 0 -28px 28px;
-  padding: 30px 20px;
-  overflow: hidden;
-  isolation: isolate;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e6e6e6;
-}
-
-.oca-brands > :not(.oca-brands-bg) {
-  position: relative;
-  z-index: 1;
-}
-
-.oca-brands-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.oca-brands-bg::before,
-.oca-brands-bg::after,
-.oca-brands-bg i {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.oca-brands-bg::before {
-  width: 150px;
-  height: 150px;
-  top: -78px;
-  left: -42px;
-  background: rgba(255, 255, 255, 0.85);
-}
-
-.oca-brands-bg::after {
-  width: 110px;
-  height: 110px;
-  top: -18px;
-  left: 56px;
-  background: rgba(255, 255, 255, 0.55);
-}
-
-.oca-brands-bg i:nth-child(1) {
-  width: 200px;
-  height: 200px;
-  top: -48px;
-  right: -92px;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.oca-brands-bg i:nth-child(2) {
-  width: 90px;
-  height: 90px;
-  bottom: -48px;
-  left: 18px;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.oca-brands-bg i:nth-child(3) {
-  width: 70px;
-  height: 70px;
-  bottom: -30px;
-  right: 72px;
-  background: rgba(255, 255, 255, 0.45);
 }
 
 .oca-people-mark {
@@ -129,13 +52,6 @@
 .oca-people-mark i {
   display: block;
   border-radius: 2px;
-}
-
-.oca-x {
-  color: #b8bdc6;
-  font-size: 20px;
-  line-height: 1;
-  font-weight: 300;
 }
 
 .oca-hello {
@@ -564,13 +480,6 @@
   max-width: 460px;
   width: 100%;
   margin: 0 auto;
-}
-
-.oca-expired-logos {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
 }
 
 .oca-expired-eyebrow {

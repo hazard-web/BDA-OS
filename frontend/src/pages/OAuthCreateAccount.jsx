@@ -286,19 +286,6 @@ export default function OAuthCreateAccount() {
 
         <div className="oca-expired-panel">
           <div className="oca-expired-inner">
-            <div className="oca-expired-logos">
-              <span className="oca-people-mark" aria-label="BDA OS">
-                <i style={{ background: '#e42527' }} />
-                <i style={{ background: '#f5c400' }} />
-                <i style={{ background: '#21a05a' }} />
-                <i style={{ background: '#2b8aed' }} />
-              </span>
-              <span className="oca-x" aria-hidden="true">
-                ×
-              </span>
-              <GoogleLogo />
-            </div>
-
             <p className="oca-expired-eyebrow">BDA OS</p>
             <h1 className="oca-expired-title">
               Sign-in session <span>expired</span>
@@ -337,24 +324,6 @@ export default function OAuthCreateAccount() {
       <AuthLogoLoader show={saving || linking} label={saving ? 'Creating account' : 'Linking account'} />
 
       <div className="oca-shell">
-        <div className="oca-brands">
-          <span className="oca-brands-bg" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="oca-people-mark" aria-label="BDA OS">
-            <i style={{ background: '#e42527' }} />
-            <i style={{ background: '#f5c400' }} />
-            <i style={{ background: '#21a05a' }} />
-            <i style={{ background: '#2b8aed' }} />
-          </span>
-          <span className="oca-x" aria-hidden="true">
-            ×
-          </span>
-          <GoogleLogo />
-        </div>
-
         <div className="oca-hello">
           {profile.picture ? (
             <img src={profile.picture} alt="" className="oca-pic" referrerPolicy="no-referrer" />

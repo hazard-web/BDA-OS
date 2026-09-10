@@ -1,5 +1,4 @@
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
-import { Button, Tooltip } from 'antd'
 import { useTheme } from '../context/ThemeContext'
 
 export default function PulseAppearanceToggle({ variant = 'icon' }) {
@@ -9,10 +8,18 @@ export default function PulseAppearanceToggle({ variant = 'icon' }) {
   const icon = dark ? <SunOutlined /> : <MoonOutlined />
   const toggle = () => setTheme(dark ? 'light' : 'dark')
 
+  const onKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      toggle()
+    }
+  }
+
   if (variant === 'rail') {
     return (
       <button
         type="button"
+        title={label}
         aria-label={label}
         aria-pressed={dark}
         className={dark ? 'is-on' : undefined}
@@ -27,6 +34,7 @@ export default function PulseAppearanceToggle({ variant = 'icon' }) {
     return (
       <button
         type="button"
+        title={label}
         className={`pulse-ribbon-btn${dark ? ' is-on' : ''}`}
         aria-label={label}
         aria-pressed={dark}
@@ -37,9 +45,19 @@ export default function PulseAppearanceToggle({ variant = 'icon' }) {
     )
   }
 
+  // No Ant Tooltip — its dark bubble was showing as a black hover smear under the header.
   return (
-    <Tooltip title={label}>
-      <Button type="text" icon={icon} aria-label={label} aria-pressed={dark} onClick={toggle} />
-    </Tooltip>
+    <span
+      role="button"
+      tabIndex={0}
+      title={label}
+      className="pulse-appearance-btn"
+      aria-label={label}
+      aria-pressed={dark}
+      onClick={toggle}
+      onKeyDown={onKeyDown}
+    >
+      {icon}
+    </span>
   )
 }

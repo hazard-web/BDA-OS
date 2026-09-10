@@ -4,7 +4,6 @@ import { format } from 'date-fns'
 import {
   AppstoreOutlined,
   AuditOutlined,
-  BellOutlined,
   BookOutlined,
   CarryOutOutlined,
   PlusOutlined,
@@ -16,7 +15,6 @@ import {
 import {
   App,
   Avatar,
-  Badge,
   Button,
   Drawer,
   Dropdown,
@@ -41,6 +39,7 @@ import { MORE_SERVICES } from '../components/PulseMoreLauncher'
 import PulseSmartChat from '../components/PulseSmartChat'
 import PulseOrganization, { ORG_TABS } from '../components/PulseOrganization'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
+import { PulseHeaderNotifications, PulseHeaderSearch } from '../components/PulseHeaderTools'
 import PulseLiveModule from '../components/PulseLiveWorkspace'
 import PulseWelcomeCurtain from '../components/PulseWelcomeCurtain'
 import AppsFlyout from '../components/AppsFlyout'
@@ -230,7 +229,6 @@ export default function PeopleHome() {
         : (start.leaveTab || 'mydata'),
   )
   const [leaveSubTab, setLeaveSubTab] = useState('requests')
-  const [activity, setActivity] = useState('Activities')
   const [moreOpen, setMoreOpen] = useState(false)
   const [moreQuery, setMoreQuery] = useState('')
   const [checkedInAt, setCheckedInAt] = useState(null)
@@ -277,7 +275,6 @@ export default function PeopleHome() {
   const leaveBalances = sample ? SAMPLE_LEAVE_BALANCES : workWeek.leaveBalances
   const weekHours = Math.round(weekDays.reduce((sum, day) => sum + (Number(day.hours) || 0), 0) * 100) / 100
   const leaveLeft = leaveBalances.reduce((sum, row) => sum + Math.max(0, row.total - row.used), 0)
-  const pendingCount = approvals.filter((row) => ['Pending', 'Accepted', 'In Progress'].includes(row.status)).length
   const monthPresent = sample ? 18 : (workWeek.month ? Number(workWeek.month.present) || 0 : weekDays.filter((day) => day.present && !day.weekend).length)
   const monthAbsent = sample ? 1 : (workWeek.month ? Number(workWeek.month.absent) || 0 : weekDays.filter((day) => day.status === 'Absent').length)
   const mtdDays = monthPresent + monthAbsent
@@ -620,7 +617,7 @@ export default function PeopleHome() {
   )
 
   const railItems = [
-    ...RAIL_TOP.map((item) => {
+    ...RAIL_TOP.filter((item) => isPulseAdmin || item.key !== 'onboarding').map((item) => {
       const Icon = item.Icon
       const onboardingOn = item.key === 'onboarding' && space === 'organization' && sub === 'onboarding'
       const leaveHubOn = (module === 'leave' || module === 'attendance') && space === 'myspace' && !moreOpen
@@ -741,19 +738,55 @@ export default function PeopleHome() {
           <Dropdown
             trigger={['click']}
             placement="bottomRight"
+            arrow={false}
+            destroyOnHidden
             rootClassName="pulse-plus-menu"
+            getPopupContainer={() => document.body}
+            align={{ offset: [0, 10] }}
+            styles={{ root: { zIndex: 10000 } }}
             menu={{
               items: [
-                { key: 'notebook', icon: <BookOutlined />, label: 'Notebook', onClick: openNotesBoard },
+                {
+                  key: 'notebook',
+                  icon: <BookOutlined />,
+                  label: 'Notebook',
+                  onClick: openNotesBoard,
+                },
               ],
             }}
           >
             <Button className="pulse-plus" type="primary" icon={<PlusOutlined />} aria-label="Quick add" />
           </Dropdown>
-          <Button type="text" icon={<SearchOutlined />} aria-label="Search" onClick={() => soon('Search')} />
-          <Badge count={sample ? 3 : pendingCount} size="small">
-            <Button type="text" icon={<BellOutlined />} aria-label="Notifications" onClick={() => setActivity('Approvals')} />
-          </Badge>
+          <PulseHeaderSearch
+            user={user}
+            onOpenView={(view) => {
+              setMoreOpen(false)
+              goShell({
+                space: view.space,
+                module: view.module,
+                sub: view.sub,
+                leaveTab: view.leaveTab,
+                leaveSubTab: view.leaveSubTab,
+              })
+            }}
+            onOpenModule={(moduleId) => {
+              setMoreOpen(false)
+              goShell({ space: 'myspace', module: moduleId, sub: 'overview' })
+            }}
+          />
+          <PulseHeaderNotifications
+            approvals={approvals}
+            onOpenLeave={() => {
+              setMoreOpen(false)
+              goShell({
+                space: 'myspace',
+                module: 'leave',
+                sub: 'overview',
+                leaveTab: 'mydata',
+                leaveSubTab: 'requests',
+              })
+            }}
+          />
           <PulseAppearanceToggle />
           <button
             type="button"
@@ -924,20 +957,18 @@ export default function PeopleHome() {
         <Sider className="pulse-sider-right" width={44} theme="light" collapsedWidth={44} trigger={null}>
           <aside className="pulse-aside" aria-label="Shortcuts">
             <button type="button" aria-label="Directory" onClick={() => (isPulseAdmin ? navigate(APP_COMPANY) : soon('Directory'))}><UserAddOutlined /></button>
-            <button
-              type="button"
-              aria-label="Onboarding"
-              onClick={() => {
-                if (isPulseAdmin) {
+            {isPulseAdmin ? (
+              <button
+                type="button"
+                aria-label="Onboarding"
+                onClick={() => {
                   setMoreOpen(false)
                   openPulsePage('onboarding')
-                  return
-                }
-                goShell({ space: 'myspace', module: 'home', sub: 'overview' })
-              }}
-            >
-              <RocketOutlined />
-            </button>
+                }}
+              >
+                <RocketOutlined />
+              </button>
+            ) : null}
             <div className="pulse-aside-gap" />
             <button type="button" aria-label="Accessibility" onClick={() => soon('Accessibility')}><UserOutlined /></button>
             <PulseAppearanceToggle variant="rail" />

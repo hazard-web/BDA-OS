@@ -48,7 +48,8 @@ export default function PeopleHub() {
     ;(async () => {
       let nextUser = user
 
-      if (!hasPulseAccount(user)) {
+      // Members never create a company portal — skip Pulse setup onboarding.
+      if (!hasPulseAccount(user) && user.role !== 'member') {
         const payload = suggestedPulseSetupPayload(user)
         try {
           const res = await api.post('/auth/pulse-setup', payload)

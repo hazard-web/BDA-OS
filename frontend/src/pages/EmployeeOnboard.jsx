@@ -127,6 +127,7 @@ export default function EmployeeOnboard() {
         await form.validateFields([
           ...EMPLOYEE_STEP_FIELDS.you,
           ...EMPLOYEE_STEP_FIELDS.id,
+          ...EMPLOYEE_STEP_FIELDS.work,
         ])
         const values = form.getFieldsValue(true)
         const payload = payloadFromValues(values, { mode: 'employee' })
@@ -144,6 +145,7 @@ export default function EmployeeOnboard() {
         const roots = (fields) => fields.map((item) => (Array.isArray(item) ? item[0] : item))
         if (names.some((name) => roots(EMPLOYEE_STEP_FIELDS.you).includes(name))) setStep('you')
         else if (names.some((name) => roots(EMPLOYEE_STEP_FIELDS.id).includes(name))) setStep('id')
+        else if (names.some((name) => roots(EMPLOYEE_STEP_FIELDS.work).includes(name))) setStep('work')
         return
       }
       message.error(err?.response?.data?.message || err.message || 'Could not submit details')
