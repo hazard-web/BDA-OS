@@ -3,7 +3,6 @@ const router = express.Router();
 const { auth } = require('./auth');
 const PulseWorkDay = require('../models/PulseWorkDay');
 const User = require('../models/User');
-const Candidate = require('../models/Candidate');
 const Staff = require('../models/Staff');
 const LeavePolicy = require('../models/LeavePolicy');
 const LeaveRequest = require('../models/LeaveRequest');
@@ -261,36 +260,16 @@ router.get('/admin/days', auth, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const candidates = await Candidate.find({ organizationId })
-      .select('email officialEmail photo.mime photo.data photo.size')
-      .lean();
-
-    const photoByEmail = new Map();
-    for (const row of candidates) {
-      const dataUrl = candidatePhotoDataUrl(row.photo);
-      if (!dataUrl) continue;
-      for (const key of [row.officialEmail, row.email]) {
-        const email = String(key || '').trim().toLowerCase();
-        if (email && !photoByEmail.has(email)) photoByEmail.set(email, dataUrl);
-      }
-    }
-
+    // Do not load Candidate photo.data here — base64 payloads can be multi‑MB and
+    // OOM/timeout this endpoint (empty Attendance UI). Avatars come from User.avatarUrl.
     const personOf = (id) => {
       const person = members.find((item) => String(item._id) === String(id));
       if (!person) return { name: 'Employee', email: '', avatarUrl: '' };
       const parts = [person.firstName, person.lastName].filter(Boolean);
-      const email = String(person.email || '').trim().toLowerCase();
-      let avatarUrl = String(person.avatarUrl || '').trim();
-      if (!avatarUrl && email) {
-        avatarUrl = photoByEmail.get(email) || '';
-        if (avatarUrl && avatarUrl.length <= 400000) {
-          User.updateOne({ _id: person._id }, { $set: { avatarUrl } }).catch(() => {});
-        }
-      }
       return {
         name: parts.length ? parts.join(' ') : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
         email: person.email || '',
-        avatarUrl,
+        avatarUrl: String(person.avatarUrl || '').trim(),
       };
     };
 
@@ -329,17 +308,6 @@ router.get('/admin/days', auth, async (req, res) => {
     res.status(500).json({ success: false, message: err.message || 'Failed to load days' });
   }
 });
-
-function candidatePhotoDataUrl(photo) {
-  if (!photo?.data) return '';
-  const raw = String(photo.data);
-  if (raw.startsWith('data:')) {
-    return raw.length <= 400000 ? raw : '';
-  }
-  if (raw.length > 350000) return '';
-  const mime = photo.mime || 'image/jpeg';
-  return `data:${mime};base64,${raw}`;
-}
 
 function emptyTimesheet(date) {
   return {
