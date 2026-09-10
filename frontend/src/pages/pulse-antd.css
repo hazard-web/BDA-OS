@@ -3459,6 +3459,350 @@ body:has(.pulse-shell),
   width: 100%;
 }
 
+.pulse-people {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.pulse-org-main-card .pulse-people-card.ant-card {
+  background: rgba(255, 252, 247, 0.72);
+  border-color: rgba(230, 225, 214, 0.9);
+  box-shadow: none;
+}
+
+.pulse-org-main-card .pulse-people {
+  gap: 12px;
+}
+
+.pulse-org-pane-title {
+  margin: 0 0 12px;
+}
+
+.pulse-people-invite-form {
+  margin: 0;
+}
+
+.pulse-people-invite-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.pulse-people-invite-email .ant-input-prefix {
+  margin-inline-end: 10px;
+}
+
+.pulse-people-gmail {
+  display: block;
+  flex-shrink: 0;
+}
+
+.pulse-people-invite-email,
+.pulse-people-invite-role,
+.pulse-people-invite-submit {
+  margin-bottom: 0 !important;
+}
+
+.pulse-people-invite-submit .ant-btn {
+  width: 100%;
+  min-width: 132px;
+}
+
+.pulse-people-person-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pulse-people-person-meta strong {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #14110e;
+  line-height: 1.25;
+}
+
+.pulse-people-person-meta em {
+  font-style: normal;
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pulse-people-table .ant-table-thead > tr > th {
+  background: transparent !important;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom-color: #eee9df !important;
+}
+
+.pulse-people-table .ant-table-tbody > tr > td {
+  border-bottom-color: #f2eee6 !important;
+  vertical-align: middle;
+}
+
+.pulse-people-table .ant-table-tbody > tr:last-child > td {
+  border-bottom: 0 !important;
+}
+
+.pulse-people-role-select.ant-select {
+  min-width: 148px;
+}
+
+.pulse-people-role-select .ant-select-selector {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+}
+
+.pulse-people-role-select.ant-select-focused .ant-select-selector,
+.pulse-people-role-select.ant-select-open .ant-select-selector,
+.pulse-people-role-select:hover .ant-select-selector {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.pulse-people-confirm-shift {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 14px;
+}
+
+.pulse-people-confirm .ant-modal-content {
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.pulse-people-confirm .ant-modal-close {
+  display: none;
+}
+
+.pulse-people-confirm-body {
+  padding: 20px 20px 18px;
+}
+
+.pulse-people-confirm-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.pulse-people-confirm-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.pulse-people-confirm-name {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #14110e;
+  line-height: 1.2;
+}
+
+.pulse-people-confirm-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pulse-people-confirm-close:hover {
+  background: #f4f2ec;
+  color: #14110e;
+}
+
+.pulse-people-confirm-role {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f4f2ec;
+  border: 1px solid #e6e1d6;
+}
+
+.pulse-people-confirm-role span {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.pulse-people-confirm-role strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #14110e;
+}
+
+.pulse-people-confirm-role.is-to.is-admin,
+.pulse-people-confirm-role.is-to.is-superadmin {
+  background: #e8f2ee;
+  border-color: #c5ddd2;
+}
+
+.pulse-people-confirm-role.is-to.is-superadmin strong {
+  color: #8a6a12;
+}
+
+.pulse-people-confirm-role.is-to.is-admin strong {
+  color: #1a5f4a;
+}
+
+.pulse-people-confirm-role.is-to.is-member {
+  background: #f7f1ef;
+  border-color: #e8d8d2;
+}
+
+.pulse-people-confirm-arrow {
+  color: #9ca3af;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pulse-people-confirm-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.pulse-people-confirm-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #3f3a34;
+}
+
+.pulse-people-confirm-label b {
+  font-weight: 700;
+  color: #14110e;
+}
+
+.pulse-people-confirm-input.ant-input,
+.pulse-people-confirm-input.ant-input-affix-wrapper {
+  border-radius: 10px;
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+}
+
+.pulse-people-confirm-input.ant-input:hover,
+.pulse-people-confirm-input.ant-input:focus,
+.pulse-people-confirm-input.ant-input-focused,
+.pulse-people-confirm-input.is-ready.ant-input {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.pulse-people-confirm-input.is-ready.ant-input {
+  border-color: #1a5f4a !important;
+  background: #f4faf7;
+}
+
+.pulse-people-confirm-hint {
+  margin: 8px 0 0;
+  min-height: 18px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.pulse-people-confirm-hint.is-error {
+  color: #b42318;
+}
+
+.pulse-people-confirm-hint.is-ok {
+  color: #1a5f4a;
+}
+
+.pulse-people-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #eee9df;
+}
+
+.pulse-people-confirm-actions .ant-btn-primary.ant-btn-dangerous,
+.pulse-people-confirm-actions .ant-btn-variant-solid.ant-btn-color-dangerous {
+  color: #fff !important;
+  background: #b42318 !important;
+  border-color: #b42318 !important;
+  box-shadow: none !important;
+}
+
+.pulse-people-confirm-actions .ant-btn-primary.ant-btn-dangerous:hover:not(:disabled),
+.pulse-people-confirm-actions .ant-btn-variant-solid.ant-btn-color-dangerous:hover:not(:disabled) {
+  color: #fff !important;
+  background: #d92d20 !important;
+  border-color: #d92d20 !important;
+  box-shadow: none !important;
+}
+
+.pulse-people-confirm-actions .ant-btn-primary.ant-btn-dangerous:focus,
+.pulse-people-confirm-actions .ant-btn-primary.ant-btn-dangerous:focus-visible,
+.pulse-people-confirm-actions .ant-btn-variant-solid.ant-btn-color-dangerous:focus,
+.pulse-people-confirm-actions .ant-btn-variant-solid.ant-btn-color-dangerous:focus-visible {
+  color: #fff !important;
+  border-color: #b42318 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.pulse-people-confirm-actions .ant-btn-primary:disabled,
+.pulse-people-confirm-actions .ant-btn-primary.ant-btn-dangerous:disabled {
+  opacity: 0.45;
+  box-shadow: none !important;
+}
+
+.pulse-people-invite-row .ant-input-affix-wrapper-focused,
+.pulse-people-invite-row .ant-input-affix-wrapper:focus,
+.pulse-people-invite-row .ant-input-affix-wrapper:hover,
+.pulse-people-invite-row .ant-select-focused .ant-select-selector,
+.pulse-people-invite-row .ant-select-open .ant-select-selector,
+.pulse-people-invite-row .ant-select:hover .ant-select-selector {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+@media (max-width: 720px) {
+  .pulse-people-invite-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pulse-people-invite-submit .ant-btn {
+    width: 100%;
+  }
+}
+
 .pulse-org-card.ant-card {
   border-radius: 12px;
   border-color: #e6e1d6;

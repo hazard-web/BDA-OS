@@ -7,22 +7,67 @@ const { listActiveGrantsForEmail } = require('./appCatalog')
 
 /**
  * Pulse org roles — invite-only workspace.
+ * superadmin ≥ admin ≥ member
  */
+const PULSE_ROLES = ['superadmin', 'admin', 'member']
+
 function orgIdOf(user) {
   if (!user) return null
   if (user.organizationId) return String(user.organizationId)
   return user._id ? String(user._id) : null
 }
 
+function normalizePulseRole(role) {
+  const value = String(role || '').trim().toLowerCase()
+  if (value === 'superadmin' || value === 'super_admin' || value === 'super-admin') return 'superadmin'
+  if (value === 'admin') return 'admin'
+  if (value === 'member') return 'member'
+  return null
+}
+
+function effectiveRole(user) {
+  if (!user) return null
+  if (user.role == null || user.role === '') return 'admin'
+  return normalizePulseRole(user.role) || 'member'
+}
+
+function isPulseSuperAdmin(user) {
+  return effectiveRole(user) === 'superadmin'
+}
+
 function isPulseAdmin(user) {
   if (!user) return false
-  // Legacy accounts (no role) are admins of their own workspace
-  if (user.role == null || user.role === '') return true
-  return user.role === 'admin'
+  const role = effectiveRole(user)
+  return role === 'admin' || role === 'superadmin'
 }
 
 function isPulseMember(user) {
-  return !!user && user.role === 'member'
+  return effectiveRole(user) === 'member'
+}
+
+function pulseRoleLabel(role) {
+  const normalized = normalizePulseRole(role) || (role == null || role === '' ? 'admin' : null)
+  if (normalized === 'superadmin') return 'Super Admin'
+  if (normalized === 'admin') return 'Admin'
+  if (normalized === 'member') return 'Member'
+  return 'Member'
+}
+
+/** Roles the actor may assign when inviting or changing people. */
+function assignableRolesFor(actor) {
+  if (!isPulseAdmin(actor)) return []
+  return ['member', 'admin', 'superadmin']
+}
+
+function canAssignRole(actor, role) {
+  const next = normalizePulseRole(role)
+  if (!next) return false
+  return assignableRolesFor(actor).includes(next)
+}
+
+function isOrgOwner(user, organizationId) {
+  if (!user?._id || !organizationId) return false
+  return String(user._id) === String(organizationId)
 }
 
 async function orgCompanyDomain() {
@@ -68,9 +113,17 @@ async function publicUserWithApps(user) {
 }
 
 module.exports = {
+  PULSE_ROLES,
   orgIdOf,
+  normalizePulseRole,
+  effectiveRole,
+  isPulseSuperAdmin,
   isPulseAdmin,
   isPulseMember,
+  pulseRoleLabel,
+  assignableRolesFor,
+  canAssignRole,
+  isOrgOwner,
   orgCompanyDomain,
   assertMemberCompanyDomain,
   publicUserFields,

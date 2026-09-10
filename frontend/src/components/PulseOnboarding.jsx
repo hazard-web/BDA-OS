@@ -145,6 +145,8 @@ function EmptyArt() {
 
 export default function PulseOnboarding() {
   const { message } = App.useApp()
+  const messageRef = useRef(message)
+  messageRef.current = message
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -189,12 +191,12 @@ export default function PulseOnboarding() {
     } catch (err) {
       if (!silent) {
         setRows([])
-        message.error(err?.response?.data?.message || 'Could not load employees')
+        messageRef.current.error(err?.response?.data?.message || 'Could not load employees')
       }
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [applied, query, message])
+  }, [applied, query])
 
   useEffect(() => {
     load()

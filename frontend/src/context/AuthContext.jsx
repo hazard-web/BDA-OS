@@ -44,15 +44,52 @@ export function AuthProvider({ children }) {
   }, [])
 
   const fetchProfile = useCallback(async () => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      setLoading(false)
+      return
+    }
+
+    let payload = null
+    try {
+      payload = JSON.parse(atob(token.split('.')[1]))
+    } catch {
+      payload = null
+    }
+    if (!payload?.id || (payload.exp && payload.exp * 1000 < Date.now())) {
+      logout()
+      setLoading(false)
+      return
+    }
+
+    // Coolify / Atlas cold starts often exceed 5s — that used to force logout
+    // and look like a session timeout / onboarding reload loop.
     const controller = new AbortController()
-    // 5-second timeout - avoids the 30 s axios global timeout causing a
-    // long blank screen when the backend is slow or the token is expired.
-    const timer = setTimeout(() => controller.abort(), 5000)
+    const timer = setTimeout(() => controller.abort(), 20000)
     try {
       const res = await api.get('/auth/profile', { signal: controller.signal, __skipCache: true })
       setUser(res.data.user)
-    } catch {
-      logout()
+    } catch (err) {
+      const status = err?.response?.status
+      if (status === 401 || status === 403) {
+        logout()
+      } else if (userRef.current) {
+        // Keep the in-memory session if profile refresh failed transiently.
+        console.warn('[Auth] Profile refresh failed — keeping session.', err?.message)
+      } else {
+        // No profile yet: retry once before giving up (still keep the token).
+        try {
+          const retry = await api.get('/auth/profile', { __skipCache: true, timeout: 20000 })
+          setUser(retry.data.user)
+        } catch (retryErr) {
+          const retryStatus = retryErr?.response?.status
+          if (retryStatus === 401 || retryStatus === 403) {
+            logout()
+          } else {
+            console.warn('[Auth] Profile unreachable — keeping token.', retryErr?.message)
+          }
+        }
+      }
     } finally {
       clearTimeout(timer)
       setLoading(false)
