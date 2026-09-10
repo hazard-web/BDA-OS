@@ -55,9 +55,10 @@ async function createAndSendOrgInvite({
   )
 
   const token = crypto.randomBytes(32).toString('hex')
+  const inviteRole = ['superadmin', 'admin', 'member'].includes(role) ? role : 'member'
   const invite = await PulseInvite.create({
     email: address,
-    role,
+    role: inviteRole,
     organizationId,
     invitedBy,
     companyName: companyName || '',
@@ -75,7 +76,7 @@ async function createAndSendOrgInvite({
       to: address,
       inviteUrl,
       companyName,
-      role,
+      role: inviteRole,
       invitedByName: invitedByName || 'BDA OS',
       loginEmail: address,
     })

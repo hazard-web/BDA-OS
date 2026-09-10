@@ -1170,7 +1170,7 @@ async function sendPunchOutReminderEmail(staff, loginUrl, details = {}) {
 async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedByName, loginEmail }) {
   const transporter = await createSMTPTransporter();
   const org = companyName || 'BDA Technologies';
-  const roleLabel = role === 'admin' ? 'Admin' : 'Member';
+  const roleLabel = role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
   const fromName = invitedByName || 'HR';
   const login = loginEmail || to;
 
@@ -1353,6 +1353,66 @@ async function sendLeaveRequestEmail({
   return info;
 }
 
+/**
+ * Notify a person that their BDA OS org role changed.
+ */
+async function sendPulseRoleChangedEmail({
+  to,
+  companyName,
+  personName,
+  previousRole,
+  nextRole,
+  changedByName,
+}) {
+  const transporter = await createSMTPTransporter();
+  const org = companyName || 'BDA Technologies';
+  const roleLabel = (role) =>
+    role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
+  const fromLabel = changedByName || 'an administrator';
+  const who = personName || to;
+
+  const mailOptions = {
+    from: buildFromAddress(org),
+    to,
+    subject: `Your ${org} role was updated`,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f5f0e8;font-family:Segoe UI,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
+          <tr>
+            <td style="background:#1A5F4A;padding:28px 32px;">
+              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
+              <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">Role updated</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
+              <p style="margin:0 0 12px;">Hi ${who},</p>
+              <p style="margin:0 0 12px;"><strong>${fromLabel}</strong> changed your role in <strong>${org}</strong>.</p>
+              <p style="margin:0 0 8px;color:#555;">Previous role</p>
+              <p style="margin:0 0 16px;padding:10px 12px;background:#f4f2ec;border-radius:8px;font-weight:600;">${roleLabel(previousRole)}</p>
+              <p style="margin:0 0 8px;color:#555;">New role</p>
+              <p style="margin:0 0 16px;padding:10px 12px;background:#e8f2ee;border-radius:8px;font-weight:600;color:#1A5F4A;">${roleLabel(nextRole)}</p>
+              <p style="margin:0;font-size:13px;color:#888;">If you did not expect this change, contact your administrator.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `,
+  };
+
+  const info = await sendMailWithRetry(transporter, mailOptions);
+  return info;
+}
+
 module.exports = {
   sendPayslipEmail,
   sendVerificationEmail,
@@ -1361,6 +1421,7 @@ module.exports = {
   sendTeamMemberOnboarding,
   sendPunchOutReminderEmail,
   sendPulseInviteEmail,
+  sendPulseRoleChangedEmail,
   sendCandidateOnboardingEmail,
   sendLeaveRequestEmail,
 };

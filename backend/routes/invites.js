@@ -4,10 +4,31 @@ const { auth } = require('./auth')
 const User = require('../models/User')
 const PulseInvite = require('../models/PulseInvite')
 const Candidate = require('../models/Candidate')
-const { isPulseAdmin, orgIdOf, publicUserWithApps, orgCompanyDomain } = require('../utils/pulseAuth')
+const {
+  isPulseAdmin,
+  orgIdOf,
+  publicUserWithApps,
+  orgCompanyDomain,
+  normalizePulseRole,
+  canAssignRole,
+  assignableRolesFor,
+  isOrgOwner,
+  effectiveRole,
+  pulseRoleLabel,
+} = require('../utils/pulseAuth')
 const { assertAllowedCompanyEmail, resolveCompanyDomain } = require('../utils/companyDomain')
 const { createAndSendOrgInvite } = require('../utils/pulseOrgInvite')
+const { sendPulseRoleChangedEmail } = require('../utils/emailService')
 const { DEFAULT_GENDER } = require('../utils/indiaLocation')
+
+function memberConfirmName(user) {
+  const n = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+  return n || String(user?.email || '').trim()
+}
+
+function namesMatch(typed, expected) {
+  return String(typed || '').trim().toLowerCase() === String(expected || '').trim().toLowerCase()
+}
 
 const router = express.Router()
 
@@ -21,6 +42,23 @@ function requireAdmin(req, res, next) {
 function inviterName(user) {
   const n = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
   return n || user.displayName || user.email || 'Your admin'
+}
+
+function isManagerRole(role) {
+  const value = normalizePulseRole(role) || (role == null || role === '' ? 'admin' : 'member')
+  return value === 'admin' || value === 'superadmin'
+}
+
+async function countOrgManagers(organizationId, excludeUserId) {
+  const rows = await User.find({
+    $or: [{ organizationId }, { _id: organizationId }],
+  })
+    .select('_id role')
+    .lean()
+  return rows.filter((row) => {
+    if (excludeUserId && String(row._id) === String(excludeUserId)) return false
+    return isManagerRole(row.role)
+  }).length
 }
 
 // GET /api/invites — list for this org (admin)
@@ -43,12 +81,16 @@ router.get('/', auth, requireAdmin, async (req, res) => {
       success: true,
       data: {
         companyDomain,
+        assignableRoles: assignableRolesFor(req.user),
+        currentUserId: String(req.user._id),
+        currentUserRole: effectiveRole(req.user),
         members: members.map((m) => ({
           _id: m._id,
           email: m.email,
           firstName: m.firstName || '',
           lastName: m.lastName || '',
           role: m.role || 'admin',
+          isOwner: isOrgOwner(m, organizationId),
           createdAt: m.createdAt,
         })),
         invites: invites.map((i) => ({
@@ -67,13 +109,19 @@ router.get('/', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /api/invites — send invite (admin)
+// POST /api/invites — send invite (admin / superadmin)
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
     const email = String(req.body.email || '')
       .trim()
       .toLowerCase()
-    const role = req.body.role === 'admin' ? 'admin' : 'member'
+    const role = normalizePulseRole(req.body.role) || 'member'
+    if (!canAssignRole(req.user, role)) {
+      return res.status(403).json({
+        success: false,
+        message: `You cannot invite someone as ${pulseRoleLabel(role)}`,
+      })
+    }
     const organizationId = orgIdOf(req.user)
     const { invite, inviteUrl, emailSent } = await createAndSendOrgInvite({
       email,
@@ -105,6 +153,101 @@ router.post('/', auth, requireAdmin, async (req, res) => {
       code: err.code,
       message: err.message || 'Failed to send invite',
     })
+  }
+})
+
+// PATCH /api/invites/members/:id/role — change an existing person's role
+router.patch('/members/:id/role', auth, requireAdmin, async (req, res) => {
+  try {
+    const organizationId = orgIdOf(req.user)
+    const nextRole = normalizePulseRole(req.body.role)
+    if (!nextRole || !canAssignRole(req.user, nextRole)) {
+      return res.status(400).json({ success: false, message: 'Choose Member, Admin, or Super Admin' })
+    }
+
+    const member = await User.findById(req.params.id)
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Person not found' })
+    }
+
+    const inOrg =
+      String(member.organizationId || member._id) === String(organizationId) ||
+      String(member._id) === String(organizationId)
+    if (!inOrg) {
+      return res.status(404).json({ success: false, message: 'Person not found in this organization' })
+    }
+
+    if (String(member._id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'You cannot change your own role' })
+    }
+
+    const current = effectiveRole(member)
+    if (current === nextRole) {
+      return res.json({
+        success: true,
+        message: 'Role unchanged',
+        data: { _id: member._id, role: current },
+      })
+    }
+
+    const expectedName = memberConfirmName(member)
+    if (!namesMatch(req.body.confirmName, expectedName)) {
+      return res.status(400).json({
+        success: false,
+        message: `Type “${expectedName}” exactly to confirm this role change`,
+      })
+    }
+
+    if (isOrgOwner(member, organizationId) && nextRole === 'member') {
+      return res.status(400).json({
+        success: false,
+        message: 'The organization owner must stay Admin or Super Admin',
+      })
+    }
+
+    if (isManagerRole(current) && !isManagerRole(nextRole)) {
+      const remaining = await countOrgManagers(organizationId, member._id)
+      if (remaining < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Keep at least one Admin or Super Admin in the organization',
+        })
+      }
+    }
+
+    member.role = nextRole
+    await member.save()
+
+    let emailSent = true
+    let emailError = ''
+    try {
+      await sendPulseRoleChangedEmail({
+        to: member.email,
+        companyName: req.user.companyName || member.companyName || '',
+        personName: expectedName,
+        previousRole: current,
+        nextRole,
+        changedByName: inviterName(req.user),
+      })
+    } catch (emailErr) {
+      emailSent = false
+      emailError = emailErr.message || 'Email could not be sent'
+    }
+
+    res.json({
+      success: true,
+      message: emailSent
+        ? `Updated to ${pulseRoleLabel(nextRole)} — email sent to ${member.email}`
+        : `Updated to ${pulseRoleLabel(nextRole)} — email not sent (${emailError})`,
+      emailSent,
+      data: {
+        _id: member._id,
+        email: member.email,
+        role: member.role,
+      },
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to update role' })
   }
 })
 
@@ -190,13 +333,14 @@ router.post('/accept', async (req, res) => {
 
     const givenName = firstName || invite.firstName || ''
     const familyName = lastName || invite.lastName || ''
+    const joinedRole = normalizePulseRole(invite.role) || 'member'
 
     const user = new User({
       email: invite.email,
       password,
       firstName: givenName,
       lastName: familyName,
-      role: invite.role,
+      role: joinedRole,
       organizationId: invite.organizationId,
       companyName: (admin && admin.companyName) || invite.companyName || '',
       companyAddress: (admin && admin.companyAddress) || '',

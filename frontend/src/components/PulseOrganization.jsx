@@ -12,12 +12,12 @@ import {
 } from '@ant-design/icons'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
+import PulseInviteAdmin from './PulseInviteAdmin'
 import PulseLiveModule from './PulseLiveWorkspace'
 import { openPulsePage } from '../utils/pulseOpenPage'
 // Company setup form — parked with Getting Started on `pulse/company-later-services`
 // import PulseCompanyInfoForm from './PulseCompanyInfoForm'
 // Later build — restore from branch `pulse/company-later-services`
-// import PulseInviteAdmin from './PulseInviteAdmin'
 // import { PulseAnnouncementsBoard } from './PulseLiveWorkspace'
 
 export const BDA_LOGO = '/bda-logo-lockup.png'
@@ -26,6 +26,7 @@ export const BDA_LOGO_WIDE = '/bda-logo-lockup.png'
 export const ORG_TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'onboarding', label: 'Onboarding' },
+  { key: 'people', label: 'People' },
 ]
 
 /*
@@ -96,7 +97,7 @@ function ServiceTile({ item, featured, onClick }) {
   )
 }
 
-function OverviewPanel({ user }) {
+function OrgIdentityCard({ user }) {
   const orgName = user?.companyName || 'BDA Technologies'
   const location = [user?.state, user?.country || 'India'].filter(Boolean).join(', ') || 'India'
   const logoSrc = user?.companyLogo || BDA_LOGO
@@ -113,43 +114,56 @@ function OverviewPanel({ user }) {
   ].filter(Boolean)
 
   return (
+    <aside className="pulse-org-identity">
+      <Card size="small" className="pulse-org-card pulse-org-profile">
+        <div className="pulse-org-brand">
+          <div className={`pulse-org-logo${logoSrc === BDA_LOGO ? ' is-lockup' : ''}`}>
+            <img src={logoSrc} alt={`${orgName} logo`} />
+          </div>
+          <h1 className="pulse-org-name">{orgName}</h1>
+          <p className="pulse-org-place">{location}</p>
+        </div>
+        {facts.length ? (
+          <ul className="pulse-org-facts">
+            {facts.map((fact) => {
+              const Icon = fact.Icon
+              return (
+                <li key={fact.key} className="pulse-org-fact">
+                  <Icon className="pulse-org-fact-ico" aria-hidden="true" />
+                  <span>{fact.text}</span>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+      </Card>
+    </aside>
+  )
+}
+
+function OverviewPanel({ user, onOpenService }) {
+  const openService = (key) => {
+    if (typeof onOpenService === 'function') {
+      onOpenService(key)
+      return
+    }
+    openPulsePage(key)
+  }
+
+  return (
     <div className="pulse-org-overview">
       <div className="pulse-org-grid">
-        <aside className="pulse-org-identity">
-          <Card size="small" className="pulse-org-card pulse-org-profile">
-            <div className="pulse-org-brand">
-              <div className={`pulse-org-logo${logoSrc === BDA_LOGO ? ' is-lockup' : ''}`}>
-                <img src={logoSrc} alt={`${orgName} logo`} />
-              </div>
-              <h1 className="pulse-org-name">{orgName}</h1>
-              <p className="pulse-org-place">{location}</p>
-            </div>
-            {facts.length ? (
-              <ul className="pulse-org-facts">
-                {facts.map((fact) => {
-                  const Icon = fact.Icon
-                  return (
-                    <li key={fact.key} className="pulse-org-fact">
-                      <Icon className="pulse-org-fact-ico" aria-hidden="true" />
-                      <span>{fact.text}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : null}
-          </Card>
-        </aside>
-
+        <OrgIdentityCard user={user} />
         <section className="pulse-org-main">
           <Card size="small" className="pulse-org-card pulse-org-main-card">
             <h2 className="pulse-org-pane-title">Services</h2>
             <div className="pulse-org-services">
-              {SERVICES.map((item, index) => (
+              {SERVICES.map((item) => (
                 <ServiceTile
                   key={item.key}
                   item={item}
-                  featured={index === 0}
-                  onClick={openPulsePage}
+                  featured={item.key === 'onboarding'}
+                  onClick={openService}
                 />
               ))}
             </div>
@@ -160,14 +174,42 @@ function OverviewPanel({ user }) {
   )
 }
 
+function PeoplePanel({ user }) {
+  return (
+    <div className="pulse-org-overview">
+      <div className="pulse-org-grid">
+        <OrgIdentityCard user={user} />
+        <section className="pulse-org-main is-deep">
+          <Card size="small" className="pulse-org-card pulse-org-main-card">
+            <h2 className="pulse-org-pane-title">People</h2>
+            <PulseInviteAdmin />
+          </Card>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 /** Organization — org home aligned with Overview. */
 export default function PulseOrganization({ user, tab = 'overview', onSoon, onTab, liveProps }) {
+  const openService = (key) => {
+    if (key === 'onboarding' || key === 'apps' || key === 'attendance') {
+      onTab?.(key === 'attendance' ? 'attendance' : key)
+      return
+    }
+    if (key === 'companyTime') {
+      onTab?.('time')
+      return
+    }
+    openPulsePage(key)
+  }
+
   if (tab === 'overview') {
     return (
       <div className="pulse-strip-root">
         <OrgPeak />
         <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <OverviewPanel user={user} />
+          <OverviewPanel user={user} onOpenService={openService} />
         </div>
       </div>
     )
@@ -181,6 +223,17 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, onTa
           <div className="pulse-org-overview pulse-org-employee">
             <PulseOnboarding />
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'people') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <PeoplePanel user={user} />
         </div>
       </div>
     )
@@ -255,7 +308,7 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, onTa
     <div className="pulse-strip-root">
       <OrgPeak />
       <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-        <OverviewPanel user={user} />
+        <OverviewPanel user={user} onOpenService={openService} />
       </div>
     </div>
   )
