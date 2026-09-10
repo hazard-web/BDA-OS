@@ -366,12 +366,6 @@ function requireAdminHireFields(row) {
       'WORK_EMAIL_DOMAIN_REQUIRED',
     )
   }
-  if (!row.tentativeJoiningDate) {
-    throw httpError(400, 'Joining date is required')
-  }
-  if (!hasCardFile(row.offerLetter)) {
-    throw httpError(400, 'Upload the offer letter')
-  }
   row.officialEmail = officialEmail
 }
 

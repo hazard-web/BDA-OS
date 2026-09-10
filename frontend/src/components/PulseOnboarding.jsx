@@ -337,14 +337,6 @@ export default function PulseOnboarding() {
         message.error(companyEmailRequiredMessage())
         return
       }
-      if (!values.tentativeJoiningDate) {
-        message.error('Joining date is required')
-        return
-      }
-      if (!values.offerLetter?.name && !values.offerLetter?.data) {
-        message.error('Upload the offer letter')
-        return
-      }
       setSending(true)
       const row = await persistAdmin()
       const id = row?._id || editing?._id
@@ -633,8 +625,8 @@ export default function PulseOnboarding() {
                     <strong>No employees have been added yet</strong>
                     <p>
                       Add an employee and send a details form to their personal email. After they submit, their
-                      information appears here. Then fill work email, joining date, and offer letter, and send the
-                      BDA OS invite to their work email.
+                      information appears here. Then fill work email and send the BDA OS invite. Joining date and
+                      offer letter can be added later.
                     </p>
                   </div>
                 }
@@ -749,7 +741,7 @@ export default function PulseOnboarding() {
                 {editing.pulseInviteSentAt
                   ? 'BDA OS invite sent to their work email.'
                   : editing.employeeSubmittedAt
-                    ? 'Details received. Fill work email, joining date, and offer letter, then send the BDA OS invite.'
+                    ? 'Details received. Fill work email and send the BDA OS invite. Joining date and offer letter can be added later.'
                     : editing.onboardingEmailSentAt
                       ? 'Details form emailed to their personal inbox. Waiting for them to submit.'
                       : null}
