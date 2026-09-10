@@ -8,6 +8,8 @@ import {
   broadcastPulseLogout,
   goToLoginOrCloseTab,
 } from '../../utils/pulseAuthSync'
+import { endCheckInOnLogout } from '../../utils/pulseCheckIn'
+import { closeCheckInPip } from '../../utils/pulseCheckInPip'
 
 const DEFAULT_MS = 900
 
@@ -50,7 +52,7 @@ export function useAuthRedirect(delayMs = DEFAULT_MS) {
 /** Accounts + Pulse: button loads, then BDA OS mark, then login. */
 export function useAccountSignOut({ onClosePanel, blocked = false } = {}) {
   const navigate = useNavigate()
-  const { logout, startExit } = useAuth()
+  const { user, logout, startExit } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
   const [signOutLogo, setSignOutLogo] = useState(false)
   const closeRef = useRef(onClosePanel)
@@ -60,6 +62,13 @@ export function useAccountSignOut({ onClosePanel, blocked = false } = {}) {
   const beginSignOut = useCallback(() => {
     if (signingOut || signOutLogo || blocked) return
     startExit?.()
+    // Freeze check-in immediately so desktop/PiP timers do not keep running during the gate.
+    try {
+      endCheckInOnLogout(user?.email)
+      closeCheckInPip()
+    } catch {
+      /* ignore */
+    }
     broadcastPulseLogout()
     setSigningOut(true)
     timersRef.current.forEach((id) => window.clearTimeout(id))
@@ -73,7 +82,7 @@ export function useAccountSignOut({ onClosePanel, blocked = false } = {}) {
         goToLoginOrCloseTab(navigate)
       }, SIGN_OUT_BUTTON_MS + SIGN_OUT_GATE_MS),
     ]
-  }, [signingOut, signOutLogo, blocked, logout, navigate, startExit])
+  }, [signingOut, signOutLogo, blocked, logout, navigate, startExit, user?.email])
 
   useEffect(() => () => {
     timersRef.current.forEach((id) => window.clearTimeout(id))

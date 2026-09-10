@@ -76,16 +76,25 @@ cd backend
 npm install
 ```
 
-Create `backend/.env` (not committed). Local and Render/Vercel each have their own values.
+Create `backend/.env` (not committed). Intended database split:
+
+| Environment | MongoDB |
+|-------------|---------|
+| Local + UAT | Same Atlas DB — `peopleos_uat` |
+| Production | Separate Atlas DB — `peopleos_prod` (never share with UAT) |
 
 ```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/payslip_generator
+PORT=5001
+APP_ENV=local
+# Local and UAT share this database:
+MONGODB_URI=mongodb+srv://USER:PASS@peopleos-uat.xxxxx.mongodb.net/peopleos_uat
 
 EMAIL_USER=your_gmail@gmail.com
 EMAIL_PASS=your_16_char_app_password
 EMAIL_FROM=PaySlip Pro <your_gmail@gmail.com>
 ```
+
+On **Render production**, set `APP_ENV=production` and a different `MONGODB_URI` whose path is `peopleos_prod` (or another non-UAT name). On **Render UAT**, keep `peopleos_uat` (same as local).
 
 > 💡 **Gmail App Password setup:**
 > 1. Go to [Google Account Settings](https://myaccount.google.com)

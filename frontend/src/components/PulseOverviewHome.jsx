@@ -301,8 +301,8 @@ function checkInView(checkedInAt, elapsed) {
     return {
       mode: 'paused',
       status: 'Paused',
-      action: 'Resume',
-      busy: 'Resuming',
+      action: 'Check in again',
+      busy: 'Checking in',
     }
   }
   return {

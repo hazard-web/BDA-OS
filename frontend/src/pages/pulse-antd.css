@@ -5615,6 +5615,22 @@ button.pulse-ts-person.is-clickable:focus-visible {
   font-size: 16px;
 }
 
+.pulse-ts-anomaly {
+  display: inline-block;
+  margin-top: 4px;
+  color: #b45309;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.pulse-ts-anomaly-note {
+  margin: 6px 0 0;
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .pulse-ts-person-tasks {
   margin: 0;
   padding: 0;

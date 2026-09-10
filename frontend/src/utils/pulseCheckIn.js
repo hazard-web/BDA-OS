@@ -6,11 +6,15 @@ export const PULSE_CHECKIN_EVENT = 'pulse-checkin-change'
 export const PULSE_CHECKIN_POS_KEY = 'pulseCheckInFloatPos'
 export const PULSE_CHECKIN_ACTIVE_EMAIL_KEY = 'pulseCheckInActiveEmail'
 
-/** Gaps longer than this (sleep / shutdown / crash) are not counted as work. */
-export const PULSE_IDLE_GAP_MS = 90_000
+/** Gaps longer than this mean JS was frozen (sleep / crash / killed tab) — not counted.
+ *  Must be above typical background-tab timer throttling (~1 min) so switching apps is fine. */
+export const PULSE_IDLE_GAP_MS = 180_000
 
 /** Standard workday target used for admin "target reached" logging. */
 export const PULSE_TARGET_HOURS = 9
+
+/** Match server daily cap so the UI cannot run past 14h locally. */
+export const PULSE_DAILY_CAP_MS = 14 * 3_600_000
 
 function scheduleIdle(fn) {
   try {
@@ -150,8 +154,60 @@ function projectedActiveMs(session, now = Date.now()) {
   const lastTickAt = session.lastTickAt || session.checkedInAt || now
   const delta = Math.max(0, now - lastTickAt)
   let activeMs = Math.max(0, session.activeMs || 0)
+  // Only credit short awake gaps — sleep, shutdown, and closed tabs skip time.
   if (delta > 0 && delta < PULSE_IDLE_GAP_MS) activeMs += delta
-  return activeMs
+  return Math.min(PULSE_DAILY_CAP_MS, activeMs)
+}
+
+/**
+ * Freeze the clock without checking out (tab hide / sleep / shutdown).
+ * Credits at most a short awake delta, then stamps lastTickAt so long gaps are skipped on resume.
+ */
+export function pauseCheckInClock(email, { reason = 'idle' } = {}) {
+  if (!email) return null
+  const day = pulseDayKey()
+  const current = readRawSession(email, day)
+  if (!current || current.status !== 'active') return current
+
+  const now = Date.now()
+  const lastTickAt = current.lastTickAt || current.checkedInAt || now
+  const delta = Math.max(0, now - lastTickAt)
+  const interrupted = delta >= PULSE_IDLE_GAP_MS || reason === 'sleep' || reason === 'shutdown'
+  const activeMs = projectedActiveMs(current, now)
+  const next = {
+    ...current,
+    activeMs,
+    lastTickAt: now,
+    interrupted,
+    dayKey: day,
+  }
+  writeRawSession(email, next, day)
+  emitCheckIn(email, next)
+  return next
+}
+
+/**
+ * After server trusted sync, clamp local timer to the server total (may be capped).
+ */
+export function alignLocalToServerTotal(email, serverActiveMs) {
+  if (!email || serverActiveMs == null) return null
+  const day = pulseDayKey()
+  const prev = readRawSession(email, day)
+  if (!prev) return null
+  const serverMs = Math.min(PULSE_DAILY_CAP_MS, Math.max(0, Number(serverActiveMs) || 0))
+  const localMs = projectedActiveMs(prev)
+  // Allow up to 2 minutes of local ahead for UX; never keep a large inflate over server.
+  const activeMs = Math.min(localMs, serverMs + 120_000)
+  const next = {
+    ...prev,
+    activeMs: Math.max(serverMs, Math.min(activeMs, PULSE_DAILY_CAP_MS)),
+    lastTickAt: Date.now(),
+    dayKey: day,
+  }
+  if (Math.abs((prev.activeMs || 0) - next.activeMs) < 500) return prev
+  writeRawSession(email, next, day)
+  emitCheckIn(email, next)
+  return next
 }
 
 /**
@@ -171,7 +227,7 @@ export function reconcileCheckInSession(email) {
   const targetLogged = current.targetLogged || activeMs >= targetMs
   const next = {
     ...current,
-    activeMs,
+    activeMs: Math.min(PULSE_DAILY_CAP_MS, activeMs),
     lastTickAt: now,
     interrupted,
     targetLogged,
@@ -314,6 +370,27 @@ export function stopCheckIn(email) {
 }
 
 /**
+ * Sign-out: stop a live timer, hide desktop/PiP companion, keep today's total for next login.
+ */
+export function endCheckInOnLogout(email) {
+  const target =
+    email ||
+    readCheckInActiveEmail() ||
+    null
+  if (!target) {
+    void syncPulseDesktopCheckIn('', null)
+    return null
+  }
+  const active = readCheckInAt(target)
+  if (active) {
+    return stopCheckIn(target)
+  }
+  void syncPulseDesktopCheckIn(target, null)
+  emitCheckIn(target, readRawSession(target))
+  return null
+}
+
+/**
  * Legacy API: timestamp truthy → start; falsy → stop (freeze, not clear).
  */
 export function writeCheckInAt(email, timestamp) {
@@ -410,7 +487,10 @@ export function supportsDocumentPip() {
   return typeof window !== 'undefined' && 'documentPictureInPicture' in window
 }
 
-/** Keep session heartbeats while the tab is open (skips sleep / shutdown gaps). */
+/** Keep session heartbeats while the browser is open.
+ * Switching to another app/tab does NOT pause time.
+ * Only sleep / shutdown / killed tab (JS frozen) skips the gap on wake.
+ */
 export function startCheckInHeartbeat(getEmail) {
   if (typeof window === 'undefined') return () => {}
 
@@ -420,14 +500,32 @@ export function startCheckInHeartbeat(getEmail) {
   let lastEmittedStatus = null
   let lastDesktopActive = null
 
-  const pulse = ({ broadcast = false, syncDesktop = false } = {}) => {
-    const email = typeof getEmail === 'function' ? getEmail() : getEmail
+  const emailOf = () => (typeof getEmail === 'function' ? getEmail() : getEmail)
+
+  const flushSync = (session, { force = false } = {}) => {
+    const email = emailOf()
+    if (!email || !session || session.status !== 'active') return
+    const now = Date.now()
+    if (!force && now - lastSyncAt < 45_000) return
+    lastSyncAt = now
+    void syncPulseCheckInEvent('sync', {
+      email,
+      activeMs: session.activeMs,
+      date: session.dayKey || pulseDayKey(),
+    }).then((day) => {
+      if (day && day.totalActiveMs != null) {
+        alignLocalToServerTotal(email, day.totalActiveMs)
+      }
+    })
+  }
+
+  const pulse = ({ broadcast = false, syncDesktop = false, forceSync = false } = {}) => {
+    const email = emailOf()
     if (!email) return
     if (broadcast) void rolloverCheckInDayIfNeeded(email)
 
     const checkedInAt = readCheckInAt(email)
     if (!checkedInAt) {
-      // Keep desktop widget aligned with CTA — hide when not checked in.
       if (syncDesktop || lastDesktopActive !== false) {
         lastDesktopActive = false
         lastDesktopAt = Date.now()
@@ -464,32 +562,64 @@ export function startCheckInHeartbeat(getEmail) {
       lastDesktopActive = true
       void syncPulseDesktopCheckIn(email, session)
     }
-    if (now - lastSyncAt > 90_000) {
-      lastSyncAt = now
-      void syncPulseCheckInEvent('sync', {
-        email,
-        activeMs: session.activeMs,
-        date: session.dayKey || pulseDayKey(),
-      })
-    }
+    flushSync(session, { force: forceSync })
   }
 
-  // Align desktop with current CTA state on mount (show or hide).
-  pulse({ syncDesktop: true })
+  /** Tab/app switch — save progress only; keep accruing in the background. */
+  const onHide = () => {
+    const email = emailOf()
+    if (!email || !readCheckInAt(email)) return
+    const session = reconcileCheckInSession(email)
+    if (session?.status === 'active') flushSync(session, { force: true })
+  }
+
+  const onShow = () => {
+    pulse({ broadcast: true, syncDesktop: true, forceSync: true })
+  }
+
+  /** Real close / shutdown / discard — stamp so frozen time is not credited on reopen. */
+  const onPageHide = (event) => {
+    const email = emailOf()
+    if (!email) return
+    // bfcache (persisted) is like a soft hide — treat as tab switch, not shutdown.
+    if (event?.persisted) {
+      onHide()
+      return
+    }
+    const paused = pauseCheckInClock(email, { reason: 'shutdown' })
+    if (paused?.status === 'active') flushSync(paused, { force: true })
+  }
+
+  const onFreeze = () => {
+    const email = emailOf()
+    if (!email) return
+    const paused = pauseCheckInClock(email, { reason: 'sleep' })
+    if (paused?.status === 'active') flushSync(paused, { force: true })
+  }
+
+  pulse({ syncDesktop: true, forceSync: true })
+  // Keep ticking even in background tabs (browsers may throttle to ~1/min — still fine).
   const id = window.setInterval(() => pulse(), 30_000)
 
-  const onResume = () => pulse({ syncDesktop: true })
   const onVisibility = () => {
-    if (document.visibilityState === 'visible') pulse({ syncDesktop: true })
+    if (document.visibilityState === 'hidden') onHide()
+    else onShow()
   }
-  window.addEventListener('online', onResume)
+
+  window.addEventListener('online', onShow)
   document.addEventListener('visibilitychange', onVisibility)
-  window.addEventListener('pageshow', onResume)
+  window.addEventListener('pageshow', onShow)
+  window.addEventListener('pagehide', onPageHide)
+  document.addEventListener('freeze', onFreeze)
+  window.addEventListener('beforeunload', onPageHide)
 
   return () => {
     window.clearInterval(id)
-    window.removeEventListener('online', onResume)
+    window.removeEventListener('online', onShow)
     document.removeEventListener('visibilitychange', onVisibility)
-    window.removeEventListener('pageshow', onResume)
+    window.removeEventListener('pageshow', onShow)
+    window.removeEventListener('pagehide', onPageHide)
+    document.removeEventListener('freeze', onFreeze)
+    window.removeEventListener('beforeunload', onPageHide)
   }
 }

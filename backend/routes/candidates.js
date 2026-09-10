@@ -326,9 +326,8 @@ function requireIdCards(payload, existing) {
   const aadhaarFront = payload.aadhaarFront || existing?.aadhaarFront
   const aadhaarBack = payload.aadhaarBack || existing?.aadhaarBack
   const panFront = payload.panFront || existing?.panFront
-  const panBack = payload.panBack || existing?.panBack
-  if (!hasCardFile(aadhaarFront) || !hasCardFile(aadhaarBack) || !hasCardFile(panFront) || !hasCardFile(panBack)) {
-    throw httpError(400, 'Upload Aadhaar and PAN card (front and back)')
+  if (!hasCardFile(aadhaarFront) || !hasCardFile(aadhaarBack) || !hasCardFile(panFront)) {
+    throw httpError(400, 'Upload Aadhaar (front and back) and PAN front')
   }
 }
 
