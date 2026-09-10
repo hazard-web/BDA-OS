@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { syncPulseDesktopCheckIn } from './pulseDesktopBridge'
-import { syncPulseCheckInEvent } from './pulseCheckInApi'
+import { syncPulseCheckInEvent, fetchPulseWorkDayToday } from './pulseCheckInApi'
 
 export const PULSE_CHECKIN_EVENT = 'pulse-checkin-change'
 export const PULSE_CHECKIN_POS_KEY = 'pulseCheckInFloatPos'
@@ -202,23 +202,75 @@ export function getElapsedSeconds(email) {
 }
 
 /**
- * Check in (or resume same day). Timer continues from prior activeMs if any.
- * Desktop widget shows immediately with mapped elapsed time.
+ * Raise local day total to at least the server total (resume after refresh / new device).
+ * Does not change active/stopped status by itself.
  */
-export function startCheckIn(email, timestamp = Date.now()) {
+export function mergeServerActiveMs(email, serverActiveMs) {
+  if (!email) return null
+  const day = pulseDayKey()
+  const serverMs = Math.max(0, Number(serverActiveMs) || 0)
+  if (serverMs <= 0) return readRawSession(email, day)
+
+  const prev = readRawSession(email, day)
+  const localMs = prev ? projectedActiveMs(prev) : 0
+  const activeMs = Math.max(localMs, serverMs)
+  if (prev && activeMs <= Math.max(0, prev.activeMs || 0) && localMs >= serverMs) {
+    return prev
+  }
+
+  const now = Date.now()
+  const next = {
+    checkedInAt: prev?.status === 'active' ? prev.checkedInAt || now : prev?.checkedInAt || null,
+    activeMs,
+    lastTickAt: prev?.status === 'active' ? now : prev?.lastTickAt || now,
+    status: prev?.status === 'active' ? 'active' : 'stopped',
+    stoppedAt: prev?.status === 'active' ? null : prev?.stoppedAt || now,
+    dayKey: day,
+    timesheetLogged: Boolean(prev?.timesheetLogged),
+    targetLogged: Boolean(prev?.targetLogged) || activeMs >= PULSE_TARGET_HOURS * 3_600_000,
+    interrupted: false,
+  }
+  writeRawSession(email, next, day)
+  emitCheckIn(email, next)
+  return next
+}
+
+/** Pull today's server total into localStorage so the timer can resume. */
+export async function hydrateCheckInFromServer(email) {
+  if (!email) return null
+  try {
+    const day = await fetchPulseWorkDayToday(pulseDayKey())
+    const serverMs = Math.max(0, Number(day?.totalActiveMs) || 0)
+    if (serverMs <= 0) return readRawSession(email)
+    return mergeServerActiveMs(email, serverMs)
+  } catch {
+    return readRawSession(email)
+  }
+}
+
+/**
+ * Check in (or resume same day). Timer continues from prior activeMs if any.
+ * Pass baseActiveMs (e.g. server total) so resume is never lower than logged time.
+ */
+export function startCheckIn(email, timestamp = Date.now(), { baseActiveMs } = {}) {
   if (!email) return null
   const day = pulseDayKey()
   const now = Number(timestamp) || Date.now()
   const prev = readRawSession(email, day)
+  const priorMs = Math.max(
+    0,
+    Number(prev?.activeMs) || 0,
+    Number(baseActiveMs) || 0,
+  )
   const session = {
     checkedInAt: now,
-    activeMs: Math.max(0, prev?.activeMs || 0),
+    activeMs: priorMs,
     lastTickAt: now,
     status: 'active',
     stoppedAt: null,
     dayKey: day,
     timesheetLogged: Boolean(prev?.timesheetLogged),
-    targetLogged: Boolean(prev?.targetLogged),
+    targetLogged: Boolean(prev?.targetLogged) || priorMs >= PULSE_TARGET_HOURS * 3_600_000,
     interrupted: false,
   }
   writeRawSession(email, session, day)
