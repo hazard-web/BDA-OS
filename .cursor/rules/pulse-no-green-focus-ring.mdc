@@ -12,10 +12,9 @@ Do not add a forest-green (`#1A5F4A` / `#1a5f4a`) border, outline, or box-shadow
 
 # Calendar month toolbar
 
-My Space → Calendar uses a custom toolbar, not Ant Design Year/Month selects:
+My Space → Calendar uses a custom toolbar, not Ant Design Year/Month `Select`s:
 
-- Segmented **prev / next** control, then a **Mon YYYY** label (e.g. `Sep 2026`).
-- No calendar-icon button. No month/year popover. Change months with prev/next only.
-- The month label is text, not a control.
-- Popover month grids stay unused. Do not restore Ant Design Year/Month `Select` dropdowns.
-- No green line under weekday headers or green ring around today's cell. Today is a forest-green (`#1A5F4A`) rounded square with white numerals. Do not use green as a focus ring on form controls.
+- Segmented **prev / next**, then separate **month** and **year** pickers (`Sep` and `2026`).
+- Custom gray-border dropdowns only. Do not restore Ant Design Year/Month `Select` dropdowns.
+- No green halo on picker hover, focus, or open. Border stays `#d9d9d9`.
+- No calendar-icon button. No green line under weekday headers or green ring around today's cell. Today is a forest-green (`#1A5F4A`) rounded square with white numerals.

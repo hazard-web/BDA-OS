@@ -105,7 +105,7 @@ export default function PulseOverviewPortal({
                 <PulseTaskRows rows={approvalRows} empty="Inbox is clear." />
                 <button type="button" className="pov-link" onClick={onOpenApprovals}>All approvals</button>
                 {' '}
-                <button type="button" className="pov-link" onClick={onOpenTimesheet}>Hours</button>
+                <button type="button" className="pov-link" onClick={onOpenTimesheet}>Timesheet</button>
               </section>
             </div>
 

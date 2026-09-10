@@ -78,7 +78,7 @@ export default function HrSetup() {
 
   return (
     <div className="hrs-page">
-      <AuthLogoLoader show={redirecting || saving} label={saving ? 'Saving organization' : 'Opening Pulse'} />
+      <AuthLogoLoader show={redirecting || saving} label={saving ? 'Saving organization' : 'Opening BDA OS'} />
 
       <header className="hrs-top">
         <div className="hrs-brand">
@@ -88,21 +88,21 @@ export default function HrSetup() {
             <i style={{ background: '#c8e6d9' }} />
             <i style={{ background: '#f5f0e8' }} />
           </span>
-          <strong>Pulse</strong>
+          <strong>BDA OS</strong>
         </div>
-        <p className="hrs-progress">Organization setup</p>
+        <p className="hrs-progress">Company setup</p>
       </header>
 
       <main className="hrs-main">
         <form className="hrs-card" onSubmit={onFinish}>
-          <p className="hrs-eyebrow">Pulse</p>
+          <p className="hrs-eyebrow">BDA OS</p>
           <h1>Set up your organization</h1>
           <p className="hrs-sub">
-            Add your company details to open My Space. You can invite people and manage Organization from Pulse.
+            Add your company details to get started. You can invite people and manage Company from BDA OS.
           </p>
 
           <label className="hrs-label" htmlFor="hrs-name">
-            Organization name
+            Company name
           </label>
           <input
             id="hrs-name"
@@ -179,7 +179,7 @@ export default function HrSetup() {
           </div>
 
           <button type="submit" className="hrs-primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Continue to Pulse'}
+            {saving ? 'Saving…' : 'Continue to BDA OS'}
           </button>
         </form>
       </main>

@@ -20,7 +20,7 @@ import { MailOutlined, ReloadOutlined, SendOutlined, UserOutlined } from '@ant-d
 import api from '../api'
 import { pulseRoleLabel } from '../utils/pulseRoles'
 
-/** Admin: invite people + see members (Pulse Organization) — Ant Design. */
+/** Admin: invite people + see members (Organization) — Ant Design. */
 export default function PulseInviteAdmin() {
   const { message } = App.useApp()
   const [loading, setLoading] = useState(true)

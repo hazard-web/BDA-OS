@@ -393,12 +393,12 @@ function trayIcon() {
 
 function updateTray() {
   if (!tray) return
-  tray.setToolTip(state.checkedInAt ? 'Pulse · Working' : 'Pulse Timer')
+  tray.setToolTip(state.checkedInAt ? 'BDA OS · Working' : 'BDA OS Timer')
 }
 
 function createTray() {
   tray = new Tray(trayIcon())
-  tray.setToolTip('Pulse Timer')
+  tray.setToolTip('BDA OS Timer')
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {

@@ -57,6 +57,11 @@ export function clockLabel(value) {
 export function hoursLabel(value) {
   const hours = Number(value) || 0
   if (hours <= 0) return '0h'
-  const rounded = Math.round(hours * 10) / 10
-  return `${rounded}h`
+  const secs = Math.round(hours * 3600)
+  if (secs < 60) return `${secs}s`
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  if (h <= 0) return `${m}m`
+  if (m <= 0) return `${h}h`
+  return `${h}h ${String(m).padStart(2, '0')}m`
 }

@@ -2,7 +2,7 @@ import { useId } from 'react'
 import PeopleOsMark from './PeopleOsMark'
 import './people-os-logo-load.css'
 
-/** People OS mark with a spinning four-colour ring. */
+/** BDA OS mark with a spinning four-colour ring. */
 export default function PeopleOsLogoLoader({
   label = 'Loading',
   overlay = false,

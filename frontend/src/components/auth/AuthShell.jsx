@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthPromo from './AuthPromo'
 import AuthBg from './AuthBg'
-import PeopleOsMark from '../PeopleOsMark'
 import './auth-shell.css'
 
 export default function AuthShell({
   title = 'Sign in',
-  subtitle = 'to access People OS',
+  subtitle = 'to access BDA OS',
   headerRight,
   children,
   footer,
@@ -36,9 +35,8 @@ export default function AuthShell({
       <div className="auth-board">
         <div className="auth-left">
           <div className="auth-top">
-            <Link to="/login" className="auth-logo" aria-label="People OS home">
-              <PeopleOsMark size={28} />
-              <span className="auth-logo-text">PEOPLE OS</span>
+            <Link to="/login" className="auth-logo" aria-label="BDA Technologies">
+              <img src="/bda-logo-lockup.png" alt="BDA Technologies" className="auth-logo-mark" />
             </Link>
             {headerRight}
           </div>

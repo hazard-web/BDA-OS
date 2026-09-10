@@ -47,7 +47,7 @@ export function useAuthRedirect(delayMs = DEFAULT_MS) {
   return { redirecting, redirectTo, onRedirectClick }
 }
 
-/** Accounts + Pulse: button loads, then People OS mark, then login. */
+/** Accounts + Pulse: button loads, then BDA OS mark, then login. */
 export function useAccountSignOut({ onClosePanel, blocked = false } = {}) {
   const navigate = useNavigate()
   const { logout, startExit } = useAuth()

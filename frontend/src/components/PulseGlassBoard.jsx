@@ -27,16 +27,16 @@ function ownerTone(name) {
   return ['a', 'b', 'c', 'd', 'e'][code]
 }
 
-export function PulseTaskRows({ rows, empty, onRow }) {
+export function PulseTaskRows({ rows, empty, onRow, taskLabel = 'Task', dueLabel = 'Due date' }) {
   if (!rows?.length) return <p className="pov-empty">{empty || 'Nothing here yet.'}</p>
   return (
     <div className="pov-table-wrap">
       <table className="pov-table">
         <thead>
           <tr>
-            <th>Task</th>
+            <th>{taskLabel}</th>
             <th>Owner</th>
-            <th>Due date</th>
+            <th>{dueLabel}</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -81,6 +81,7 @@ export function PulseTaskRows({ rows, empty, onRow }) {
 export default function PulseGlassBoard({
   title,
   kicker,
+  lead,
   ctaLabel,
   onCta,
   checkIn,
@@ -90,14 +91,17 @@ export default function PulseGlassBoard({
   empty,
   onRow,
   extra,
+  taskLabel,
+  dueLabel,
 }) {
   return (
     <div className="pov">
       <div className="pov-app pov-app-bare">
         <div className="pov-app-body">
-          {(title || kicker || ctaLabel) ? (
+          {(title || kicker || lead || ctaLabel) ? (
             <header className="pov-top">
               <div>
+                {lead}
                 {kicker ? <p className="pov-kicker">{kicker}</p> : null}
                 {title ? <h1>{title}</h1> : null}
               </div>
@@ -133,13 +137,19 @@ export default function PulseGlassBoard({
                     <h4>{group.title}</h4>
                     <span>{group.hint}</span>
                   </div>
-                  <PulseTaskRows rows={group.rows} empty={group.empty} onRow={onRow} />
+                  <PulseTaskRows
+                    rows={group.rows}
+                    empty={group.empty}
+                    onRow={onRow}
+                    taskLabel={group.taskLabel || taskLabel}
+                    dueLabel={group.dueLabel || dueLabel}
+                  />
                 </div>
               ))}
             </section>
           ) : rows ? (
             <section className="pov-glass pov-tasks">
-              <PulseTaskRows rows={rows} empty={empty} onRow={onRow} />
+              <PulseTaskRows rows={rows} empty={empty} onRow={onRow} taskLabel={taskLabel} dueLabel={dueLabel} />
             </section>
           ) : null}
 

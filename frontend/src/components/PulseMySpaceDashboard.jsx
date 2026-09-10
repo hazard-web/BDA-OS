@@ -45,7 +45,7 @@ function inRollingMonths(date, now, span, recurring) {
   return date >= start && date <= end
 }
 
-function filterWidgetData(source, now = new Date()) {
+export function filterWidgetData(source, now = new Date()) {
   const next = { ...source }
   for (const key of Object.keys(source)) {
     const rows = source[key]
@@ -66,7 +66,7 @@ function filterWidgetData(source, now = new Date()) {
   return next
 }
 
-const DEMO = {
+export const DEMO = {
   birthday: [
     { id: 'b1', title: 'Priya Sharma', meta: 'Today · Design', on: 'today' },
     { id: 'b2', title: 'Amit Verma', meta: '22 Aug · Engineering', on: '2026-08-22' },
@@ -88,14 +88,14 @@ const DEMO = {
     { id: 'f1', title: 'Attendance', meta: 'Module', to: 'attendance' },
     { id: 'f2', title: 'Leave Tracker', meta: 'Module', to: 'leave' },
     { id: 'f3', title: 'Hours', meta: 'Module', to: 'hours' },
-    { id: 'f4', title: 'Calendar', meta: 'My Space', to: 'calendar' },
+    { id: 'f4', title: 'Calendar', meta: 'You', to: 'calendar' },
     { id: 'f5', title: 'Overview', meta: 'Check-in', to: 'overview' },
   ],
   quickLinks: [
     { id: 'ql1', title: 'Apply leave', meta: 'Leave Tracker', to: 'leave' },
     { id: 'ql2', title: 'Calendar', meta: 'Month view', to: 'calendar' },
     { id: 'ql3', title: 'Holidays', meta: 'This year', to: 'holidays' },
-    { id: 'ql4', title: 'Attendance', meta: 'My Space', to: 'attendance' },
+    { id: 'ql4', title: 'Attendance', meta: 'You', to: 'attendance' },
     { id: 'ql5', title: 'Hours', meta: 'Logged from check-in', to: 'hours' },
     { id: 'ql6', title: 'Overview', meta: 'Check-in', to: 'overview' },
   ],
@@ -103,7 +103,7 @@ const DEMO = {
     { id: 'a1', title: 'Independence Day — office closed', meta: '15 Aug · All hands', on: '2026-08-15' },
     { id: 'a2', title: 'Q2 town hall recording', meta: '12 Aug · Leadership', on: '2026-08-12' },
     { id: 'a3', title: 'New parking levels open', meta: '10 Aug · Facilities', on: '2026-08-10' },
-    { id: 'a4', title: 'Pulse town hall — Q3', meta: '12 Sep · Leadership', on: '2026-09-12' },
+    { id: 'a4', title: 'BDA OS town hall — Q3', meta: '12 Sep · Leadership', on: '2026-09-12' },
     { id: 'a5', title: 'Update your emergency contacts', meta: '20 Sep · HR', on: '2026-09-20' },
     { id: 'a6', title: 'Diwali week hours', meta: '18 Oct · People', on: '2026-10-18' },
     { id: 'a7', title: 'Benefits enrollment window', meta: '4 Nov · HR', on: '2026-11-04' },
@@ -166,7 +166,7 @@ const DEMO = {
     { id: 'wa3', title: 'Nikhil & Sana', meta: '3 Sep', on: '2026-09-03' },
   ],
   engagement: [
-    { id: 'e1', title: 'Pulse check · August', meta: 'Due 31 Aug' },
+    { id: 'e1', title: 'BDA OS check · August', meta: 'Due 31 Aug' },
     { id: 'e2', title: 'Manager effectiveness survey', meta: 'Due 5 Sep' },
     { id: 'e3', title: 'Office experience feedback', meta: 'Due 12 Sep' },
     { id: 'e4', title: 'Benefits satisfaction', meta: 'Due 20 Sep' },
@@ -175,15 +175,12 @@ const DEMO = {
 
 const MY_WIDGETS = [
   { id: 'birthday', label: 'Birthday', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
-  { id: 'newHires', label: 'New Hires', dataKey: 'newHires', empty: 'No new joinees in past 15 days', showAvatar: true, tone: 'blue' },
   { id: 'favorites', label: 'Favorites', dataKey: 'favorites', empty: 'No favorites yet', addable: true, tone: 'green' },
   { id: 'quickLinks', label: 'Quick Links', dataKey: 'quickLinks', empty: 'No quick links', addable: true, tone: 'teal' },
   { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No Files Found', showTotal: true, fileTabs: true, tone: 'slate' },
-  { id: 'announcements', label: 'Announcements', dataKey: 'announcements', empty: 'No announcements in the next 3 months', addable: true, tone: 'gold' },
   { id: 'leaveReport', label: 'Leave Report', dataKey: 'leaveReport', empty: 'No leave data yet', tone: 'slate' },
   { id: 'attendance', label: 'Attendance', dataKey: 'attendance', empty: 'No attendance yet', tone: 'green' },
   { id: 'hours', label: 'Hours', dataKey: 'hours', empty: 'No hours logged yet', tone: 'teal' },
-  { id: 'holidays', label: 'Upcoming Holidays', dataKey: 'holidays', empty: 'No holidays in the next 3 months', tone: 'terracotta' },
   { id: 'tasks', label: 'My Pending Tasks', dataKey: 'tasks', empty: 'There are no tasks available', badge: true, tone: 'green' },
   { id: 'workAnniv', label: 'Work Anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
   { id: 'weddingAnniv', label: 'Wedding Anniversary', dataKey: 'weddingAnniv', empty: 'No wedding anniversaries this month', showAvatar: true, tone: 'rose' },
@@ -237,11 +234,11 @@ function rowInitial(title = '') {
 }
 
 const FILE_TABS = [
-  { id: 'org', label: 'Organization Files' },
+  { id: 'org', label: 'Company Files' },
   { id: 'employee', label: 'Employee Files' },
 ]
 
-const EMPTY_DASH = {
+export const EMPTY_DASH = {
   birthday: [],
   newHires: [],
   favorites: [],
@@ -258,7 +255,7 @@ const EMPTY_DASH = {
   engagement: [],
 }
 
-function DashListWidget({
+export function DashListWidget({
   title,
   items = [],
   empty,
@@ -554,7 +551,7 @@ function CustomizePanel({ prefs, setPrefs, onClose }) {
           <div className="pulse-dash-customize-soon">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="Organization widgets coming soon"
+              description="Company widgets coming soon"
             />
           </div>
         ) : (
@@ -597,7 +594,7 @@ function CustomizePanel({ prefs, setPrefs, onClose }) {
   )
 }
 
-/** My Space → Dashboard with sticky tools, customizable grip drag. */
+/** My Space → Dashboard. Parked on branch `pulse/company-later-services`. Restore the tab in PeopleHome.jsx to ship it. */
 export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen }) {
   const soon = (label) => (typeof onSoon === 'function' ? onSoon(label) : undefined)
   const [prefs, setPrefs] = useState(() => readPrefs())

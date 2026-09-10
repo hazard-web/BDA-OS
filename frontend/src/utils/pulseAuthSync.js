@@ -1,6 +1,6 @@
 import { isPulseAuxiliaryTab } from './pulseOpenPage'
 
-/** Same Sign out beat as Overview: button loads, then the People OS gate. */
+/** Same Sign out beat as Overview: button loads, then the BDA OS gate. */
 export const SIGN_OUT_BUTTON_MS = 650
 export const SIGN_OUT_GATE_MS = 950
 export const SIGN_OUT_TOTAL_MS = SIGN_OUT_BUTTON_MS + SIGN_OUT_GATE_MS
@@ -37,7 +37,7 @@ function isLogoutOriginator() {
   return Boolean(readOriginStamp())
 }
 
-/** Tell every other People OS tab that this session signed out. */
+/** Tell every other BDA OS tab that this session signed out. */
 export function broadcastPulseLogout() {
   const already = isLogoutOriginator()
   const at = String(Date.now())

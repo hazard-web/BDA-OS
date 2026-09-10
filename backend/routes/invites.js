@@ -233,7 +233,7 @@ router.post('/accept', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Welcome to Pulse',
+      message: 'Welcome to BDA OS',
       token: jwtToken,
       user: await publicUserWithApps(user),
     })

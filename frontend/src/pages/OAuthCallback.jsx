@@ -19,7 +19,7 @@ export default function OAuthCallback() {
       const provider = params.get('provider') || 'google'
 
       if (error) {
-        // Keep recovery inside People OS login (never a dead error page)
+        // Keep recovery inside BDA OS login (never a dead error page)
         navigate(`/login?oauth_error=${encodeURIComponent(error)}&provider=${encodeURIComponent(provider)}`, {
           replace: true,
         })

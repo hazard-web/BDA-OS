@@ -37,6 +37,7 @@
   height: 56px !important;
   min-height: 56px;
   max-height: 56px;
+  z-index: 1200;
   padding-inline: 8px 18px !important;
   background: rgba(232, 238, 228, 0.58) !important;
   color: #142019;
@@ -127,6 +128,7 @@
 
 .pulse-shell.pulse-id .pulse-sub {
   height: 40px;
+  z-index: 1190;
   background: rgba(232, 238, 228, 0.5);
   backdrop-filter: blur(18px) saturate(1.15);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
@@ -206,6 +208,30 @@
   background-color: transparent !important;
   background-image: none !important;
   animation: none;
+}
+
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-cal-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-leave-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-att-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-ts-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-ts-admin),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-org-att),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-org-apps),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.acc-shell) {
+  display: flex;
+  flex-direction: column;
+}
+
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-leave-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-att-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-ts-page),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-ts-admin),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-org-att),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.pulse-org-apps),
+.pulse-strip-root > .pulse-scroll.pulse-scroll-surface:has(.acc-shell) {
+  padding-bottom: 128px;
+  box-sizing: border-box;
+  overflow: auto;
 }
 
 .pulse-strip-scene {
@@ -641,9 +667,9 @@
 }
 
 .pulse-shell.pulse-id .ms-hello-logo {
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #e6e9ee;
+  border-radius: 10px;
+  background: #fff;
 }
 
 :root[data-theme='dark'] .pulse-id .pov-glass,
@@ -678,13 +704,12 @@
   overflow: hidden;
 }
 
-.pulse-overview .pulse-ov-tile.is-checkin,
-.pulse-overview .pulse-ov-tile.is-checkin > .pulse-ov-tile-inner,
 .pulse-overview .pulse-ov-tile.is-checkin .ant-card,
-.pulse-overview .pulse-ov-tile.is-checkin .ant-card-body,
 .pulse-overview .pulse-ov-tile.is-checkin .pulse-checkin-card,
-.pulse-overview .pulse-ov-tile.is-checkin .pulse-checkin-main {
-  overflow: visible;
+.pulse-overview .pulse-ov-tile.is-checkin .ant-card-body {
+  overflow: hidden;
+  border-radius: 20px;
+  isolation: isolate;
 }
 
 .pulse-overview .pulse-feed {

@@ -114,7 +114,7 @@ export default function HrGettingStarted({ companyName }) {
             Set up HR for {companyName || 'your organization'}
           </h2>
           <p className="hrgs-sub">
-            Follow this People OS flow: Employees → Leave → Attendance → Payroll.
+            Follow this BDA OS flow: Employees → Leave → Attendance → Payroll.
           </p>
         </div>
         <button type="button" className="hrgs-dismiss" onClick={dismiss}>

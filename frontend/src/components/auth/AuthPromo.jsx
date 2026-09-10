@@ -43,7 +43,7 @@ export default function AuthPromo() {
         <p className="auth-promo-greet">{greetingTitle(period)}</p>
         <p className="auth-promo-title">{promoTitle(period)}</p>
         <span className="auth-promo-rule" aria-hidden="true" />
-        <p className="auth-promo-body">Check in, take leave, and see the week in Pulse.</p>
+        <p className="auth-promo-body">Check in, take leave, and see the week in BDA OS.</p>
         <div className="auth-promo-beats">
           <span className="auth-promo-beat is-live">
             <i />

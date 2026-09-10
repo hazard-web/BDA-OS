@@ -11,12 +11,13 @@ const AssignedTask = require('../models/AssignedTask');
 const { logActivity } = require('../utils/logger');
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth');
 const { sendLeaveRequestEmail } = require('../utils/emailService');
+const { uploadBase64 } = require('../utils/cloudinary');
 const { getProductionBaseUrl } = require('../utils/urlHelper');
 const {
   clientIp,
   clientUserAgent,
-  normalizeLocation,
   formatLocationLabel,
+  enrichLocation,
 } = require('../utils/requestMeta');
 
 const TARGET_HOURS = 9;
@@ -111,6 +112,33 @@ async function getOrCreateDay(userId, email, date) {
   return doc;
 }
 
+function firstCheckInAt(plain) {
+  const event = (plain.events || []).find((item) => item.type === 'CHECK_IN' || item.type === 'RESUME');
+  if (event?.at) return event.at;
+  const session = (plain.sessions || []).find((item) => item.checkInAt);
+  return session?.checkInAt || null;
+}
+
+function parseTaskEntries(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const description = String(item?.description || item?.task || '').trim();
+      const project = String(item?.project || 'BDA OS').trim() || 'BDA OS';
+      const minutes = Math.max(
+        0,
+        Math.round(Number(item?.minutes) || ((Number(item?.hours) || 0) * 60)),
+      );
+      return { description, project, minutes };
+    })
+    .filter((item) => item.description && item.minutes > 0)
+    .slice(0, 20);
+}
+
+function taskMinutesOf(plain) {
+  return (plain.taskEntries || []).reduce((sum, item) => sum + (Number(item.minutes) || 0), 0);
+}
+
 function serializeDay(doc) {
   if (!doc) return null;
   const plain = doc.toObject ? doc.toObject() : doc;
@@ -118,6 +146,10 @@ function serializeDay(doc) {
     ...plain,
     totalActiveHours: msToHours(plain.totalActiveMs),
     targetHours: plain.targetHours || TARGET_HOURS,
+    checkInAt: firstCheckInAt(plain),
+    taskMinutes: taskMinutesOf(plain),
+    timesheetSubmitted: Boolean(plain.timesheetSubmitted),
+    taskEntries: Array.isArray(plain.taskEntries) ? plain.taskEntries : [],
   };
 }
 
@@ -192,24 +224,150 @@ router.get('/admin/days', auth, async (req, res) => {
     const members = await User.find({
       $or: [{ organizationId }, { _id: organizationId }],
     })
-      .select('_id')
+      .select('_id firstName lastName displayName email avatarUrl')
       .lean();
     const userIds = members.map((m) => m._id);
     if (!userIds.length) {
       return res.json({ success: true, data: [] });
     }
 
+    const personOf = (id) => {
+      const person = members.find((item) => String(item._id) === String(id));
+      if (!person) return { name: 'Employee', email: '', avatarUrl: '' };
+      const parts = [person.firstName, person.lastName].filter(Boolean);
+      return {
+        name: parts.length ? parts.join(' ') : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
+        email: person.email || '',
+        avatarUrl: person.avatarUrl || '',
+      };
+    };
+
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 60));
-    const days = await PulseWorkDay.find({ user: { $in: userIds } })
+    const dayKey = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
+      ? String(req.query.date)
+      : '';
+    const query = { user: { $in: userIds } };
+    if (dayKey) query.date = dayKey;
+    const days = await PulseWorkDay.find(query)
       .sort({ date: -1, updatedAt: -1 })
-      .limit(limit)
+      .limit(dayKey ? 400 : limit)
       .lean();
+
+    if (dayKey) {
+      const byUser = new Map(days.map((row) => [String(row.user), row]));
+      return res.json({
+        success: true,
+        data: members.map((member) => {
+          const row = byUser.get(String(member._id));
+          const person = personOf(member._id);
+          return {
+            ...(serializeDay(row) || emptyTimesheet(dayKey)),
+            user: member._id,
+            ...person,
+          };
+        }),
+      });
+    }
+
     res.json({
       success: true,
-      data: days.map((d) => serializeDay(d)),
+      data: days.map((d) => ({ ...serializeDay(d), ...personOf(d.user) })),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to load days' });
+  }
+});
+
+function emptyTimesheet(date) {
+  return {
+    date,
+    taskEntries: [],
+    timesheetSubmitted: false,
+    timesheetSubmittedAt: null,
+    checkInAt: null,
+    totalActiveMs: 0,
+    totalActiveHours: 0,
+    taskMinutes: 0,
+  };
+}
+
+// GET /api/pulse-checkin/timesheet/today
+router.get('/timesheet/today', auth, async (req, res) => {
+  try {
+    const date = todayKey(req.query.date);
+    const doc = await PulseWorkDay.findOne({ user: req.user._id, date });
+    res.json({ success: true, data: serializeDay(doc) || emptyTimesheet(date) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load timesheet' });
+  }
+});
+
+// PUT /api/pulse-checkin/timesheet/today — save draft
+router.put('/timesheet/today', auth, async (req, res) => {
+  try {
+    const date = todayKey(req.body?.date);
+    const email = String(req.body?.email || req.user.email || '').toLowerCase();
+    const entries = parseTaskEntries(req.body?.entries);
+    const totalMinutes = entries.reduce((sum, item) => sum + item.minutes, 0);
+    if (totalMinutes > 16 * 60) {
+      return res.status(400).json({ success: false, message: 'Task time cannot exceed 16 hours' });
+    }
+
+    const doc = await getOrCreateDay(req.user._id, email, date);
+    if (doc.timesheetSubmitted) {
+      return res.status(400).json({ success: false, message: 'Timesheet already submitted' });
+    }
+    doc.email = email;
+    doc.taskEntries = entries;
+    await doc.save();
+    res.json({ success: true, data: serializeDay(doc) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to save timesheet' });
+  }
+});
+
+// POST /api/pulse-checkin/timesheet/submit
+router.post('/timesheet/submit', auth, async (req, res) => {
+  try {
+    const date = todayKey(req.body?.date);
+    const email = String(req.body?.email || req.user.email || '').toLowerCase();
+    const entries = parseTaskEntries(req.body?.entries);
+    if (!entries.length) {
+      return res.status(400).json({ success: false, message: 'Add at least one task with time' });
+    }
+    const totalMinutes = entries.reduce((sum, item) => sum + item.minutes, 0);
+    if (totalMinutes > 16 * 60) {
+      return res.status(400).json({ success: false, message: 'Task time cannot exceed 16 hours' });
+    }
+
+    const doc = await getOrCreateDay(req.user._id, email, date);
+    if (doc.timesheetSubmitted) {
+      return res.status(400).json({ success: false, message: 'Timesheet already submitted' });
+    }
+    const now = new Date();
+    doc.email = email;
+    doc.taskEntries = entries;
+    doc.timesheetSubmitted = true;
+    doc.timesheetSubmittedAt = now;
+    doc.timesheetHours = Math.round((totalMinutes / 60) * 100) / 100;
+    await doc.save();
+
+    await logActivity(
+      req.user._id,
+      'PULSE_TIMESHEET_SUBMIT',
+      `${email} submitted timesheet for ${date}: ${entries.length} task${entries.length === 1 ? '' : 's'}, ${doc.timesheetHours}h`,
+      {
+        date,
+        email,
+        hours: doc.timesheetHours,
+        tasks: entries.length,
+        workDayId: doc._id,
+      },
+    );
+
+    res.json({ success: true, data: serializeDay(doc) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to submit timesheet' });
   }
 });
 
@@ -219,7 +377,7 @@ router.post('/check-in', auth, async (req, res) => {
     const date = todayKey(req.body?.date);
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
     const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
-    const location = normalizeLocation(req.body?.location);
+    const location = await enrichLocation(req.body?.location);
     const ip = clientIp(req);
     const userAgent = clientUserAgent(req);
     const now = new Date();
@@ -281,7 +439,7 @@ router.post('/check-out', auth, async (req, res) => {
     const date = todayKey(req.body?.date);
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
     const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
-    const location = normalizeLocation(req.body?.location);
+    const location = await enrichLocation(req.body?.location);
     const ip = clientIp(req);
     const userAgent = clientUserAgent(req);
     const now = new Date();
@@ -402,7 +560,7 @@ router.post('/finalize-day', auth, async (req, res) => {
     const date = todayKey(req.body?.date);
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
     const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
-    const location = normalizeLocation(req.body?.location);
+    const location = await enrichLocation(req.body?.location);
     const ip = clientIp(req);
     const userAgent = clientUserAgent(req);
     const now = new Date();
@@ -549,11 +707,12 @@ router.get('/overview', auth, async (req, res) => {
     leaveBalances = [casualLeaveBalance(staff)];
 
     if (staff) {
+      const leaveFrom = start < monthFrom ? start : monthFrom
       const leaves = await LeaveRequest.find({
         staff: staff._id,
         status: { $in: ['Pending', 'Approved'] },
         startDate: { $lte: new Date(`${end}T23:59:59`) },
-        endDate: { $gte: new Date(`${monthFrom}T00:00:00`) },
+        endDate: { $gte: new Date(`${leaveFrom}T00:00:00`) },
       })
         .select('startDate endDate status type')
         .lean();
@@ -1230,6 +1389,9 @@ router.get('/leaves', auth, async (req, res) => {
         reason: row.reason,
         days: leaveDurationDays(row.startDate, row.endDate),
         createdAt: row.createdAt,
+        attachment: row.attachment?.name
+          ? { name: row.attachment.name, url: row.attachment.url || '', size: row.attachment.size || 0 }
+          : null,
       })),
       casual: casualLeaveBalance(staff),
       notifyEmails: LEAVE_NOTIFY_EMAILS,
@@ -1260,7 +1422,7 @@ router.post('/leaves/apply', auth, async (req, res) => {
     if (!staff) {
       return res.status(400).json({
         success: false,
-        message: 'No employee profile is linked to this Pulse account yet.',
+        message: 'No employee profile is linked to this BDA OS account yet.',
       });
     }
     const days = leaveDurationDays(startDate, endDate);
@@ -1273,6 +1435,30 @@ router.post('/leaves/apply', auth, async (req, res) => {
         });
       }
     }
+    const rawFile = req.body?.attachment && typeof req.body.attachment === 'object' ? req.body.attachment : null
+    const fileName = String(rawFile?.name || '').trim().slice(0, 180)
+    const fileData = String(rawFile?.data || '')
+    const fileMime = String(rawFile?.mime || '').trim()
+    const fileSize = Number(rawFile?.size) || 0
+    if (rawFile && (!fileName || !fileData.startsWith('data:'))) {
+      return res.status(400).json({ success: false, message: 'Attachment is not a valid file' })
+    }
+    if (fileSize > 5 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'Attachment must be 5 MB or smaller' })
+    }
+    let savedAttachment = null
+    if (fileName && fileData) {
+      let url = ''
+      if (process.env.CLOUDINARY_CLOUD_NAME) {
+        try {
+          url = await uploadBase64(fileData, `payroll_portal/leave/${staff._id}`)
+        } catch {
+          url = ''
+        }
+      }
+      savedAttachment = { name: fileName, mime: fileMime, size: fileSize, url }
+    }
+
     const leave = await LeaveRequest.create({
       staff: staff._id,
       admin: orgIdOf(req.user),
@@ -1281,6 +1467,7 @@ router.post('/leaves/apply', auth, async (req, res) => {
       endDate: new Date(endDate),
       reason: String(reason).trim(),
       status: 'Pending',
+      attachment: savedAttachment || undefined,
     });
 
     // A mail failure must not lose a saved request, so report it instead of throwing.
@@ -1296,8 +1483,11 @@ router.post('/leaves/apply', auth, async (req, res) => {
           toDate: formatLeaveDate(leave.endDate),
           days,
           reason: leave.reason,
-          reviewUrl: `${getProductionBaseUrl()}/pulse`,
+          reviewUrl: `${getProductionBaseUrl()}/bda-os`,
           companyName: req.user.companyName || '',
+          attachments: fileName && fileData
+            ? [{ filename: fileName, content: fileData }]
+            : undefined,
         });
         notified = true;
       } catch {
@@ -1318,6 +1508,9 @@ router.post('/leaves/apply', auth, async (req, res) => {
         status: leave.status,
         reason: leave.reason,
         days,
+        attachment: savedAttachment
+          ? { name: savedAttachment.name, url: savedAttachment.url || '', size: savedAttachment.size || 0 }
+          : null,
       },
     });
   } catch (err) {
@@ -1344,7 +1537,7 @@ router.post('/leaves/import', auth, async (req, res) => {
     if (!selfStaff && !isAdmin) {
       return res.status(400).json({
         success: false,
-        message: 'No employee profile is linked to this Pulse account yet.',
+        message: 'No employee profile is linked to this BDA OS account yet.',
       });
     }
 
@@ -1393,7 +1586,7 @@ router.post('/leaves/import', auth, async (req, res) => {
         }
       }
       if (!target && !errors.length) {
-        errors.push('No employee profile is linked to this Pulse account yet');
+        errors.push('No employee profile is linked to this BDA OS account yet');
       }
 
       if (!type) errors.push(`${rawType || 'Leave type'} is not a supported leave type`);

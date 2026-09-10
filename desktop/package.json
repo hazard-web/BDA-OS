@@ -1,9 +1,9 @@
 {
   "name": "pulse-desktop-timer",
-  "productName": "Pulse Timer",
+  "productName": "BDA OS Timer",
   "version": "1.0.0",
   "private": true,
-  "description": "Always-on-top Pulse check-in timer for macOS and Windows",
+  "description": "Always-on-top BDA OS check-in timer for macOS and Windows",
   "author": "BDA Technologies",
   "main": "main.js",
   "scripts": {
@@ -15,7 +15,7 @@
   },
   "build": {
     "appId": "in.bda.peopleos.pulse-timer",
-    "productName": "Pulse Timer",
+    "productName": "BDA OS Timer",
     "copyright": "Copyright © BDA Technologies",
     "directories": {
       "output": "release"

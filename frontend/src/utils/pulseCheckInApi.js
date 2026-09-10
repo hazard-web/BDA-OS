@@ -10,13 +10,18 @@ function dayKey(d = new Date()) {
 
 /**
  * Sync Pulse check-in events to backend.
- * Never waits on GPS — uses cache only so UI stays responsive.
+ * Briefly waits for city/town when possible so admin activity stores a place name.
  */
 export async function syncPulseCheckInEvent(kind, { email, activeMs, date } = {}) {
   try {
-    const location = peekPulseLocation()
-    // Warm cache for a later event; do not await.
-    if (location.lat == null) {
+    let location = peekPulseLocation()
+    const needsPlace =
+      location.lat == null ||
+      (!location.city && !location.locality && !location.displayName)
+
+    if (needsPlace && (kind === 'check-in' || kind === 'check-out' || kind === 'finalize')) {
+      location = await capturePulseLocation(3000, { waitForPlace: true })
+    } else if (location.lat == null) {
       void capturePulseLocation(3000)
     }
 
@@ -38,4 +43,27 @@ export async function syncPulseCheckInEvent(kind, { email, activeMs, date } = {}
   } catch {
     /* offline / unauthorized — keep local session */
   }
+}
+
+export async function fetchTimesheetToday(date) {
+  const res = await api.get('/pulse-checkin/timesheet/today', { params: { date: date || dayKey() } })
+  return res.data?.data || null
+}
+
+export async function saveTimesheetDraft({ date, entries, email } = {}) {
+  const res = await api.put('/pulse-checkin/timesheet/today', {
+    date: date || dayKey(),
+    email,
+    entries,
+  })
+  return res.data?.data || null
+}
+
+export async function submitTimesheet({ date, entries, email } = {}) {
+  const res = await api.post('/pulse-checkin/timesheet/submit', {
+    date: date || dayKey(),
+    email,
+    entries,
+  })
+  return res.data?.data || null
 }

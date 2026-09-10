@@ -75,7 +75,7 @@ export default function PulseFloatingDock({ items }) {
     <div className="pulse-fd-wrap">
       <motion.nav
         className="pulse-fd"
-        aria-label="Pulse modules"
+        aria-label="BDA OS modules"
         onMouseMove={(event) => {
           if (!reduced) mouseX.set(event.clientX)
         }}

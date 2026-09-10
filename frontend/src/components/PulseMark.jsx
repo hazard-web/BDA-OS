@@ -1,7 +1,7 @@
 import { useId } from 'react'
 
 /** Pulse - HR product mark (static circular logo). */
-export default function PulseMark({ size = 64, className = '', title = 'Pulse' }) {
+export default function PulseMark({ size = 64, className = '', title = 'BDA OS' }) {
   const uid = useId().replace(/:/g, '')
   return (
     <svg

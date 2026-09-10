@@ -38,6 +38,8 @@
 }
 
 .pos-logo-load-orbit .people-os-mark {
+  width: 52px;
+  height: auto;
   animation: pos-logo-breathe 1.35s ease-in-out infinite;
 }
 

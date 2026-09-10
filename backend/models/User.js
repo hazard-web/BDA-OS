@@ -110,7 +110,7 @@ const userSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
-  // Pulse (HR product) - separate org setup from People OS Accounts onboarding
+  // Pulse (HR product) - separate org setup from BDA OS onboarding
   pulseSetupCompleted: {
     type: Boolean,
     default: false,

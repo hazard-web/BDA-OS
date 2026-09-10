@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom'
+import { APP_BASE } from '../utils/pulseEntry'
 import './coming-soon.css'
 
 export default function ComingSoon() {
@@ -13,20 +14,20 @@ export default function ComingSoon() {
   const body = provider
     ? `${provider} sign-in is built in - add ${provider} OAuth keys to the backend .env to enable it.`
     : app
-      ? `${app} is on the People OS roadmap. Check back soon.`
+      ? `${app} is on the BDA OS roadmap. Check back soon.`
       : 'This feature is on the way.'
 
   return (
     <div className="soon-page">
       <header className="soon-nav">
-        <Link to="/login" className="soon-brand" aria-label="People OS home">
+        <Link to="/login" className="soon-brand" aria-label="BDA OS home">
           <span className="soon-mark" aria-hidden="true">
             <i style={{ background: '#e42527' }} />
             <i style={{ background: '#f5c400' }} />
             <i style={{ background: '#21a05a' }} />
             <i style={{ background: '#2b8aed' }} />
           </span>
-          <span>PEOPLE OS</span>
+          <span>BDA OS</span>
         </Link>
         <Link to="/login" className="soon-signin">
           Sign in
@@ -38,8 +39,8 @@ export default function ComingSoon() {
           <span>{title}</span>
         </h1>
         <p>{body}</p>
-        <Link to="/pulse" className="soon-cta">
-          Back to Pulse
+        <Link to={APP_BASE} className="soon-cta">
+          Back to BDA OS
         </Link>
       </main>
 

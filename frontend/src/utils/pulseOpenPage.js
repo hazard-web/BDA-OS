@@ -1,18 +1,39 @@
+import { APP_BASE, APP_NOTES, APP_TIMER, toAppPath } from './pulseEntry'
+
+const LIVE_MODULES = [
+  'files',
+  'engagement',
+  'letters',
+  'travel',
+  'tasks',
+  'compensation',
+  'operations',
+  'reports',
+  'general',
+  'okr',
+]
+
 export const PULSE_SHELL_VIEWS = {
   home: {
-    path: '/pulse/home',
+    path: `${APP_BASE}/home`,
     space: 'myspace',
     module: 'home',
     sub: 'overview',
   },
+  calendar: {
+    path: `${APP_BASE}/calendar`,
+    space: 'myspace',
+    module: 'home',
+    sub: 'calendar',
+  },
   company: {
-    path: '/pulse/company',
+    path: `${APP_BASE}/company`,
     space: 'organization',
     module: 'home',
     sub: 'overview',
   },
   onboarding: {
-    path: '/pulse/onboarding',
+    path: `${APP_BASE}/onboarding`,
     space: 'organization',
     module: 'home',
     sub: 'onboarding',
@@ -20,49 +41,110 @@ export const PULSE_SHELL_VIEWS = {
     label: 'Opening Onboarding',
   },
   leave: {
-    path: '/pulse/leave',
+    path: `${APP_BASE}/leave`,
     space: 'myspace',
     module: 'leave',
     sub: 'overview',
     leaveTab: 'mydata',
-    leaveSubTab: 'summary',
-    label: 'Opening Leave Tracker',
+    leaveSubTab: 'requests',
+    label: 'Opening Leave & Attendance',
+  },
+  hours: {
+    path: `${APP_BASE}/hours`,
+    space: 'myspace',
+    module: 'time',
+    sub: 'overview',
+    label: 'Opening Timesheet',
+  },
+  time: {
+    path: `${APP_BASE}/hours`,
+    space: 'myspace',
+    module: 'time',
+    sub: 'overview',
+    label: 'Opening Timesheet',
+  },
+  myAttendance: {
+    path: `${APP_BASE}/attendance`,
+    space: 'myspace',
+    module: 'attendance',
+    sub: 'overview',
+    leaveTab: 'attendance',
+    label: 'Opening Leave & Attendance',
   },
   attendance: {
-    path: '/pulse/attendance',
+    path: `${APP_BASE}/company/attendance`,
     space: 'organization',
     module: 'home',
     sub: 'attendance',
     admin: true,
     label: 'Opening Attendance',
   },
-  time: {
-    path: '/pulse/time',
-    space: 'myspace',
-    module: 'time',
-    sub: 'overview',
+  companyTime: {
+    path: `${APP_BASE}/company/time`,
+    space: 'organization',
+    module: 'home',
+    sub: 'time',
+    admin: true,
     label: 'Opening Time Tracker',
   },
+  performance: {
+    path: `${APP_BASE}/performance`,
+    space: 'myspace',
+    module: 'performance',
+    sub: 'overview',
+  },
+  account: {
+    path: `${APP_BASE}/account`,
+    space: 'myspace',
+    module: 'account',
+    sub: 'overview',
+  },
   apps: {
-    path: '/pulse/apps',
+    path: `${APP_BASE}/apps`,
     space: 'organization',
     module: 'home',
     sub: 'apps',
     admin: true,
     label: 'Opening App access',
   },
+  ...Object.fromEntries(
+    LIVE_MODULES.map((id) => [
+      id,
+      { path: `${APP_BASE}/${id}`, space: 'myspace', module: id, sub: 'overview' },
+    ]),
+  ),
 }
 
 export const PULSE_OPEN_VIEWS = Object.fromEntries(
-  ['onboarding', 'leave', 'attendance', 'time', 'apps'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
+  ['onboarding', 'leave', 'attendance', 'time', 'hours', 'apps', 'companyTime'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
 )
 
-export const PULSE_SHELL_PATHS = Object.values(PULSE_SHELL_VIEWS).map((view) => view.path)
+export const PULSE_SHELL_PATHS = [...new Set(Object.values(PULSE_SHELL_VIEWS).map((view) => view.path))]
 
-export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance'])
+export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time'])
+
+export function pathForShell({ space, module, sub } = {}) {
+  if (space === 'organization') {
+    if (sub === 'onboarding') return PULSE_SHELL_VIEWS.onboarding.path
+    if (sub === 'apps') return PULSE_SHELL_VIEWS.apps.path
+    if (sub === 'attendance') return PULSE_SHELL_VIEWS.attendance.path
+    if (sub === 'time') return PULSE_SHELL_VIEWS.companyTime.path
+    return PULSE_SHELL_VIEWS.company.path
+  }
+  if (module === 'home') {
+    return sub === 'calendar' ? PULSE_SHELL_VIEWS.calendar.path : PULSE_SHELL_VIEWS.home.path
+  }
+  if (module === 'leave') return PULSE_SHELL_VIEWS.leave.path
+  if (module === 'time') return PULSE_SHELL_VIEWS.hours.path
+  if (module === 'attendance') return PULSE_SHELL_VIEWS.myAttendance.path
+  if (module === 'performance') return PULSE_SHELL_VIEWS.performance.path
+  if (module === 'account') return PULSE_SHELL_VIEWS.account.path
+  if (PULSE_SHELL_VIEWS[module]) return PULSE_SHELL_VIEWS[module].path
+  return PULSE_SHELL_VIEWS.home.path
+}
 
 export function readPulseLocation(pathname = window.location.pathname, search = window.location.search) {
-  const path = String(pathname || '').replace(/\/+$/, '') || '/'
+  const path = toAppPath(String(pathname || '').replace(/\/+$/, '') || '/')
   let params
   try {
     params = new URLSearchParams(search || '')
@@ -76,10 +158,12 @@ export function readPulseLocation(pathname = window.location.pathname, search = 
     return { key: openKey, ...PULSE_SHELL_VIEWS[openKey], boot: true }
   }
 
-  const found = Object.entries(PULSE_SHELL_VIEWS).find(([, view]) => view.path === path)
+  const found = Object.entries(PULSE_SHELL_VIEWS)
+    .sort((a, b) => b[1].path.length - a[1].path.length)
+    .find(([, view]) => view.path === path)
   if (found) {
     const [key, view] = found
-    return { key, ...view, boot: key !== 'home' && key !== 'company' ? boot : false }
+    return { key, ...view, boot: Boolean(PULSE_OPEN_VIEWS[key]) && boot }
   }
 
   return { key: 'home', ...PULSE_SHELL_VIEWS.home, boot: false }
@@ -97,18 +181,18 @@ export function isPulseOpenPath(pathname, search) {
 /** Service pages opened from Company — never the login welcome. */
 export function isPulseServicePath(pathname) {
   const key = readPulseLocation(pathname, '').key
-  return key !== 'home' && key !== 'company'
+  return key !== 'home' && key !== 'company' && key !== 'calendar'
 }
 
 const PULSE_AUXILIARY_PATHS = new Set([
   ...Object.values(PULSE_OPEN_VIEWS).map((view) => view.path),
-  '/pulse/notes',
-  '/pulse/checkin-timer',
+  APP_NOTES,
+  APP_TIMER,
 ])
 
-/** Extra Pulse tabs (Employee, Leave, Notes, …). Logout should close these, not show Login. */
+/** Extra BDA OS tabs (Employee, Leave, Notes, …). Logout should close these, not show Login. */
 export function isPulseAuxiliaryTab(pathname = typeof window !== 'undefined' ? window.location.pathname : '') {
-  const path = String(pathname || '').replace(/\/+$/, '') || '/'
+  const path = toAppPath(String(pathname || '').replace(/\/+$/, '') || '/')
   return PULSE_AUXILIARY_PATHS.has(path)
 }
 
@@ -123,12 +207,11 @@ function warmOpenAssets() {
   }
 }
 
-/** Open a service in a new tab. Never navigate the page you clicked from. */
-export function openPulsePage(key) {
-  const view = PULSE_OPEN_VIEWS[key]
-  if (!view) return false
+/** Open a path in a new tab. Never navigate the page you clicked from. */
+export function openPulsePath(path) {
+  if (!path) return false
   warmOpenAssets()
-  const url = `${window.location.origin}${view.path}?boot=1`
+  const url = `${window.location.origin}${path}?boot=1`
   const link = document.createElement('a')
   link.href = url
   link.target = '_blank'
@@ -137,4 +220,11 @@ export function openPulsePage(key) {
   link.click()
   link.remove()
   return true
+}
+
+/** Open a service in a new tab. Never navigate the page you clicked from. */
+export function openPulsePage(key) {
+  const view = PULSE_OPEN_VIEWS[key] || PULSE_SHELL_VIEWS[key]
+  if (!view) return false
+  return openPulsePath(view.path)
 }

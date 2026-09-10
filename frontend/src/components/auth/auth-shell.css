@@ -135,8 +135,16 @@ body:has(.auth-page),
   color: inherit;
 }
 
-.auth-logo svg {
+.auth-logo svg,
+.auth-logo-mark {
   display: block;
+}
+
+.auth-logo-mark {
+  height: 40px;
+  width: auto;
+  max-width: 168px;
+  object-fit: contain;
 }
 
 .auth-mark {

@@ -1,5 +1,3 @@
-import PeopleOsMark from './PeopleOsMark'
-
 export function periodForHour(hour) {
   if (hour >= 5 && hour < 12) return 'morning'
   if (hour >= 12 && hour < 17) return 'afternoon'
@@ -63,8 +61,8 @@ export default function PulseGreetingBanner({ name, hour = new Date().getHours()
 
   return (
     <article className={`ms-card ms-hello is-${period}`}>
-      <span className="ms-hello-logo" aria-hidden="true">
-        <PeopleOsMark size={26} title="People OS" />
+      <span className="ms-hello-logo">
+        <img src="/bda-logo-lockup.png" alt="BDA Technologies" />
       </span>
       <div className="ms-hello-copy">
         <span className="ms-hello-greet">{greetingTitle(period)}</span>

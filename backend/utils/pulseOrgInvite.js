@@ -43,7 +43,7 @@ async function createAndSendOrgInvite({
       String(existingUser.organizationId || existingUser._id) === String(organizationId) ||
       String(existingUser._id) === String(organizationId)
     const err = new Error(
-      sameOrg ? 'This person already has a Pulse account' : 'Email is already registered',
+      sameOrg ? 'This person already has a BDA OS account' : 'Email is already registered',
     )
     err.status = 400
     throw err
@@ -76,11 +76,10 @@ async function createAndSendOrgInvite({
       inviteUrl,
       companyName,
       role,
-      invitedByName: invitedByName || 'Pulse',
+      invitedByName: invitedByName || 'BDA OS',
       loginEmail: address,
     })
   } catch (emailErr) {
-    console.error('Pulse invite email failed:', emailErr.message)
     emailSent = false
     emailError = emailErr.message || 'Email provider rejected the message'
   }

@@ -477,12 +477,21 @@
 .ms-hello-logo {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  height: 48px;
+  width: auto;
   flex-shrink: 0;
+  padding: 6px 10px;
   border: 1px solid #e6e9ee;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
+}
+
+.ms-hello-logo img {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: 148px;
+  object-fit: contain;
 }
 
 .ms-hello-copy {

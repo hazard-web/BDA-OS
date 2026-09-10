@@ -116,7 +116,7 @@ export default function Login() {
       */}
       <AuthShell
         title="Sign in"
-        subtitle="to access People OS"
+        subtitle="to access BDA OS"
       >
         {/* {step === 'more' ? (
           <AuthSocialGrid onBack={() => setStep(1)} />

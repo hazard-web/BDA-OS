@@ -1,5 +1,5 @@
 /**
- * Fast location for check-in — cache + short timeout, geocode off the critical path.
+ * Fast location for check-in — cache + short timeout, geocode when needed.
  */
 
 const empty = () => ({
@@ -15,6 +15,7 @@ const empty = () => ({
 
 let cached = null
 let inflight = null
+const placeCache = new Map()
 
 function readCoords(timeoutMs, highAccuracy) {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -34,7 +35,7 @@ async function reverseGeocode(lat, lng) {
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('lat', String(lat))
   url.searchParams.set('lon', String(lng))
-  url.searchParams.set('zoom', '18')
+  url.searchParams.set('zoom', '14')
   url.searchParams.set('addressdetails', '1')
 
   const res = await fetch(url.toString(), {
@@ -49,10 +50,9 @@ async function reverseGeocode(lat, lng) {
     addr.residential ||
     addr.quarter ||
     addr.city_district ||
-    addr.county ||
     ''
   const city =
-    addr.city || addr.town || addr.village || addr.municipality || addr.county || ''
+    addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.county || ''
   return {
     lat,
     lng,
@@ -71,11 +71,72 @@ export function peekPulseLocation() {
 }
 
 /**
- * Best-effort location. Prefer cache; never wait long.
- * Geocode runs in background and refreshes cache for the next event.
+ * Prefer city/town for admin activity and labels.
+ * Order: city → locality/sector → state → short displayName → coords.
  */
-export async function capturePulseLocation(timeoutMs = 2500) {
+export function formatPulseLocationLabel(loc) {
+  if (!loc) return '—'
+  const parts = [loc.city, loc.locality || loc.sector, loc.state].filter(Boolean)
+  if (parts.length) return [...new Set(parts)].join(', ')
+  if (loc.displayName) {
+    const short = String(loc.displayName)
+      .split(',')
+      .slice(0, 3)
+      .map((p) => p.trim())
+      .filter(Boolean)
+    if (short.length) return short.join(', ')
+  }
+  if (Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng))) {
+    return `${Number(loc.lat).toFixed(4)}, ${Number(loc.lng).toFixed(4)}`
+  }
+  return '—'
+}
+
+/**
+ * Resolve city/town for stored coords (admin history without named place).
+ */
+export async function resolvePulsePlaceName(loc) {
+  if (!loc) return '—'
+  const named = formatPulseLocationLabel(loc)
+  if (named !== '—' && !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(named)) return named
+
+  const lat = Number(loc.lat)
+  const lng = Number(loc.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '—'
+
+  const key = `${lat.toFixed(3)},${lng.toFixed(3)}`
+  if (placeCache.has(key)) return placeCache.get(key)
+
+  try {
+    const full = await reverseGeocode(lat, lng)
+    const label = formatPulseLocationLabel(full)
+    placeCache.set(key, label)
+    return label
+  } catch {
+    const fallback = formatPulseLocationLabel(loc)
+    placeCache.set(key, fallback)
+    return fallback
+  }
+}
+
+/**
+ * Best-effort location. Prefer cache; optionally wait briefly for city name.
+ */
+export async function capturePulseLocation(timeoutMs = 2500, { waitForPlace = false } = {}) {
   if (cached?.lat != null && cached?.lng != null) {
+    if (waitForPlace && !cached.city && !cached.locality && !cached.displayName) {
+      try {
+        const full = await Promise.race([
+          reverseGeocode(cached.lat, cached.lng),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1800)),
+        ])
+        if (full?.city || full?.locality || full?.displayName) {
+          cached = { ...cached, ...full }
+        }
+      } catch {
+        /* keep coords */
+      }
+    }
     return { ...cached }
   }
 
@@ -103,12 +164,22 @@ export async function capturePulseLocation(timeoutMs = 2500) {
       const base = { ...empty(), lat, lng }
       cached = base
 
-      // Enrich in background — do not block check-in/out
-      void reverseGeocode(lat, lng)
+      const geocodePromise = reverseGeocode(lat, lng)
         .then((full) => {
           if (full?.lat != null) cached = full
+          return full
         })
-        .catch(() => {})
+        .catch(() => null)
+
+      if (waitForPlace) {
+        const full = await Promise.race([
+          geocodePromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1800)),
+        ])
+        if (full?.lat != null) return { ...full }
+      } else {
+        void geocodePromise
+      }
 
       return base
     } catch {

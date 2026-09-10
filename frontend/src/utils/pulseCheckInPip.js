@@ -5,11 +5,13 @@ import {
   readCheckInActiveEmail,
   supportsDocumentPip,
 } from './pulseCheckIn'
+import { APP_TIMER } from './pulseEntry'
 
 export const PULSE_PIP_EVENT = 'pulse-checkin-pip-change'
 
 const OVERLAY_WINDOW_NAME = 'pulse-checkin-timer'
-const TIMER_PATH = '/pulse/checkin-timer'
+
+const TIMER_PATH = APP_TIMER
 
 let popupWindow = null
 let pipWindow = null
@@ -89,7 +91,7 @@ function renderPipShell(win, email) {
   const elapsed = checkedInAt ? getElapsedSeconds(email) : 0
 
   win.document.documentElement.lang = 'en'
-  win.document.title = 'Pulse · Working'
+  win.document.title = 'BDA OS · Working'
 
   const style = win.document.createElement('style')
   style.textContent = `
@@ -145,7 +147,7 @@ function renderPipShell(win, email) {
   wrap.innerHTML = `
     <span class="dot" aria-hidden="true"></span>
     <div class="meta">
-      <div class="label">Pulse · Working</div>
+      <div class="label">BDA OS · Working</div>
       <div class="time" id="pulse-pip-time">${formatElapsed(elapsed)}</div>
     </div>
   `
@@ -163,7 +165,7 @@ function startPipTick(win, email) {
     }
     const label = formatElapsed(getElapsedSeconds(email))
     if (el) el.textContent = label
-    win.document.title = `Pulse · ${label}`
+    win.document.title = `BDA OS · ${label}`
   }, 1000)
 }
 

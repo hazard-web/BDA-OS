@@ -17,9 +17,9 @@ function ToastCard({ tone = 'success', title, detail, visible }) {
   )
 }
 
-/** People OS-styled welcome toast (login / OAuth). */
+/** BDA OS-styled welcome toast (login / OAuth). */
 export function toastWelcomeBack(name) {
-  const detail = name ? `Signed in as ${name}` : 'You’re signed in to People OS Accounts'
+  const detail = name ? `Signed in as ${name}` : 'You’re signed in to BDA OS'
   return toast.custom(
     (t) => (
       <ToastCard

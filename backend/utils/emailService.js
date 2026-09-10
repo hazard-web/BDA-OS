@@ -15,6 +15,29 @@ function resendApiKey() {
   return String(process.env.RESEND_API_KEY || '').trim();
 }
 
+function smtpHost() {
+  return String(process.env.EMAIL_HOST || '').trim();
+}
+
+function smtpPort() {
+  const n = Number(process.env.EMAIL_PORT);
+  return Number.isFinite(n) && n > 0 ? n : 587;
+}
+
+function smtpAuth() {
+  return {
+    user: sanitizeEmailValue(process.env.EMAIL_USER),
+    pass: String(process.env.EMAIL_PASS || '').trim(),
+  };
+}
+
+function hasSmtpConfig() {
+  const { user, pass } = smtpAuth();
+  if (!smtpHost() || !user || !pass) return false;
+  if (pass.includes('PASTE_') || pass.includes('YOUR_') || pass.includes('XXXX')) return false;
+  return true;
+}
+
 function extractEmailAddress(value) {
   const match = String(value || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
   return match ? match[0] : ''
@@ -61,6 +84,11 @@ function resendFromAddress(displayName) {
  */
 function buildFromAddress(displayName) {
   const safeDisplayName = displayNameFrom(displayName)
+  if (hasSmtpConfig()) {
+    const from = sanitizeEmailValue(process.env.EMAIL_FROM)
+    const address = extractEmailAddress(from) || extractEmailAddress(process.env.EMAIL_USER)
+    if (address) return formatFrom(safeDisplayName, address)
+  }
   if (resendApiKey()) return resendFromAddress(safeDisplayName)
   const fromEmail = sanitizeEmailValue(process.env.EMAIL_FROM) || sanitizeEmailValue(process.env.EMAIL_USER)
   return `"${safeDisplayName}" <${fromEmail}>`
@@ -70,12 +98,12 @@ function buildFromAddress(displayName) {
  * Detect if the configured credentials look like placeholders.
  */
 function hasRealCredentials() {
+  if (hasSmtpConfig()) return true;
   if (resendApiKey()) return true;
   const user = sanitizeEmailValue(process.env.EMAIL_USER);
   const pass = (process.env.EMAIL_PASS || '').trim();
   if (!user || !pass) return false;
   if (pass.includes('PASTE_') || pass.includes('YOUR_') || pass.includes('XXXX')) return false;
-  // Gmail App Passwords are exactly 16 chars (letters + digits + spaces)
   if (pass.replace(/\s/g, '').length < 10) return false;
   return true;
 }
@@ -125,7 +153,7 @@ async function sendViaResend(mailOptions) {
   const resend = new Resend(resendApiKey());
   const to = mailOptions.to;
   const payload = {
-    from: mailOptions.from || resendFromAddress('Pulse'),
+    from: mailOptions.from || resendFromAddress('BDA OS'),
     to: Array.isArray(to) ? to : String(to || '').split(',').map((s) => s.trim()).filter(Boolean),
     subject: mailOptions.subject,
     html: mailOptions.html,
@@ -166,10 +194,28 @@ async function sendViaResend(mailOptions) {
 
 /**
  * Create a mail transporter.
- * Prefers Resend when RESEND_API_KEY is set. Otherwise Gmail SMTP.
- * Falls back to Ethereal test account ONLY if no credentials are configured.
+ * Prefers SMTP when EMAIL_HOST is set (SocketLabs, etc). Else Resend, else Gmail, else Ethereal.
  */
 async function createSMTPTransporter() {
+  if (hasSmtpConfig()) {
+    const port = smtpPort();
+    const { user, pass } = smtpAuth();
+    const transporter = nodemailer.createTransport({
+      host: smtpHost(),
+      port,
+      secure: port === 465,
+      requireTLS: port !== 465,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+    });
+    try {
+      await transporter.verify();
+    } catch {
+      /* SMTP may still work for send */
+    }
+    return transporter;
+  }
+
   if (resendApiKey()) {
     return {
       sendMail: (opts) => sendViaResend({ ...opts, from: opts.from || resendFromAddress('BDA Technologies') }),
@@ -180,49 +226,39 @@ async function createSMTPTransporter() {
   const emailPass = (process.env.EMAIL_PASS || '').trim();
 
   if (hasRealCredentials()) {
-    // Port 587 + STARTTLS works better on corporate/Windows networks than port 465.
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, // use STARTTLS
+      secure: false,
       requireTLS: true,
       auth: {
         user: emailUser,
         pass: emailPass,
       },
       tls: {
-        rejectUnauthorized: false, // tolerate corporate SSL chains
+        rejectUnauthorized: false,
       },
     });
 
     try {
       await transporter.verify();
-      console.log(`✅ Gmail SMTP verified - real emails will be sent (user=${emailUser})`);
-    } catch (verifyErr) {
-      // Log a clear hint so devs know how to fix credentials
-      console.warn('⚠️  Gmail SMTP verify() failed.');
-      console.warn('   Error:', verifyErr.message);
-      console.warn('   Fix:');
-      console.warn('   1. Enable 2-Step Verification on your Google account');
-      console.warn('   2. Generate a Gmail App Password: https://myaccount.google.com/apppasswords');
-      console.warn('   3. Set EMAIL_PASS in backend/.env to that 16-character password');
-      console.warn('   4. Restart the backend');
-      console.warn('   Will still attempt sendMail (it sometimes succeeds where verify fails).');
+    } catch {
+      /* Gmail may still work for send */
     }
 
     return transporter;
   }
 
-  // Helpful diagnostic when SMTP isn't configured
   const passLooksEmpty = !emailPass;
   const passIsPlaceholder = emailPass.includes('PASTE_') || emailPass.includes('YOUR_') || emailPass.includes('XXXX');
   console.warn('────────────────────────────────────────────────────');
   console.warn('⚠️  Email credentials missing or invalid.');
+  if (!smtpHost()) console.warn('   • EMAIL_HOST is empty in .env');
   if (!emailUser) console.warn('   • EMAIL_USER is empty in .env');
   if (passLooksEmpty) console.warn('   • EMAIL_PASS is empty in .env');
   if (passIsPlaceholder) console.warn('   • EMAIL_PASS is still a placeholder ("' + emailPass.substring(0, 30) + '...")');
-  console.warn('   To enable real email delivery, set RESEND_API_KEY (Resend)');
-  console.warn('   or EMAIL_USER + EMAIL_PASS (Gmail SMTP).');
+  console.warn('   To enable real email delivery, set EMAIL_HOST + EMAIL_USER + EMAIL_PASS');
+  console.warn('   or RESEND_API_KEY.');
   console.warn('   Falling back to Ethereal test SMTP for development...');
   console.warn('────────────────────────────────────────────────────');
 
@@ -1129,7 +1165,7 @@ async function sendPunchOutReminderEmail(staff, loginUrl, details = {}) {
 }
 
 /**
- * Pulse invite — accept link sets password and joins the organization.
+ * BDA OS invite — accept link sets password and joins the organization.
  */
 async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedByName, loginEmail }) {
   const transporter = await createSMTPTransporter();
@@ -1232,7 +1268,7 @@ async function sendCandidateOnboardingEmail({ to, onboardUrl, companyName, candi
 }
 
 /**
- * Leave request raised in Pulse — sent to the team inbox that has to approve it.
+ * Leave request raised in BDA OS — sent to the team inbox that has to approve it.
  */
 async function sendLeaveRequestEmail({
   to,
@@ -1245,6 +1281,7 @@ async function sendLeaveRequestEmail({
   reason,
   reviewUrl,
   companyName,
+  attachments,
 }) {
   if (!isValidEmail(to)) {
     throw new Error(`Invalid notification address: ${to}`);
@@ -1263,7 +1300,8 @@ async function sendLeaveRequestEmail({
     ['To', escapeHtml(toDate)],
     ['Duration', dayLabel],
     ['Reason', escapeHtml(reason || '—')],
-  ]
+    attachments?.length ? ['Attachment', escapeHtml(attachments[0].filename || 'File attached')] : null,
+  ].filter(Boolean)
     .map(([label, value]) => `
                 <tr>
                   <td style="padding:8px 0;font-size:13px;color:#777;width:120px;vertical-align:top;">${label}</td>
@@ -1276,6 +1314,7 @@ async function sendLeaveRequestEmail({
     to,
     replyTo: isValidEmail(employeeEmail) ? employeeEmail : undefined,
     subject: `Leave approval needed — ${employeeName || employeeEmail} (${fromDate} to ${toDate})`,
+    attachments: Array.isArray(attachments) && attachments.length ? attachments : undefined,
     html: `
 <!DOCTYPE html>
 <html>

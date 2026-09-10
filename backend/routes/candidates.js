@@ -56,8 +56,26 @@ function fileMeta(file) {
   }
 }
 
+function joinParts(parts) {
+  return parts.map(cleanStr).filter(Boolean).join(', ')
+}
+
+function formatAddress(addr) {
+  const src = addr && typeof addr === 'object' ? addr : {}
+  return joinParts([src.line1, src.line2, src.city, src.state, src.postalCode, src.country])
+}
+
+function formatEntries(list, keys) {
+  if (!Array.isArray(list)) return ''
+  return list
+    .map((entry) => joinParts(keys.map((key) => entry?.[key])))
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function toListItem(doc) {
   const row = typeof doc.toObject === 'function' ? doc.toObject() : { ...doc }
+  const emergency = row.emergencyContact && typeof row.emergencyContact === 'object' ? row.emergencyContact : {}
   return {
     _id: row._id,
     candidateId: row.candidateId || '',
@@ -68,6 +86,15 @@ function toListItem(doc) {
     officialEmail: row.officialEmail || '',
     phone: row.phone || '',
     countryCode: row.countryCode || '+91',
+    dob: row.dob || null,
+    gender: row.gender || '',
+    emergencyName: cleanStr(emergency.name),
+    emergencyRelationship: cleanStr(emergency.relationship),
+    emergencyPhone: cleanStr(emergency.phone),
+    presentAddressLine: formatAddress(row.presentAddress),
+    permanentAddressLine: formatAddress(row.permanentAddress),
+    educationSummary: formatEntries(row.education, ['degree', 'fieldOfStudy', 'schoolName']),
+    experienceSummary: formatEntries(row.experience, ['occupation', 'company']),
     uan: row.uan || '',
     aadhaar: row.aadhaar || '',
     pan: row.pan || '',
@@ -103,6 +130,7 @@ function toDetail(doc) {
     ...toListItem(row),
     presentAddress: row.presentAddress || {},
     permanentAddress: row.permanentAddress || {},
+    emergencyContact: row.emergencyContact || {},
     sameAsPresent: Boolean(row.sameAsPresent),
     education: row.education || [],
     experience: row.experience || [],
@@ -126,6 +154,9 @@ function toPublicOnboard(doc, { companyName }) {
     officialEmail: detail.officialEmail,
     phone: detail.phone,
     countryCode: detail.countryCode,
+    dob: detail.dob,
+    gender: detail.gender,
+    emergencyContact: detail.emergencyContact,
     aadhaar: detail.aadhaar,
     pan: detail.pan,
     photo: null,
@@ -172,6 +203,8 @@ function sanitizeFile(file, allowedMimes) {
   return { name, mime, size, data }
 }
 
+const GENDERS = ['Male', 'Female', 'Other']
+
 function sanitizeAddress(raw) {
   const src = raw && typeof raw === 'object' ? raw : {}
   return {
@@ -182,6 +215,27 @@ function sanitizeAddress(raw) {
     state: cleanStr(src.state),
     postalCode: cleanStr(src.postalCode),
   }
+}
+
+function sanitizeEmergency(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {}
+  return {
+    name: cleanStr(src.name),
+    relationship: cleanStr(src.relationship),
+    phone: cleanStr(src.phone).replace(/\D/g, '').slice(0, 12),
+  }
+}
+
+function sanitizeGender(value) {
+  const gender = cleanStr(value)
+  return GENDERS.includes(gender) ? gender : ''
+}
+
+function parseDob(value) {
+  if (!value) return null
+  const dob = new Date(value)
+  if (Number.isNaN(dob.getTime())) return null
+  return dob
 }
 
 function sanitizeRows(list, keys) {
@@ -226,6 +280,9 @@ function pickEmployeePayload(body, { keepFiles }) {
     lastName: cleanStr(body.lastName),
     phone: cleanStr(body.phone),
     countryCode: cleanStr(body.countryCode) || '+91',
+    dob: parseDob(body.dob),
+    gender: sanitizeGender(body.gender),
+    emergencyContact: sanitizeEmergency(body.emergencyContact),
     aadhaar: cleanStr(body.aadhaar),
     pan: cleanStr(body.pan).toUpperCase(),
     presentAddress: sanitizeAddress(body.presentAddress),
@@ -289,7 +346,7 @@ function requireAdminHireFields(row) {
   if (!domainCheck.ok) {
     throw httpError(
       400,
-      `Work email must be @${domainCheck.domain}. That address is the Pulse login.`,
+      `Work email must be @${domainCheck.domain}. That address is the BDA OS login.`,
       'WORK_EMAIL_DOMAIN_REQUIRED',
     )
   }
@@ -340,13 +397,13 @@ async function sendPulseInviteForCandidate(candidate) {
   if (!domainCheck.ok) {
     throw httpError(
       400,
-      `Work email must be @${domainCheck.domain}. That address is the Pulse login.`,
+      `Work email must be @${domainCheck.domain}. That address is the BDA OS login.`,
       'WORK_EMAIL_DOMAIN_REQUIRED',
     )
   }
   const inviter = await resolveInviter(candidate)
   if (!inviter) {
-    throw httpError(400, 'Could not find an admin to send the Pulse invite')
+    throw httpError(400, 'Could not find an admin to send the BDA OS invite')
   }
   const { invite, emailSent, inviteUrl, emailError } = await createAndSendOrgInvite({
     email: officialEmail,
@@ -421,6 +478,21 @@ router.post('/onboard/:token', async (req, res) => {
         message: 'First name, last name, and phone are required',
       })
     }
+    if (!payload.dob) {
+      return res.status(400).json({ success: false, message: 'Date of birth is required' })
+    }
+    if (payload.dob > new Date()) {
+      return res.status(400).json({ success: false, message: 'Date of birth cannot be in the future' })
+    }
+    if (!payload.gender) {
+      return res.status(400).json({ success: false, message: 'Gender is required' })
+    }
+    if (!payload.emergencyContact.name || !payload.emergencyContact.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Emergency contact name and phone are required',
+      })
+    }
     requireIdCards(payload, row)
 
     Object.assign(row, payload)
@@ -467,6 +539,14 @@ router.get('/', auth, requireAdmin, async (req, res) => {
           row.phone,
           row.candidateId,
           row.department,
+          row.gender,
+          row.pan,
+          row.aadhaar,
+          row.emergencyContact?.name,
+          row.emergencyContact?.phone,
+          row.presentAddress?.city,
+          row.workLocation,
+          row.title,
         ]
           .join(' ')
           .toLowerCase()
@@ -502,7 +582,7 @@ router.post('/:id/send-onboarding', auth, requireAdmin, async (req, res) => {
     if (row.employeeSubmittedAt) {
       return res.status(400).json({
         success: false,
-        message: 'This person already submitted details. Resend the Pulse invite instead.',
+        message: 'This person already submitted details. Resend the BDA OS invite instead.',
       })
     }
 
@@ -565,7 +645,7 @@ router.post('/:id/send-invite', auth, requireAdmin, async (req, res) => {
     if (!row.employeeSubmittedAt) {
       return res.status(400).json({
         success: false,
-        message: 'Wait until the employee submits personal details, then send the Pulse invite.',
+        message: 'Wait until the employee submits personal details, then send the BDA OS invite.',
       })
     }
 
@@ -575,7 +655,7 @@ router.post('/:id/send-invite', auth, requireAdmin, async (req, res) => {
       success: true,
       emailSent: sent.emailSent,
       message: sent.emailSent
-        ? `Pulse invite sent to ${sent.officialEmail}`
+        ? `BDA OS invite sent to ${sent.officialEmail}`
         : `Invite created, but the email could not be sent. ${sent.emailError || ''}`.trim(),
       data: {
         ...toListItem(row),
@@ -584,7 +664,7 @@ router.post('/:id/send-invite', auth, requireAdmin, async (req, res) => {
     })
   } catch (err) {
     const status = err.status || 500
-    res.status(status).json({ success: false, message: err.message || 'Failed to send Pulse invite' })
+    res.status(status).json({ success: false, message: err.message || 'Failed to send BDA OS invite' })
   }
 })
 

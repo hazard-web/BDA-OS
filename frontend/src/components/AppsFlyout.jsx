@@ -15,7 +15,7 @@ import {
 } from 'antd'
 import { InfoCircleOutlined, SearchOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
-import { getPulseOpenPath } from '../utils/pulseEntry'
+import { APP_BASE, getPulseOpenPath, isBdaOsAppLink } from '../utils/pulseEntry'
 import { goToLoginOrCloseTab } from '../utils/pulseAuthSync'
 import PulseMark from './PulseMark'
 import api from '../api'
@@ -104,8 +104,8 @@ export default function AppsFlyout({
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
-    const pulseHit = 'pulse'.includes(q)
-      ? [{ id: 'pulse', name: 'Pulse', to: '/pulse', isPulse: true }]
+    const pulseHit = ['pulse', 'bda', 'bda os', 'bdaos'].some((k) => k.startsWith(q) || q.startsWith(k))
+      ? [{ id: 'pulse', name: 'BDA OS', to: APP_BASE, isPulse: true }]
       : []
     return [
       ...pulseHit,
@@ -198,12 +198,12 @@ export default function AppsFlyout({
   const go = (appOrTo) => {
     onClose()
     if (typeof appOrTo === 'string') {
-      if (appOrTo === '/pulse' || appOrTo.startsWith('/pulse')) {
+      if (isBdaOsAppLink(appOrTo)) {
         window.open(getPulseOpenPath(user), '_blank', 'noopener,noreferrer')
       }
       return
     }
-    if (appOrTo?.isPulse || appOrTo?.to === '/pulse' || appOrTo?.id === 'pulse') {
+    if (appOrTo?.isPulse || isBdaOsAppLink(appOrTo?.to) || appOrTo?.id === 'pulse') {
       window.open(getPulseOpenPath(user), '_blank', 'noopener,noreferrer')
       return
     }
@@ -244,7 +244,7 @@ export default function AppsFlyout({
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <div className="af-root" role="dialog" aria-modal="true" aria-label={pulseHome ? 'Account and assigned apps' : 'People OS apps'}>
+        <div className="af-root" role="dialog" aria-modal="true" aria-label={pulseHome ? 'Account and assigned apps' : 'BDA OS apps'}>
           <motion.button
             type="button"
             className="af-backdrop"
@@ -285,7 +285,7 @@ export default function AppsFlyout({
                     <Text type="secondary">{user?.email}</Text>
                     <Text type="secondary" className="af-profile-id">
                       User ID : {displayUserId(user?._id)}{' '}
-                      <Tooltip title="Your unique People OS account identifier">
+                      <Tooltip title="Your unique BDA OS account identifier">
                         <InfoCircleOutlined />
                       </Tooltip>
                     </Text>
@@ -331,11 +331,11 @@ export default function AppsFlyout({
                         <div className="af-grid">
                           {searchResults.map((app) =>
                             app.isPulse ? (
-                              <button key="pulse" type="button" className="af-app" onClick={() => go('/pulse')}>
+                              <button key="pulse" type="button" className="af-app" onClick={() => go(APP_BASE)}>
                                 <span className="af-app-mark">
                                   <PulseMark size={28} />
                                 </span>
-                                <Text className="af-app-name">Pulse</Text>
+                                <Text className="af-app-name">BDA OS</Text>
                               </button>
                             ) : (
                               <AppTile key={app.id || app.appId} app={app} onOpen={go} />
@@ -349,11 +349,11 @@ export default function AppsFlyout({
                       <Text className="af-section-label">Featured app</Text>
                       <Card size="small" className="af-featured" bordered>
                         <Flex gap={12} align="center">
-                          <PulseMark size={40} title="Pulse" />
+                          <PulseMark size={40} title="BDA OS" />
                           <div className="af-featured-copy">
-                            <Title level={5}>Pulse</Title>
-                            <Button type="link" onClick={() => go('/pulse')}>
-                              Open Pulse now
+                            <Title level={5}>BDA OS</Title>
+                            <Button type="link" onClick={() => go(APP_BASE)}>
+                              Open BDA OS now
                             </Button>
                           </div>
                         </Flex>

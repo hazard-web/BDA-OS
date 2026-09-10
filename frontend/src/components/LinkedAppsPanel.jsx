@@ -13,6 +13,7 @@ import {
 } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import api from '../api'
+import { PULSE_HOME } from '../utils/pulseEntry'
 import { oauthStartUrl } from './auth/oauthUrls'
 import './linked-apps.css'
 
@@ -85,7 +86,7 @@ export default function LinkedAppsPanel({ email }) {
         Review your linked apps
       </Typography.Title>
       <Typography.Paragraph type="secondary" className="la-lead">
-        See the data you&apos;re sharing with apps assigned in Pulse, and Sign in with Google
+        See the data you&apos;re sharing with apps assigned in BDA OS, and Sign in with Google
         apps imported from Google Workspace.{' '}
         <Typography.Link
           href="https://support.google.com/accounts/answer/3466521"
@@ -123,7 +124,7 @@ export default function LinkedAppsPanel({ email }) {
           description={
             <span>
               {google.message ||
-                `Google Account can show dozens of apps for ${email || 'this email'}. People OS cannot read that page with Sign in with Google (email and profile only). Import them with Google Workspace admin access, or assign apps in Pulse Organization.`}
+                `Google Account can show dozens of apps for ${email || 'this email'}. BDA OS cannot read that page with Sign in with Google (email and profile only). Import them with Google Workspace admin access, or assign apps in Company.`}
             </span>
           }
         >
@@ -134,7 +135,7 @@ export default function LinkedAppsPanel({ email }) {
             <Button onClick={resync} loading={syncing}>
               Sync again
             </Button>
-            <Link to="/pulse/home">Open Pulse</Link>
+            <Link to={PULSE_HOME}>Open BDA OS</Link>
           </Space>
         </Empty>
       ) : (
