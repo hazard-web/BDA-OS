@@ -64,60 +64,6 @@ const NAV = [
     ],
   },
   // Security, MFA, Settings, Sessions, Groups, Privacy — parked on branch `pulse/company-later-services`.
-  // Restore the NAV items below to ship them.
-  // {
-  //   id: 'security',
-  //   label: 'Security',
-  //   icon: <KeyOutlined />,
-  //   children: [
-  //     { id: 'password', label: 'Password' },
-  //     { id: 'additional-verification', label: 'Additional verification' },
-  //     { id: 'geo-fencing', label: 'Geo-fencing' },
-  //     { id: 'account-recovery', label: 'Account Recovery' },
-  //     { id: 'allowed-ip', label: 'Allowed IP Address' },
-  //     { id: 'app-passwords', label: 'App Passwords' },
-  //     { id: 'device-signins', label: 'Device Sign-ins' },
-  //   ],
-  // },
-  // {
-  //   id: 'mfa',
-  //   label: 'Multi-factor auth',
-  //   icon: <MobileOutlined />,
-  //   children: [{ id: 'mfa-modes', label: 'MFA Modes' }],
-  // },
-  // {
-  //   id: 'settings',
-  //   label: 'Settings',
-  //   icon: <SettingOutlined />,
-  //   children: [
-  //     { id: 'preferences', label: 'Preferences' },
-  //     { id: 'notifications', label: 'Notifications' },
-  //     { id: 'authorized-websites', label: 'Authorized Websites' },
-  //     { id: 'linked-accounts', label: 'Linked Accounts' },
-  //     { id: 'close-account', label: 'Close Account' },
-  //   ],
-  // },
-  // {
-  //   id: 'sessions',
-  //   label: 'Sessions',
-  //   icon: <DesktopOutlined />,
-  //   children: [
-  //     { id: 'active-sessions', label: 'Active Sessions' },
-  //     { id: 'activity-history', label: 'Activity History' },
-  //     { id: 'connected-apps', label: 'Connected Apps' },
-  //     { id: 'app-signins', label: 'App Sign-Ins' },
-  //   ],
-  // },
-  // { id: 'groups', label: 'Groups', icon: <TeamOutlined /> },
-  // {
-  //   id: 'privacy',
-  //   label: 'Privacy',
-  //   icon: <LockOutlined />,
-  //   children: [
-  //     { id: 'data-processing', label: 'Data Processing Addendum' },
-  //     { id: 'manage-contacts', label: 'Manage Your Contacts' },
-  //   ],
-  // },
 ]
 
 const PROFILE_SECTIONS = new Set(['personal', 'email', 'mobile'])

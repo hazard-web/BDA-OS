@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const express = require('express')
+const mongoose = require('mongoose')
 const { auth } = require('./auth')
 const Candidate = require('../models/Candidate')
 const User = require('../models/User')
@@ -52,7 +53,8 @@ function fileMeta(file) {
     name: file.name,
     mime: file.mime || '',
     size: file.size || 0,
-    hasFile: Boolean(file.data),
+    // Prefer size/name — list queries omit base64 `data` on purpose.
+    hasFile: Boolean(file.data) || Boolean(file.size) || Boolean(file.name),
   }
 }
 
@@ -533,13 +535,32 @@ router.get('/', auth, requireAdmin, async (req, res) => {
     const location = cleanStr(req.query.location)
     const status = cleanStr(req.query.status)
     const scope = cleanStr(req.query.scope) || 'all'
-    const filter = { organizationId }
+    const filter = {
+      organizationId: isId(organizationId)
+        ? new mongoose.Types.ObjectId(organizationId)
+        : organizationId,
+    }
     if (department && department !== 'all') filter.department = department
     if (location && location !== 'all') filter.workLocation = location
     if (status && STATUSES.includes(status)) filter.status = status
     if (scope === 'mine') filter.addedBy = req.user._id
 
-    let rows = await Candidate.find(filter).sort({ createdAt: -1 }).limit(500).lean()
+    // Never load base64 file payloads on the table list — those can be multi‑MB
+    // per row and make /candidates hang until the browser times out (empty UI).
+    let rows = await Candidate.find(filter)
+      .select(
+        [
+          '-photo.data',
+          '-offerLetter.data',
+          '-aadhaarFront.data',
+          '-aadhaarBack.data',
+          '-panFront.data',
+          '-panBack.data',
+        ].join(' '),
+      )
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean()
     if (q) {
       rows = rows.filter((row) => {
         const blob = [

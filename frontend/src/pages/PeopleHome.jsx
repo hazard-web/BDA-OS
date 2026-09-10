@@ -516,7 +516,8 @@ export default function PeopleHome() {
   const showOrgTime = space === 'organization' && sub === 'time'
   const showOrgAttendance = space === 'organization' && sub === 'attendance'
   const showOrgApps = space === 'organization' && sub === 'apps'
-  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgApps
+  const showOrgPeople = space === 'organization' && sub === 'people'
+  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgApps || showOrgPeople
   const liveKind = space === 'myspace' && ({
     onboarding: 'onboarding',
     performance: 'performance',
@@ -822,7 +823,7 @@ export default function PeopleHome() {
       <AntLayout className="pulse-mid">
         <AntLayout className="pulse-maincol">
           {!showAccount && !showOnboarding && !showAttendance && !showTimesheet && !showOrgTime && !showOrgAttendance && !showOrgApps ? (
-          <div className={`pulse-sub${showOverview || showOrgOverview || showCalendar || showLeave || showAttendance ? ' pulse-sub-overview' : ''}`} role="tablist" aria-label={showLeave ? 'Leave Tracker sections' : space === 'organization' ? 'Company sections' : 'You sections'}>
+          <div className={`pulse-sub${showOverview || showOrgOverview || showOrgPeople || showCalendar || showLeave || showAttendance ? ' pulse-sub-overview' : ''}`} role="tablist" aria-label={showLeave ? 'Leave Tracker sections' : space === 'organization' ? 'Company sections' : 'You sections'}>
             <div className="pulse-sub-tabs">
               {space === 'organization'
                 ? ORG_TABS.filter((item) => item.key !== 'onboarding').map((item) => (
@@ -831,7 +832,7 @@ export default function PeopleHome() {
                       type="button"
                       role="tab"
                       className={`pulse-sub-tab${sub === item.key ? ' is-on' : ''}`}
-                      onClick={() => setSub(item.key)}
+                      onClick={() => goShell({ space: 'organization', module: 'home', sub: item.key })}
                     >
                       {item.label}
                     </button>
