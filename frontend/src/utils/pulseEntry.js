@@ -242,7 +242,7 @@ const LEGACY_RESUME_PATHS = {
 
 /** Where to open BDA OS from the apps launcher / deep links. */
 export function getPulseOpenPath(user) {
-  if (!hasPulseAccount(user)) return APP_BASE
+  if (!hasPulseAccount(user)) return PULSE_HOME
   // Getting Started parked on `pulse/company-later-services`:
   // if (!hasPulseSampleChoice() || needsPulseGettingStartedGuide()) {
   //   return getPulseGettingStartedPath(user)
@@ -258,13 +258,8 @@ export function getPulseOpenPath(user) {
   return PULSE_HOME
 }
 
-/** After invite / login / OAuth — My Space welcome, not Getting Started. */
-export function getPostLoginPath(user) {
-  if (!hasPulseAccount(user)) return APP_BASE
-  // Getting Started parked on `pulse/company-later-services`:
-  // if (!hasPulseSampleChoice() || needsPulseGettingStartedGuide()) {
-  //   return getPulseGettingStartedPath(user)
-  // }
+/** After invite / login / OAuth — open You directly (no marketing landing). */
+export function getPostLoginPath(_user) {
   return PULSE_HOME
 }
 
