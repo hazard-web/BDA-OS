@@ -54,6 +54,7 @@ import { ORG_OPEN_SUBS, isPulseServicePath, openPulsePage, openPulsePath, pathFo
 import {
   formatElapsed,
   getElapsedSeconds,
+  hydrateCheckInFromServer,
   PULSE_CHECKIN_EVENT,
   readCheckInAt,
   rolloverCheckInDayIfNeeded,
@@ -394,11 +395,13 @@ export default function PeopleHome() {
     if (!user?.email) return undefined
     let live = true
     prefetchPulseLocation()
-    void rolloverCheckInDayIfNeeded(user.email).finally(() => {
-      if (!live) return
-      setCheckedInAt(readCheckInAt(user.email))
-      setElapsed(getElapsedSeconds(user.email))
-    })
+    void rolloverCheckInDayIfNeeded(user.email)
+      .then(() => hydrateCheckInFromServer(user.email))
+      .finally(() => {
+        if (!live) return
+        setCheckedInAt(readCheckInAt(user.email))
+        setElapsed(getElapsedSeconds(user.email))
+      })
     const onChange = (event) => {
       if (event?.detail?.email && event.detail.email !== user.email) return
       const nextAt = event?.detail?.checkedInAt ?? readCheckInAt(user.email)
@@ -432,7 +435,7 @@ export default function PeopleHome() {
     return () => window.clearInterval(id)
   }, [checkedInAt, user?.email])
 
-  const onCheckIn = () => {
+  const onCheckIn = async () => {
     if (!user?.email || checkBusy) return
     setCheckBusy(true)
     const isActive = Boolean(readCheckInAt(user.email))
@@ -450,8 +453,15 @@ export default function PeopleHome() {
         })
       } else {
         closeCheckInPip()
-        const resuming = getElapsedSeconds(user.email) > 0
-        const session = startCheckIn(user.email, Date.now())
+        // Resume from server day total so timer matches calendar (e.g. 3h 45m), not 00:00.
+        const hydrated = await hydrateCheckInFromServer(user.email)
+        const baseActiveMs = Math.max(
+          0,
+          Number(hydrated?.activeMs) || 0,
+          getElapsedSeconds(user.email) * 1000,
+        )
+        const resuming = baseActiveMs > 0
+        const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
         setCheckedInAt(session?.checkedInAt || Date.now())
         const secs = getElapsedSeconds(user.email)
         setElapsed(secs)

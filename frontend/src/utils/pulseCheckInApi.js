@@ -50,6 +50,11 @@ export async function fetchTimesheetToday(date) {
   return res.data?.data || null
 }
 
+export async function fetchPulseWorkDayToday(date) {
+  const res = await api.get('/pulse-checkin/today', { params: { date: date || dayKey() } })
+  return res.data?.data || null
+}
+
 export async function saveTimesheetDraft({ date, entries, email } = {}) {
   const res = await api.put('/pulse-checkin/timesheet/today', {
     date: date || dayKey(),
