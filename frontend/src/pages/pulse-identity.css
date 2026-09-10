@@ -44,6 +44,7 @@
   border-bottom: 1px solid rgba(20, 32, 25, 0.08);
   backdrop-filter: blur(22px) saturate(1.2);
   -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  overflow: visible;
 }
 
 .pulse-shell.pulse-id .pulse-space {
@@ -67,7 +68,27 @@
 .pulse-shell.pulse-id .pulse-top-tools .ant-btn-text:hover,
 .pulse-shell.pulse-id .pulse-top-tools .ant-btn-text:focus-visible {
   color: #142019 !important;
-  background: rgba(20, 32, 25, 0.06) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.pulse-shell.pulse-id .pulse-appearance-btn {
+  color: #3a4a3e;
+  background: none !important;
+  background-color: transparent !important;
+}
+
+.pulse-shell.pulse-id .pulse-appearance-btn:hover,
+.pulse-shell.pulse-id .pulse-appearance-btn:focus,
+.pulse-shell.pulse-id .pulse-appearance-btn:focus-visible,
+.pulse-shell.pulse-id .pulse-appearance-btn:active,
+.pulse-shell.pulse-id .pulse-appearance-btn.ant-tooltip-open {
+  color: #142019 !important;
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 .pulse-shell.pulse-id .pulse-head-timer {

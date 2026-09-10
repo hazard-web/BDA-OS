@@ -321,7 +321,13 @@ export const EMPLOYEE_STEP_FIELDS = {
   ],
   id: ['aadhaarFront', 'aadhaarBack', 'panFront'],
   address: [],
-  work: [],
+  work: [
+    'highestQualification',
+    ['education', 0, 'schoolName'],
+    ['education', 0, 'degree'],
+    ['education', 0, 'fieldOfStudy'],
+    ['education', 0, 'dateOfCompletion'],
+  ],
 }
 
 function dobDisabledDate(current) {
@@ -598,8 +604,16 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="highestQualification" label="Qualification">
-              <Input disabled={disabled} />
+            <Form.Item
+              name="highestQualification"
+              label="Qualification"
+              rules={
+                publicLayout && !disabled
+                  ? [{ required: true, message: 'Highest qualification is required' }]
+                  : []
+              }
+            >
+              <Input disabled={disabled} placeholder="e.g. B.Tech, MBA" />
             </Form.Item>
           </Col>
           <Col span={24}>
@@ -608,8 +622,23 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
             </Form.Item>
           </Col>
         </Row>
-        <Form.List name="education">
-          {(fields, { add, remove }) => (
+        <Form.List
+          name="education"
+          rules={
+            publicLayout && !disabled
+              ? [
+                  {
+                    validator: async (_, rows) => {
+                      if (!rows?.length) {
+                        throw new Error('Add at least one education entry')
+                      }
+                    },
+                  },
+                ]
+              : []
+          }
+        >
+          {(fields, { add, remove }, { errors }) => (
             <>
               <div className="ob-section-head">
                 <Typography.Title level={5}>Education</Typography.Title>
@@ -619,33 +648,50 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                   </Button>
                 )}
               </div>
+              <Form.ErrorList errors={errors} />
               {publicLayout ? (
                 <div className="ob-entry-list">
                   {fields.map((field) => (
                     <div className="ob-entry-card" key={field.key}>
                       <Row gutter={16}>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'schoolName']} label="School">
+                          <Form.Item
+                            name={[field.name, 'schoolName']}
+                            label="School"
+                            rules={[{ required: true, message: 'School is required' }]}
+                          >
                             <Input disabled={disabled} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'degree']} label="Degree">
+                          <Form.Item
+                            name={[field.name, 'degree']}
+                            label="Degree"
+                            rules={[{ required: true, message: 'Degree is required' }]}
+                          >
                             <Input disabled={disabled} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'fieldOfStudy']} label="Field">
+                          <Form.Item
+                            name={[field.name, 'fieldOfStudy']}
+                            label="Field"
+                            rules={[{ required: true, message: 'Field of study is required' }]}
+                          >
                             <Input disabled={disabled} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'dateOfCompletion']} label="Year">
+                          <Form.Item
+                            name={[field.name, 'dateOfCompletion']}
+                            label="Year"
+                            rules={[{ required: true, message: 'Completion year is required' }]}
+                          >
                             <Input placeholder="YYYY" disabled={disabled} />
                           </Form.Item>
                         </Col>
                       </Row>
-                      {disabled ? null : (
+                      {disabled || fields.length <= 1 ? null : (
                         <Button type="text" danger icon={<DeleteOutlined />} aria-label="Remove education" onClick={() => remove(field.name)}>
                           Remove
                         </Button>
@@ -670,7 +716,7 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                       <Form.Item name={[field.name, 'fieldOfStudy']}><Input disabled={disabled} /></Form.Item>
                       <Form.Item name={[field.name, 'dateOfCompletion']}><Input placeholder="MMM yyyy" disabled={disabled} /></Form.Item>
                       <Form.Item name={[field.name, 'additionalNotes']}><Input.TextArea rows={1} disabled={disabled} /></Form.Item>
-                      {disabled ? <span /> : (
+                      {disabled || fields.length <= 1 ? <span /> : (
                         <Button type="text" danger icon={<DeleteOutlined />} aria-label="Remove education row" onClick={() => remove(field.name)} />
                       )}
                     </div>

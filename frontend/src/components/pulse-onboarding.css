@@ -938,12 +938,56 @@
 }
 
 .ob-status-tag {
-  margin-inline-end: 0;
+  margin-inline-end: 0 !important;
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: 650;
   font-size: 12px;
   line-height: 20px;
-  padding: 0 10px;
+  padding: 1px 10px;
+  border: 1px solid transparent;
+  letter-spacing: 0.01em;
+}
+
+.ob-status-tag--draft {
+  color: #44403c;
+  background: #f5f5f4;
+  border-color: #e7e5e4;
+}
+
+.ob-status-tag--not-started {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.ob-status-tag--in-progress {
+  color: #0f3d2e;
+  background: #e6f4ee;
+  border-color: #9dceb8;
+}
+
+.ob-status-tag--details {
+  color: #5b21b6;
+  background: #f3e8ff;
+  border-color: #d8b4fe;
+}
+
+.ob-status-tag--offer {
+  color: #0e7490;
+  background: #cffafe;
+  border-color: #67e8f9;
+}
+
+.ob-status-tag--joined {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.ob-status-tag--withdrawn {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
 }
 
 .ob-hire-banner {
