@@ -19,8 +19,16 @@ const {
   formatLocationLabel,
   enrichLocation,
 } = require('../utils/requestMeta');
+const {
+  TARGET_HOURS,
+  assertWritableDate,
+  applyTrustedActiveMs,
+  closeOpenSession,
+  findOpenSession,
+  touchHeartbeat,
+  msToHours: trustedMsToHours,
+} = require('../utils/pulseTrustedTime');
 
-const TARGET_HOURS = 9;
 const PULSE_CASUAL_ANNUAL = 18;
 
 async function linkedStaff(user) {
@@ -96,7 +104,18 @@ function todayKey(raw) {
 }
 
 function msToHours(ms) {
-  return Math.round((Math.max(0, Number(ms) || 0) / 3_600_000) * 100) / 100;
+  return trustedMsToHours(ms);
+}
+
+function applyAnomaly(doc, anomaly) {
+  if (!anomaly?.flagged) return;
+  doc.anomaly = {
+    flagged: true,
+    reason: anomaly.reason || 'Hours exceed session wall time',
+    at: anomaly.at || new Date(),
+    wallMs: anomaly.wallMs || 0,
+    activeMs: anomaly.activeMs || doc.totalActiveMs || 0,
+  };
 }
 
 async function getOrCreateDay(userId, email, date) {
@@ -150,6 +169,16 @@ function serializeDay(doc) {
     taskMinutes: taskMinutesOf(plain),
     timesheetSubmitted: Boolean(plain.timesheetSubmitted),
     taskEntries: Array.isArray(plain.taskEntries) ? plain.taskEntries : [],
+    anomaly: plain.anomaly?.flagged
+      ? {
+          flagged: true,
+          reason: plain.anomaly.reason || '',
+          at: plain.anomaly.at || null,
+          wallMs: plain.anomaly.wallMs || 0,
+          activeMs: plain.anomaly.activeMs || plain.totalActiveMs || 0,
+        }
+      : null,
+    lastHeartbeatAt: plain.lastHeartbeatAt || null,
   };
 }
 
@@ -374,9 +403,9 @@ router.post('/timesheet/submit', auth, async (req, res) => {
 // POST /api/pulse-checkin/check-in
 router.post('/check-in', auth, async (req, res) => {
   try {
-    const date = todayKey(req.body?.date);
+    const date = assertWritableDate(req.body?.date);
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
-    const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
+    const clientActiveMs = Math.max(0, Number(req.body?.activeMs) || 0);
     const location = await enrichLocation(req.body?.location);
     const ip = clientIp(req);
     const userAgent = clientUserAgent(req);
@@ -387,10 +416,22 @@ router.post('/check-in', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'This day is already closed for timesheet' });
     }
 
+    // Close a dangling open session before opening a new one (tab crash / missed check-out).
+    const dangling = findOpenSession(doc);
+    if (dangling) {
+      const trustedClose = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
+      doc.totalActiveMs = trustedClose.totalActiveMs;
+      applyAnomaly(doc, trustedClose.anomaly);
+      closeOpenSession(doc, now, { location, ip, userAgent });
+    } else {
+      const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: false });
+      doc.totalActiveMs = trusted.totalActiveMs;
+    }
+
     const isResume = Boolean(doc.sessions?.length);
     doc.status = 'active';
-    doc.totalActiveMs = Math.max(doc.totalActiveMs || 0, activeMs);
     doc.email = email;
+    touchHeartbeat(doc, now);
 
     doc.sessions.push({
       checkInAt: now,
@@ -429,34 +470,36 @@ router.post('/check-in', auth, async (req, res) => {
 
     res.json({ success: true, data: serializeDay(doc) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message || 'Check-in failed' });
+    const status = err.status || 500;
+    res.status(status).json({ success: false, message: err.message || 'Check-in failed' });
   }
 });
 
 // POST /api/pulse-checkin/check-out
 router.post('/check-out', auth, async (req, res) => {
   try {
-    const date = todayKey(req.body?.date);
+    const date = assertWritableDate(req.body?.date);
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
-    const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
+    const clientActiveMs = Math.max(0, Number(req.body?.activeMs) || 0);
     const location = await enrichLocation(req.body?.location);
     const ip = clientIp(req);
     const userAgent = clientUserAgent(req);
     const now = new Date();
 
     const doc = await getOrCreateDay(req.user._id, email, date);
-    doc.totalActiveMs = Math.max(doc.totalActiveMs || 0, activeMs);
+    if (doc.status === 'closed') {
+      return res.status(400).json({ success: false, message: 'This day is already closed for timesheet' });
+    }
+
+    const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
+    doc.totalActiveMs = trusted.totalActiveMs;
+    applyAnomaly(doc, trusted.anomaly);
     doc.status = 'stopped';
     doc.email = email;
+    touchHeartbeat(doc, now);
 
-    const open = [...(doc.sessions || [])].reverse().find((s) => s.checkInAt && !s.checkOutAt);
-    if (open) {
-      open.checkOutAt = now;
-      open.durationMs = Math.max(0, now.getTime() - new Date(open.checkInAt).getTime());
-      open.locationOut = location;
-      open.ip = open.ip || ip;
-      open.userAgent = open.userAgent || userAgent;
-    } else {
+    const closed = closeOpenSession(doc, now, { location, ip, userAgent });
+    if (!closed) {
       doc.sessions.push({
         checkInAt: now,
         checkOutAt: now,
@@ -511,27 +554,44 @@ router.post('/check-out', auth, async (req, res) => {
         hours: msToHours(doc.totalActiveMs),
         eventType: 'CHECK_OUT',
         workDayId: doc._id,
+        anomaly: Boolean(doc.anomaly?.flagged),
       },
     );
 
     res.json({ success: true, data: serializeDay(doc) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message || 'Check-out failed' });
+    const status = err.status || 500;
+    res.status(status).json({ success: false, message: err.message || 'Check-out failed' });
   }
 });
 
-// POST /api/pulse-checkin/sync — heartbeat / activeMs update while checked in
+// POST /api/pulse-checkin/sync — heartbeat while checked in (requires open session)
 router.post('/sync', auth, async (req, res) => {
   try {
-    const date = todayKey(req.body?.date);
-    const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
+    const date = assertWritableDate(req.body?.date);
+    const clientActiveMs = Math.max(0, Number(req.body?.activeMs) || 0);
     const doc = await PulseWorkDay.findOne({ user: req.user._id, date });
     if (!doc) return res.json({ success: true, data: null });
 
-    doc.totalActiveMs = Math.max(doc.totalActiveMs || 0, activeMs);
+    if (doc.status === 'closed') {
+      return res.status(400).json({ success: false, message: 'This day is already closed' });
+    }
+    if (doc.status !== 'active' || !findOpenSession(doc)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sync requires an active check-in session',
+        code: 'NOT_CHECKED_IN',
+      });
+    }
+
+    const now = new Date();
+    const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
+    doc.totalActiveMs = trusted.totalActiveMs;
+    applyAnomaly(doc, trusted.anomaly);
+    touchHeartbeat(doc, now);
+
     const targetMs = (doc.targetHours || TARGET_HOURS) * 3_600_000;
     if (!doc.targetReachedAt && doc.totalActiveMs >= targetMs) {
-      const now = new Date();
       doc.targetReachedAt = now;
       doc.events.push({
         type: 'TARGET_REACHED',
@@ -550,31 +610,32 @@ router.post('/sync', auth, async (req, res) => {
     await doc.save();
     res.json({ success: true, data: serializeDay(doc) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message || 'Sync failed' });
+    const status = err.status || 500;
+    res.status(status).json({ success: false, message: err.message || 'Sync failed' });
   }
 });
 
 // POST /api/pulse-checkin/finalize-day — midnight / new-day timesheet log
 router.post('/finalize-day', auth, async (req, res) => {
   try {
-    const date = todayKey(req.body?.date);
+    const date = todayKey(req.body?.date); // past days allowed for rollover
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
-    const activeMs = Math.max(0, Number(req.body?.activeMs) || 0);
+    const clientActiveMs = Math.max(0, Number(req.body?.activeMs) || 0);
     const location = await enrichLocation(req.body?.location);
     const ip = clientIp(req);
     const userAgent = clientUserAgent(req);
     const now = new Date();
 
     const doc = await getOrCreateDay(req.user._id, email, date);
-    doc.totalActiveMs = Math.max(doc.totalActiveMs || 0, activeMs);
+    const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, {
+      allowInflate: doc.status === 'active',
+    });
+    doc.totalActiveMs = trusted.totalActiveMs;
+    applyAnomaly(doc, trusted.anomaly);
     doc.email = email;
+    touchHeartbeat(doc, now);
 
-    const open = [...(doc.sessions || [])].reverse().find((s) => s.checkInAt && !s.checkOutAt);
-    if (open) {
-      open.checkOutAt = now;
-      open.durationMs = Math.max(0, now.getTime() - new Date(open.checkInAt).getTime());
-      open.locationOut = location || open.locationOut;
-    }
+    closeOpenSession(doc, now, { location, ip, userAgent });
 
     if (!doc.timesheetLogged) {
       doc.timesheetLogged = true;

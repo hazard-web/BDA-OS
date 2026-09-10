@@ -1,7 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import api from '../api'
 import { broadcastPulseLogout, clearPulseLogoutOrigin } from '../utils/pulseAuthSync'
 import { clearWelcomeCurtainSeen } from '../utils/pulseWelcomeCurtain'
+import { endCheckInOnLogout } from '../utils/pulseCheckIn'
+import { closeCheckInPip } from '../utils/pulseCheckInPip'
 
 const AuthContext = createContext()
 
@@ -13,6 +15,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(() => {
     return typeof window !== 'undefined' ? !!localStorage.getItem('token') : false
   })
+  const userRef = useRef(null)
+  userRef.current = user
 
   // useCallback keeps these function identities stable across renders
   // so consumers that depend on them (useEffect deps, etc.) don't re-fire.
@@ -25,6 +29,13 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(() => {
+    const email = userRef.current?.email
+    try {
+      endCheckInOnLogout(email)
+      closeCheckInPip()
+    } catch {
+      /* keep logout resilient */
+    }
     localStorage.removeItem('token')
     api.invalidateCache?.('/auth/')
     clearWelcomeCurtainSeen()

@@ -467,7 +467,7 @@ export default function PeopleHome() {
         setElapsed(secs)
         message.success({
           content: resuming
-            ? `Resumed · ${formatElapsed(secs)}`
+            ? `Checked in again · ${formatElapsed(secs)}`
             : `Checked in · ${format(new Date(), 'h:mm a')}`,
           className: 'pulse-message',
           duration: 2,

@@ -303,9 +303,25 @@ if (!process.env.VERCEL) {
 // request doesn't pay the connection cost. Safe to call repeatedly.
 ensureMongoConnection()
   .then(() => {
+    const dbName = String(mongoose.connection.name || '');
+    const host = String(mongoose.connection.host || '');
+    const appEnv = String(process.env.APP_ENV || process.env.PULSE_ENV || '').toLowerCase();
+    const looksUat = /uat/i.test(dbName) || /peopleos-uat|2lx667p/i.test(host);
+    const looksProd = (/prod/i.test(dbName) || /bdaosprod/i.test(host)) && !/uat/i.test(dbName);
+
     console.log('✅ Connected to MongoDB');
     console.log('🌐 DB HOST:', mongoose.connection.host);
-    console.log('📂 DB NAME:', mongoose.connection.name);
+    console.log('📂 DB NAME:', dbName);
+
+    // Guardrails: local/UAT share peopleos_uat; production must use BDAOSPROD / peopleos_prod.
+    if ((appEnv === 'production' || appEnv === 'prod') && looksUat) {
+      console.error('❌ Refusing to run: APP_ENV=production is pointed at a UAT database.');
+      console.error('   Set production MONGODB_URI to the BDAOSPROD cluster, not peopleos_uat.');
+      process.exit(1);
+    }
+    if ((appEnv === 'uat' || appEnv === 'development' || appEnv === 'local') && looksProd) {
+      console.warn('⚠️  Non-production process connected to a production cluster/DB:', host || dbName);
+    }
   })
   .catch((err) => {
     console.error('❌ MongoDB connection error (server is still up - requests will return DB_UNREACHABLE until DB is reachable):');
