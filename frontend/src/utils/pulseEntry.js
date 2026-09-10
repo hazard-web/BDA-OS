@@ -1,4 +1,5 @@
-const PULSE_GETTING_STARTED_SUFFIX = '/settings/service/getting-started'
+// Getting Started path helper — parked on branch `pulse/company-later-services`.
+// const PULSE_GETTING_STARTED_SUFFIX = '/settings/service/getting-started'
 
 /** Paths that must never be treated as a portal name. */
 const RESERVED_PORTAL_SEGMENTS = new Set([
@@ -8,6 +9,8 @@ const RESERVED_PORTAL_SEGMENTS = new Set([
   'apps',
   'portal',
   'pulse',
+  'bda-os',
+  'bdaos',
   'people',
   'setup',
   'oauth',
@@ -26,16 +29,48 @@ const RESERVED_PORTAL_SEGMENTS = new Set([
   'reset-password',
   'verify',
   'verify-email',
+  'invite',
+  'onboard',
   'api',
 ])
 
-export const PULSE_HOME = '/pulse/home'
+export const APP_BASE = '/bda-os'
+export const APP_ROOT = APP_BASE
+export const APP_COMPANY = `${APP_BASE}/company`
+export const APP_NOTES = `${APP_BASE}/notes`
+export const APP_TIMER = `${APP_BASE}/checkin-timer`
+export const PULSE_HOME = `${APP_BASE}/home`
 
-const PULSE_SKIP_REMEMBER = new Set([
-  '/pulse',
-  '/pulse/getting-started',
-  `/pulse${PULSE_GETTING_STARTED_SUFFIX}`,
-])
+export function isAppPath(pathname) {
+  const path = String(pathname || '').replace(/\/+$/, '') || '/'
+  return (
+    path === APP_BASE ||
+    path.startsWith(`${APP_BASE}/`) ||
+    path === '/pulse' ||
+    path.startsWith('/pulse/')
+  )
+}
+
+export function toAppPath(pathname) {
+  let path = String(pathname || '')
+  if (path === '/pulse' || path.startsWith('/pulse/')) {
+    path = path.replace(/^\/pulse/, APP_BASE)
+  }
+  if (path === `${APP_BASE}/time` || path.startsWith(`${APP_BASE}/time/`)) {
+    return path.replace(`${APP_BASE}/time`, `${APP_BASE}/hours`)
+  }
+  return path
+}
+
+export function isBdaOsAppLink(to) {
+  const value = String(to || '')
+  return (
+    value === APP_BASE ||
+    value.startsWith(`${APP_BASE}/`) ||
+    value === '/pulse' ||
+    value.startsWith('/pulse/')
+  )
+}
 
 export function normalizePulsePortalId(portalId) {
   return String(portalId || '')
@@ -72,8 +107,32 @@ export function isReservedPortalSegment(segment) {
   return !id || RESERVED_PORTAL_SEGMENTS.has(id)
 }
 
-/** Pulse path: /{portalName}/settings/service/getting-started */
-export function getPulseGettingStartedPath(userOrPortalId) {
+export function suggestedPulseSetupPayload(user) {
+  const companyName = String(user?.companyName || '').trim() || 'My company'
+  let portalId = suggestPulsePortalId({ ...user, companyName })
+  if (!portalId || portalId.length < 6) {
+    portalId = normalizePulsePortalId(`${portalId || 'org'}hq`)
+  }
+  while (portalId.length < 6) portalId += 'x'
+  if (isReservedPortalSegment(portalId)) {
+    portalId = normalizePulsePortalId(`${portalId}hq`)
+  }
+  if (!portalId || portalId.length < 6) portalId = 'orghome'
+  return {
+    companyName,
+    portalId: portalId.slice(0, 50),
+    industry: String(user?.industry || '').trim() || 'Other',
+    employeeCount: String(user?.pulseEmployeeCount || '').trim() || '1',
+  }
+}
+
+/**
+ * Getting Started URLs — parked on branch `pulse/company-later-services`.
+ * Invited employees sign in to My Space (`PULSE_HOME`) and the welcome curtain.
+ */
+export function getPulseGettingStartedPath(_userOrPortalId) {
+  return PULSE_HOME
+  /*
   if (userOrPortalId && typeof userOrPortalId === 'object') {
     const portalId = suggestPulsePortalId(userOrPortalId)
     if (!portalId || isReservedPortalSegment(portalId)) {
@@ -87,10 +146,11 @@ export function getPulseGettingStartedPath(userOrPortalId) {
     return `/pulse${PULSE_GETTING_STARTED_SUFFIX}`
   }
   return `/${portalId}${PULSE_GETTING_STARTED_SUFFIX}`
+  */
 }
 
-/** @deprecated use getPulseGettingStartedPath(user) */
-export const PULSE_GETTING_STARTED = `/pulse${PULSE_GETTING_STARTED_SUFFIX}`
+/** @deprecated Getting Started parked on `pulse/company-later-services`. */
+export const PULSE_GETTING_STARTED = PULSE_HOME
 
 export function hasPulseSampleChoice() {
   try {
@@ -124,13 +184,15 @@ export function dismissPulseGuide() {
   }
 }
 
-/** Allow returning to Getting Started from /pulse. */
+/** Allow returning to Getting Started from /pulse. Parked — restore from `pulse/company-later-services`. */
 export function reopenPulseGuide() {
+  /*
   try {
     localStorage.removeItem('pulseGuideDismissed')
   } catch {
-    /* ignore */
+    // ignore
   }
+  */
 }
 
 /** Clear local Pulse onboarding flags (sample choice / last path). */
@@ -144,13 +206,10 @@ export function clearPulseLocalState() {
   }
 }
 
-/** True when own-data users still need the Getting Started hub. */
+/** True when own-data users still need the Getting Started hub. Parked on `pulse/company-later-services`. */
 export function needsPulseGettingStartedGuide() {
-  return getPulseSampleChoice() === '0' && !hasPulseGuideDismissed()
-}
-
-function isGettingStartedPath(path) {
-  return typeof path === 'string' && path.endsWith(PULSE_GETTING_STARTED_SUFFIX)
+  return false
+  // return getPulseSampleChoice() === '0' && !hasPulseGuideDismissed()
 }
 
 export function markPulseAccountCreated(portalId) {
@@ -175,24 +234,23 @@ export function hasPulseAccount(user) {
   }
 }
 
-/** Where to open Pulse from the apps launcher / deep links. */
+const PULSE_RESUME_PATHS = new Set([PULSE_HOME, APP_COMPANY])
+const LEGACY_RESUME_PATHS = {
+  '/pulse/home': PULSE_HOME,
+  '/pulse/company': APP_COMPANY,
+}
+
+/** Where to open BDA OS from the apps launcher / deep links. */
 export function getPulseOpenPath(user) {
-  if (!hasPulseAccount(user)) return '/pulse'
-  if (!hasPulseSampleChoice() || needsPulseGettingStartedGuide()) {
-    return getPulseGettingStartedPath(user)
-  }
+  if (!hasPulseAccount(user)) return APP_BASE
+  // Getting Started parked on `pulse/company-later-services`:
+  // if (!hasPulseSampleChoice() || needsPulseGettingStartedGuide()) {
+  //   return getPulseGettingStartedPath(user)
+  // }
 
   try {
-    const last = localStorage.getItem('pulseLastPath')
-    if (
-      last &&
-      last.startsWith('/') &&
-      last !== '/pulse' &&
-      !PULSE_SKIP_REMEMBER.has(last) &&
-      !isGettingStartedPath(last)
-    ) {
-      return last
-    }
+    const last = LEGACY_RESUME_PATHS[localStorage.getItem('pulseLastPath')] || localStorage.getItem('pulseLastPath')
+    if (last && PULSE_RESUME_PATHS.has(last)) return last
   } catch {
     /* ignore */
   }
@@ -200,18 +258,21 @@ export function getPulseOpenPath(user) {
   return PULSE_HOME
 }
 
-/** After company login / OAuth — land on Accounts for everyone. */
+/** After invite / login / OAuth — My Space welcome, not Getting Started. */
 export function getPostLoginPath(user) {
-  if (user?.onboardingCompleted === false) return '/setup'
-  return '/account'
+  if (!hasPulseAccount(user)) return APP_BASE
+  // Getting Started parked on `pulse/company-later-services`:
+  // if (!hasPulseSampleChoice() || needsPulseGettingStartedGuide()) {
+  //   return getPulseGettingStartedPath(user)
+  // }
+  return PULSE_HOME
 }
 
-/** Remember last Pulse screen so reopen resumes there. */
+/** Remember last Pulse screen so reopen resumes there. Never persist service URLs. */
 export function rememberPulsePath(pathname) {
   if (!pathname) return
-  const path = pathname.replace(/\/+$/, '') || '/'
-  if (PULSE_SKIP_REMEMBER.has(path) || isGettingStartedPath(path)) return
-  if (!(path.startsWith('/pulse') || /^\/[^/]+\/settings\//.test(path))) return
+  const path = toAppPath(pathname.replace(/\/+$/, '') || '/')
+  if (!PULSE_RESUME_PATHS.has(path)) return
   try {
     localStorage.setItem('pulseLastPath', path)
   } catch {

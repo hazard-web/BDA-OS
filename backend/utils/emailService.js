@@ -2,22 +2,6 @@ const nodemailer = require('nodemailer');
 const { generatePayslipPDFBuffer } = require('./pdfBuffer');
 const { buildSetupLink, buildVerifyLink } = require('./urlHelper');
 
-/**
- * Build a valid SMTP `from` address.
- * EMAIL_FROM should be just the email (e.g. user@gmail.com).
- * displayName is the sender label shown in email clients.
- */
-function buildFromAddress(displayName) {
-  const fromEmail = sanitizeEmailValue(process.env.EMAIL_FROM) || sanitizeEmailValue(process.env.EMAIL_USER);
-  const safeDisplayName = String(displayName || 'PaySlip Pro').replace(/"/g, '').trim() || 'PaySlip Pro';
-  return `"${safeDisplayName}" <${fromEmail}>`;
-}
-
-/**
- * Sanitize a value that may have been wrapped in markdown link syntax
- * (e.g. "[rkg98521@gmail.com](mailto:rkg98521@gmail.com)" → "rkg98521@gmail.com").
- * This happens when a user pastes a value from rendered markdown.
- */
 function sanitizeEmailValue(value) {
   if (!value) return '';
   let v = String(value).trim();
@@ -27,74 +11,254 @@ function sanitizeEmailValue(value) {
   return v.trim();
 }
 
+function resendApiKey() {
+  return String(process.env.RESEND_API_KEY || '').trim();
+}
+
+function smtpHost() {
+  return String(process.env.EMAIL_HOST || '').trim();
+}
+
+function smtpPort() {
+  const n = Number(process.env.EMAIL_PORT);
+  return Number.isFinite(n) && n > 0 ? n : 587;
+}
+
+function smtpAuth() {
+  return {
+    user: sanitizeEmailValue(process.env.EMAIL_USER),
+    pass: String(process.env.EMAIL_PASS || '').trim(),
+  };
+}
+
+function hasSmtpConfig() {
+  const { user, pass } = smtpAuth();
+  if (!smtpHost() || !user || !pass) return false;
+  if (pass.includes('PASTE_') || pass.includes('YOUR_') || pass.includes('XXXX')) return false;
+  return true;
+}
+
+function extractEmailAddress(value) {
+  const match = String(value || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
+  return match ? match[0] : ''
+}
+
+function emailDomain(value) {
+  return (extractEmailAddress(value).split('@')[1] || '').toLowerCase()
+}
+
+function displayNameFrom(value, fallback = 'BDA Technologies') {
+  let raw = String(value || fallback).replace(/"/g, '').trim()
+  const named = raw.match(/^(.+?)\s*<[^>]+>$/)
+  if (named) raw = named[1].trim()
+  if (!raw || raw.includes('@')) return fallback
+  if (raw.toLowerCase() === 'pulse') return fallback
+  return raw
+}
+
+function formatFrom(displayName, address) {
+  const name = displayNameFrom(displayName)
+  const email = extractEmailAddress(address)
+  if (!email) return `${name} <beth.t@example.com>`
+  return `${name} <${email}>`
+}
+
+/**
+ * Resend only accepts a From address on a domain verified for this API key.
+ * Display name is BDA Technologies (or the company). The mailbox must match a verified domain.
+ */
+function resendFromAddress(displayName) {
+  const name = displayNameFrom(displayName)
+  const configured = sanitizeEmailValue(process.env.RESEND_FROM)
+  const domain = emailDomain(configured)
+  const address = extractEmailAddress(configured)
+  if (!address || !domain || domain === 'example.com' || domain === 'example.org') {
+    return `${name} <beth.t@example.com>`
+  }
+  return `${name} <${address}>`
+}
+
+/**
+ * Build a valid SMTP / Resend `from` address.
+ * Resend uses the verified mailbox in RESEND_FROM; the visible name is the company.
+ */
+function buildFromAddress(displayName) {
+  const safeDisplayName = displayNameFrom(displayName)
+  if (hasSmtpConfig()) {
+    const from = sanitizeEmailValue(process.env.EMAIL_FROM)
+    const address = extractEmailAddress(from) || extractEmailAddress(process.env.EMAIL_USER)
+    if (address) return formatFrom(safeDisplayName, address)
+  }
+  if (resendApiKey()) return resendFromAddress(safeDisplayName)
+  const fromEmail = sanitizeEmailValue(process.env.EMAIL_FROM) || sanitizeEmailValue(process.env.EMAIL_USER)
+  return `"${safeDisplayName}" <${fromEmail}>`
+}
+
 /**
  * Detect if the configured credentials look like placeholders.
  */
 function hasRealCredentials() {
+  if (hasSmtpConfig()) return true;
+  if (resendApiKey()) return true;
   const user = sanitizeEmailValue(process.env.EMAIL_USER);
   const pass = (process.env.EMAIL_PASS || '').trim();
   if (!user || !pass) return false;
   if (pass.includes('PASTE_') || pass.includes('YOUR_') || pass.includes('XXXX')) return false;
-  // Gmail App Passwords are exactly 16 chars (letters + digits + spaces)
   if (pass.replace(/\s/g, '').length < 10) return false;
   return true;
 }
 
+function toResendAttachment(file) {
+  const filename = file.filename || file.name || 'attachment';
+  let content = file.content;
+  if (typeof content === 'string' && content.startsWith('data:')) {
+    content = content.split(',')[1];
+  }
+  return { filename, content };
+}
+
+function friendlyMailError(raw) {
+  const text = String(raw || 'Email could not be sent');
+  if (/domain is not verified/i.test(text)) {
+    return 'Resend rejected the sender address. Set RESEND_FROM to an address on a verified domain (see https://resend.com/domains) and restart the API.';
+  }
+  if (/only send testing emails/i.test(text)) {
+    return 'Resend test mode can only deliver to the email on your Resend account. Verify a sending domain at https://resend.com/domains, set RESEND_FROM to an address on that domain, and restart the API.';
+  }
+  return text;
+}
+
+let cachedVerifiedFrom = '';
+
+async function fromVerifiedDomain(resend, displayName) {
+  const name = displayNameFrom(displayName)
+  if (cachedVerifiedFrom) return formatFrom(name, cachedVerifiedFrom)
+  const listed = await resend.domains.list()
+  const rows = listed.data?.data || listed.data || []
+  const verified = rows.find((row) => row && row.status === 'verified' && row.name)
+  if (!verified) return ''
+  cachedVerifiedFrom = `noreply@${verified.name}`
+  return formatFrom(name, cachedVerifiedFrom)
+}
+
+function isNonRetryableMailError(err) {
+  const msg = String(err?.message || '');
+  if (/not verified|testing emails|invalid|forbidden|unauthorized/i.test(msg)) return true;
+  const status = Number(err?.statusCode || err?.status || 0);
+  return status === 400 || status === 401 || status === 403 || status === 422;
+}
+
+async function sendViaResend(mailOptions) {
+  const { Resend } = require('resend');
+  const resend = new Resend(resendApiKey());
+  const to = mailOptions.to;
+  const payload = {
+    from: mailOptions.from || resendFromAddress('BDA OS'),
+    to: Array.isArray(to) ? to : String(to || '').split(',').map((s) => s.trim()).filter(Boolean),
+    subject: mailOptions.subject,
+    html: mailOptions.html,
+  };
+  if (mailOptions.text) payload.text = mailOptions.text;
+  if (mailOptions.replyTo && emailDomain(mailOptions.replyTo) && emailDomain(mailOptions.replyTo) !== 'example.com') {
+    payload.replyTo = mailOptions.replyTo;
+  }
+  if (mailOptions.attachments && mailOptions.attachments.length) {
+    payload.attachments = mailOptions.attachments.map(toResendAttachment);
+  }
+
+  if (['example.com', 'example.org'].includes(emailDomain(payload.from))) {
+    const verifiedFrom = await fromVerifiedDomain(resend, displayNameFrom(payload.from));
+    if (verifiedFrom) payload.from = verifiedFrom;
+  }
+
+  let { data, error } = await resend.emails.send(payload);
+  if (error && /domain is not verified/i.test(error.message || '')) {
+    const fallbackFrom = await fromVerifiedDomain(resend, displayNameFrom(payload.from));
+    if (fallbackFrom && extractEmailAddress(fallbackFrom) !== extractEmailAddress(payload.from)) {
+      console.warn(`Resend rejected ${payload.from}; retrying as ${fallbackFrom}`);
+      payload.from = fallbackFrom;
+      const retry = await resend.emails.send(payload);
+      data = retry.data;
+      error = retry.error;
+    }
+  }
+  if (error) {
+    const raw = error.message || 'Resend email failed';
+    console.error('Resend send failed:', raw, 'from=', payload.from, 'to=', payload.to.join(', '));
+    const err = new Error(friendlyMailError(raw));
+    err.status = error.statusCode || 403;
+    throw err;
+  }
+  return { messageId: data?.id, accepted: payload.to };
+}
+
 /**
- * Create a Gmail SMTP transporter.
- * Requires EMAIL_USER and EMAIL_PASS (Gmail App Password) in .env.
- * Falls back to Ethereal test account ONLY if credentials are missing.
+ * Create a mail transporter.
+ * Prefers SMTP when EMAIL_HOST is set (SocketLabs, etc). Else Resend, else Gmail, else Ethereal.
  */
 async function createSMTPTransporter() {
+  if (hasSmtpConfig()) {
+    const port = smtpPort();
+    const { user, pass } = smtpAuth();
+    const transporter = nodemailer.createTransport({
+      host: smtpHost(),
+      port,
+      secure: port === 465,
+      requireTLS: port !== 465,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+    });
+    try {
+      await transporter.verify();
+    } catch {
+      /* SMTP may still work for send */
+    }
+    return transporter;
+  }
+
+  if (resendApiKey()) {
+    return {
+      sendMail: (opts) => sendViaResend({ ...opts, from: opts.from || resendFromAddress('BDA Technologies') }),
+    };
+  }
+
   const emailUser = sanitizeEmailValue(process.env.EMAIL_USER);
   const emailPass = (process.env.EMAIL_PASS || '').trim();
 
   if (hasRealCredentials()) {
-    // Port 587 + STARTTLS works better on corporate/Windows networks than port 465.
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, // use STARTTLS
+      secure: false,
       requireTLS: true,
       auth: {
         user: emailUser,
         pass: emailPass,
       },
       tls: {
-        rejectUnauthorized: false, // tolerate corporate SSL chains
+        rejectUnauthorized: false,
       },
     });
 
     try {
       await transporter.verify();
-      console.log(`✅ Gmail SMTP verified - real emails will be sent (user=${emailUser})`);
-    } catch (verifyErr) {
-      // Log a clear hint so devs know how to fix credentials
-      console.warn('⚠️  Gmail SMTP verify() failed.');
-      console.warn('   Error:', verifyErr.message);
-      console.warn('   Fix:');
-      console.warn('   1. Enable 2-Step Verification on your Google account');
-      console.warn('   2. Generate a Gmail App Password: https://myaccount.google.com/apppasswords');
-      console.warn('   3. Set EMAIL_PASS in backend/.env to that 16-character password');
-      console.warn('   4. Restart the backend');
-      console.warn('   Will still attempt sendMail (it sometimes succeeds where verify fails).');
+    } catch {
+      /* Gmail may still work for send */
     }
 
     return transporter;
   }
 
-  // Helpful diagnostic when SMTP isn't configured
   const passLooksEmpty = !emailPass;
   const passIsPlaceholder = emailPass.includes('PASTE_') || emailPass.includes('YOUR_') || emailPass.includes('XXXX');
   console.warn('────────────────────────────────────────────────────');
   console.warn('⚠️  Email credentials missing or invalid.');
+  if (!smtpHost()) console.warn('   • EMAIL_HOST is empty in .env');
   if (!emailUser) console.warn('   • EMAIL_USER is empty in .env');
   if (passLooksEmpty) console.warn('   • EMAIL_PASS is empty in .env');
   if (passIsPlaceholder) console.warn('   • EMAIL_PASS is still a placeholder ("' + emailPass.substring(0, 30) + '...")');
-  console.warn('   To enable real email delivery, set:');
-  console.warn('   EMAIL_USER=your.address@gmail.com');
-  console.warn('   EMAIL_PASS=your-16-char-gmail-app-password');
-  console.warn('   (Generate at https://myaccount.google.com/apppasswords)');
+  console.warn('   To enable real email delivery, set EMAIL_HOST + EMAIL_USER + EMAIL_PASS');
+  console.warn('   or RESEND_API_KEY.');
   console.warn('   Falling back to Ethereal test SMTP for development...');
   console.warn('────────────────────────────────────────────────────');
 
@@ -562,9 +726,8 @@ async function sendMailWithRetry(transporter, mailOptions, attempts = 3) {
       return await transporter.sendMail(mailOptions);
     } catch (err) {
       lastError = err;
-      if (attempt < attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
-      }
+      if (isNonRetryableMailError(err) || attempt >= attempts) break;
+      await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
     }
   }
 
@@ -1002,18 +1165,19 @@ async function sendPunchOutReminderEmail(staff, loginUrl, details = {}) {
 }
 
 /**
- * Pulse invite — accept link sets password and joins the organization.
+ * BDA OS invite — accept link sets password and joins the organization.
  */
-async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedByName }) {
+async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedByName, loginEmail }) {
   const transporter = await createSMTPTransporter();
-  const org = companyName || 'your organization';
+  const org = companyName || 'BDA Technologies';
   const roleLabel = role === 'admin' ? 'Admin' : 'Member';
-  const fromName = invitedByName || 'Pulse';
+  const fromName = invitedByName || 'HR';
+  const login = loginEmail || to;
 
   const mailOptions = {
-    from: buildFromAddress('Pulse'),
+    from: buildFromAddress(org),
     to,
-    subject: `You're invited to ${org} on Pulse`,
+    subject: `You're invited to ${org}`,
     html: `
 <!DOCTYPE html>
 <html>
@@ -1024,16 +1188,18 @@ async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedB
         <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
           <tr>
             <td style="background:#1A5F4A;padding:28px 32px;">
-              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">Pulse</p>
+              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
               <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">You're invited</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
               <p style="margin:0 0 12px;"><strong>${fromName}</strong> invited you to join <strong>${org}</strong> as a <strong>${roleLabel}</strong>.</p>
-              <p style="margin:0 0 24px;color:#555;">Accept the invite to set your password and open My Space.</p>
+              <p style="margin:0 0 12px;color:#555;">Sign in with your work email:</p>
+              <p style="margin:0 0 16px;padding:10px 12px;background:#f4f2ec;border-radius:8px;font-weight:600;">${login}</p>
+              <p style="margin:0 0 24px;color:#555;">Open the link below to set your password. After that you can sign in with this work email.</p>
               <p style="margin:0 0 28px;">
-                <a href="${inviteUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Accept invite</a>
+                <a href="${inviteUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Set password &amp; join</a>
               </p>
               <p style="margin:0;font-size:12px;color:#888;word-break:break-all;">Or open this link:<br/>${inviteUrl}</p>
               <p style="margin:20px 0 0;font-size:12px;color:#888;">This link expires in 7 days.</p>
@@ -1049,7 +1215,141 @@ async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedB
   };
 
   const info = await sendMailWithRetry(transporter, mailOptions);
-  console.log(`✅ Pulse invite email sent to: ${to}`);
+  return info;
+}
+
+async function sendCandidateOnboardingEmail({ to, onboardUrl, companyName, candidateName, invitedByName }) {
+  const transporter = await createSMTPTransporter();
+  const org = companyName || 'BDA Technologies';
+  const hello = candidateName ? `Hi ${candidateName},` : 'Hello,';
+  const fromName = invitedByName || 'HR';
+
+  const mailOptions = {
+    from: buildFromAddress(org),
+    to,
+    subject: `Complete your details for ${org}`,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f5f0e8;font-family:Segoe UI,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
+          <tr>
+            <td style="background:#1A5F4A;padding:28px 32px;">
+              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
+              <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">Fill your details</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
+              <p style="margin:0 0 12px;">${hello}</p>
+              <p style="margin:0 0 12px;"><strong>${fromName}</strong> at <strong>${org}</strong> asked you to complete your personal information for onboarding.</p>
+              <p style="margin:0 0 24px;color:#555;">After you submit, HR will finish your offer details and send sign-in instructions to your work email.</p>
+              <p style="margin:0 0 28px;">
+                <a href="${onboardUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Complete your details</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#888;word-break:break-all;">Or open this link:<br/>${onboardUrl}</p>
+              <p style="margin:20px 0 0;font-size:12px;color:#888;">This link expires in 14 days.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `,
+  };
+
+  const info = await sendMailWithRetry(transporter, mailOptions);
+  return info;
+}
+
+/**
+ * Leave request raised in BDA OS — sent to the team inbox that has to approve it.
+ */
+async function sendLeaveRequestEmail({
+  to,
+  employeeName,
+  employeeEmail,
+  leaveType,
+  fromDate,
+  toDate,
+  days,
+  reason,
+  reviewUrl,
+  companyName,
+  attachments,
+}) {
+  if (!isValidEmail(to)) {
+    throw new Error(`Invalid notification address: ${to}`);
+  }
+
+  const transporter = await createSMTPTransporter();
+  const name = escapeHtml(employeeName || employeeEmail || 'A team member');
+  const dayLabel = `${days} day${days === 1 ? '' : 's'}`;
+  const org = escapeHtml(companyName || 'your organization');
+
+  const rows = [
+    ['Employee', name],
+    ['Email', escapeHtml(employeeEmail || '—')],
+    ['Leave type', escapeHtml(leaveType || 'Casual')],
+    ['From', escapeHtml(fromDate)],
+    ['To', escapeHtml(toDate)],
+    ['Duration', dayLabel],
+    ['Reason', escapeHtml(reason || '—')],
+    attachments?.length ? ['Attachment', escapeHtml(attachments[0].filename || 'File attached')] : null,
+  ].filter(Boolean)
+    .map(([label, value]) => `
+                <tr>
+                  <td style="padding:8px 0;font-size:13px;color:#777;width:120px;vertical-align:top;">${label}</td>
+                  <td style="padding:8px 0;font-size:13px;color:#1a1a1a;">${value}</td>
+                </tr>`)
+    .join('');
+
+  const mailOptions = {
+    from: buildFromAddress(companyName || 'BDA Technologies'),
+    to,
+    replyTo: isValidEmail(employeeEmail) ? employeeEmail : undefined,
+    subject: `Leave approval needed — ${employeeName || employeeEmail} (${fromDate} to ${toDate})`,
+    attachments: Array.isArray(attachments) && attachments.length ? attachments : undefined,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f5f0e8;font-family:Segoe UI,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
+          <tr>
+            <td style="background:#1A5F4A;padding:28px 32px;">
+              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
+              <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">Leave request awaiting approval</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
+              <p style="margin:0 0 20px;"><strong>${name}</strong> requested ${dayLabel} of leave at ${org} and needs your approval.</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee9e0;border-bottom:1px solid #eee9e0;margin:0 0 24px;">${rows}
+              </table>
+              <p style="margin:0 0 24px;">
+                <a href="${reviewUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Review request</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#888;word-break:break-all;">Or open this link:<br/>${reviewUrl}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `,
+  };
+
+  const info = await sendMailWithRetry(transporter, mailOptions);
   return info;
 }
 
@@ -1061,4 +1361,6 @@ module.exports = {
   sendTeamMemberOnboarding,
   sendPunchOutReminderEmail,
   sendPulseInviteEmail,
+  sendCandidateOnboardingEmail,
+  sendLeaveRequestEmail,
 };

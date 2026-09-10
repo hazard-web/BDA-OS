@@ -65,8 +65,8 @@ router.get('/apps', auth, async (req, res) => {
         email,
         pulse: {
           id: 'pulse',
-          name: 'Pulse',
-          to: '/pulse',
+          name: 'BDA OS',
+          to: '/bda-os',
           always: true,
         },
         apps,

@@ -57,7 +57,7 @@ function getProductionBaseUrl() {
 
   const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
   if (isDev) {
-    return 'http://localhost:5173'; // Default fallback for local testing
+    return 'http://localhost:3001';
   }
 
   if (envFrontendUrl && !isLocalUrl(envFrontendUrl) && !isPreviewOrDeadUrl(envFrontendUrl)) {
@@ -99,6 +99,11 @@ function buildInviteLink(token) {
   return `${baseUrl}/invite/${token}`;
 }
 
+function buildCandidateOnboardLink(token) {
+  const baseUrl = getProductionBaseUrl();
+  return `${baseUrl}/onboard/${token}`;
+}
+
 /**
  * Build an email verification link using ONLY the production base URL.
  *
@@ -116,6 +121,7 @@ module.exports = {
   buildResetLink,
   buildVerifyLink,
   buildInviteLink,
+  buildCandidateOnboardLink,
   isPreviewOrDeadUrl,
   isLocalUrl,
   cleanUrl,

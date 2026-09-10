@@ -3,22 +3,14 @@ import { format } from 'date-fns'
 import { App, Button, Card, Empty, Table, Tag } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import api from '../api'
+import { hoursLabel as hoursFromValue } from '../utils/pulseCalendar'
+import PulsePlaceLabel from './PulsePlaceLabel'
 
 function hoursLabel(ms) {
   const safe = Math.max(0, Number(ms) || 0)
   const h = Math.floor(safe / 3_600_000)
   const m = Math.floor((safe % 3_600_000) / 60_000)
   return `${h}h ${String(m).padStart(2, '0')}m`
-}
-
-function locationLabel(loc) {
-  if (!loc) return '—'
-  const parts = [loc.sector, loc.city, loc.state].filter(Boolean)
-  if (parts.length) return parts.join(', ')
-  if (Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) {
-    return `${Number(loc.lat).toFixed(4)}, ${Number(loc.lng).toFixed(4)}`
-  }
-  return '—'
 }
 
 function eventTag(type) {
@@ -37,16 +29,29 @@ function eventTag(type) {
   }
 }
 
-/** Pulse Organization: org-wide check-in activity — Ant Design. */
-export default function PulseCheckInAdmin() {
+function todayKey() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function taskTimeLabel(row) {
+  const minutes = Number(row.taskMinutes) || (row.taskEntries || []).reduce((sum, item) => sum + (Number(item.minutes) || 0), 0)
+  return hoursFromValue(minutes / 60)
+}
+
+/** Organization: org-wide check-in activity — Ant Design. */
+export default function PulseCheckInAdmin({ mode = 'checkin' }) {
   const { message } = App.useApp()
   const [days, setDays] = useState([])
   const [loading, setLoading] = useState(true)
+  const timesheet = mode === 'timesheet'
 
   const load = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/pulse-checkin/admin/days', { params: { limit: 40 } })
+      const res = await api.get('/pulse-checkin/admin/days', {
+        params: timesheet ? { limit: 80, date: todayKey() } : { limit: 40 },
+      })
       setDays(res.data?.data || [])
     } catch (err) {
       setDays([])
@@ -91,6 +96,14 @@ export default function PulseCheckInAdmin() {
         return <Tag color={color}>{v || 'idle'}</Tag>
       },
     },
+    timesheet
+      ? {
+          title: 'Check-in',
+          dataIndex: 'checkInAt',
+          width: 110,
+          render: (v) => (v ? format(new Date(v), 'h:mm a') : '—'),
+        }
+      : null,
     {
       title: 'Worked',
       dataIndex: 'totalActiveMs',
@@ -98,63 +111,104 @@ export default function PulseCheckInAdmin() {
       render: (ms, row) =>
         row.timesheetHours != null && row.timesheetLogged ? `${row.timesheetHours}h` : hoursLabel(ms),
     },
+    timesheet
+      ? {
+          title: 'Tasks',
+          key: 'tasks',
+          width: 80,
+          render: (_, row) => row.taskEntries?.length || 0,
+        }
+      : null,
+    timesheet
+      ? {
+          title: 'Task time',
+          key: 'taskTime',
+          width: 110,
+          render: (_, row) => taskTimeLabel(row),
+        }
+      : null,
     {
       title: 'Timesheet',
-      dataIndex: 'timesheetLogged',
-      width: 110,
-      render: (v) => (v ? <Tag color="green">Logged</Tag> : <Tag>Open</Tag>),
+      dataIndex: timesheet ? 'timesheetSubmitted' : 'timesheetLogged',
+      width: 120,
+      render: (v) => (v ? <Tag color="green">{timesheet ? 'Submitted' : 'Logged'}</Tag> : <Tag>{timesheet ? 'Draft' : 'Open'}</Tag>),
     },
-    {
-      title: 'Events',
-      key: 'events',
-      width: 80,
-      render: (_, row) => row.events?.length || 0,
-    },
-  ]
+    timesheet
+      ? null
+      : {
+          title: 'Events',
+          key: 'events',
+          width: 80,
+          render: (_, row) => row.events?.length || 0,
+        },
+  ].filter(Boolean)
 
   const expandedRowRender = (row) => {
     const events = [...(row.events || [])].reverse()
-    if (!events.length) {
-      return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No events yet" />
-    }
+    const tasks = row.taskEntries || []
     return (
-      <Table
-        size="small"
-        pagination={false}
-        rowKey={(e) => e._id || `${e.type}-${e.at}`}
-        dataSource={events}
-        columns={[
-          {
-            title: 'When',
-            dataIndex: 'at',
-            width: 170,
-            render: (v) => (v ? format(new Date(v), 'd MMM · h:mm a') : '—'),
-          },
-          {
-            title: 'Activity',
-            dataIndex: 'type',
-            width: 140,
-            render: (v) => eventTag(v),
-          },
-          {
-            title: 'Timer at event',
-            dataIndex: 'activeMsAtEvent',
-            width: 120,
-            render: (ms) => hoursLabel(ms),
-          },
-          {
-            title: 'IP',
-            dataIndex: 'ip',
-            width: 130,
-            render: (v) => v || '—',
-          },
-          {
-            title: 'Location',
-            key: 'loc',
-            render: (_, e) => locationLabel(e.location),
-          },
-        ]}
-      />
+      <div className="pulse-ts-admin-detail">
+        {timesheet ? (
+          <Table
+            size="small"
+            pagination={false}
+            rowKey={(item) => item._id || item.description}
+            dataSource={tasks}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No tasks submitted" /> }}
+            columns={[
+              { title: 'Task', dataIndex: 'description' },
+              { title: 'Project', dataIndex: 'project', width: 140, render: (v) => v || 'BDA OS' },
+              {
+                title: 'Time',
+                dataIndex: 'minutes',
+                width: 110,
+                render: (mins) => hoursFromValue((Number(mins) || 0) / 60),
+              },
+            ]}
+          />
+        ) : null}
+        {events.length ? (
+          <Table
+            size="small"
+            pagination={false}
+            rowKey={(e) => e._id || `${e.type}-${e.at}`}
+            dataSource={events}
+            columns={[
+              {
+                title: 'When',
+                dataIndex: 'at',
+                width: 170,
+                render: (v) => (v ? format(new Date(v), 'd MMM · h:mm a') : '—'),
+              },
+              {
+                title: 'Activity',
+                dataIndex: 'type',
+                width: 140,
+                render: (v) => eventTag(v),
+              },
+              {
+                title: 'Timer at event',
+                dataIndex: 'activeMsAtEvent',
+                width: 120,
+                render: (ms) => hoursLabel(ms),
+              },
+              {
+                title: 'IP',
+                dataIndex: 'ip',
+                width: 130,
+                render: (v) => v || '—',
+              },
+              {
+                title: 'Location',
+                key: 'loc',
+                render: (_, e) => <PulsePlaceLabel location={e.location} />,
+              },
+            ]}
+          />
+        ) : timesheet ? null : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No events yet" />
+        )}
+      </div>
     )
   }
 
@@ -162,7 +216,7 @@ export default function PulseCheckInAdmin() {
     <Card
       size="small"
       className="pulse-org-card"
-      title="Check-in activity"
+      title={timesheet ? 'Time tracker' : 'Check-in activity'}
       extra={
         <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
       }
@@ -177,7 +231,12 @@ export default function PulseCheckInAdmin() {
         expandable={{ expandedRowRender }}
         scroll={{ x: 720 }}
         locale={{
-          emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No check-in activity yet" />,
+          emptyText: (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={timesheet ? 'No timesheets for today yet' : 'No check-in activity yet'}
+            />
+          ),
         }}
       />
     </Card>

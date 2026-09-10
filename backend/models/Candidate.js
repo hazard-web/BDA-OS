@@ -22,6 +22,15 @@ const addressSchema = new mongoose.Schema(
   { _id: false },
 )
 
+const emergencySchema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true, default: '' },
+    relationship: { type: String, trim: true, default: '' },
+    phone: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+)
+
 const educationSchema = new mongoose.Schema(
   {
     schoolName: { type: String, trim: true, default: '' },
@@ -59,7 +68,7 @@ const candidateSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Draft', 'Not started', 'In progress', 'Offer sent', 'Joined', 'Withdrawn'],
+      enum: ['Draft', 'Not started', 'In progress', 'Details received', 'Offer sent', 'Joined', 'Withdrawn'],
       default: 'Draft',
     },
     firstName: { type: String, trim: true, default: '' },
@@ -68,10 +77,21 @@ const candidateSchema = new mongoose.Schema(
     officialEmail: { type: String, lowercase: true, trim: true, default: '' },
     phone: { type: String, trim: true, default: '' },
     countryCode: { type: String, trim: true, default: '+91' },
+    dob: { type: Date },
+    gender: {
+      type: String,
+      enum: ['Male', 'Female', 'Other', ''],
+      default: '',
+    },
+    emergencyContact: { type: emergencySchema, default: () => ({}) },
     uan: { type: String, trim: true, default: '' },
     aadhaar: { type: String, trim: true, default: '' },
     pan: { type: String, uppercase: true, trim: true, default: '' },
     photo: { type: fileSchema, default: undefined },
+    aadhaarFront: { type: fileSchema, default: undefined },
+    aadhaarBack: { type: fileSchema, default: undefined },
+    panFront: { type: fileSchema, default: undefined },
+    panBack: { type: fileSchema, default: undefined },
     presentAddress: { type: addressSchema, default: () => ({}) },
     permanentAddress: { type: addressSchema, default: () => ({}) },
     sameAsPresent: { type: Boolean, default: false },
@@ -92,6 +112,12 @@ const candidateSchema = new mongoose.Schema(
     addedByName: { type: String, trim: true, default: '' },
     modifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     modifiedByName: { type: String, trim: true, default: '' },
+    onboardingToken: { type: String, trim: true, index: true, sparse: true },
+    onboardingTokenExpires: { type: Date },
+    onboardingEmailSentAt: { type: Date },
+    employeeSubmittedAt: { type: Date },
+    pulseInviteId: { type: mongoose.Schema.Types.ObjectId, ref: 'PulseInvite' },
+    pulseInviteSentAt: { type: Date },
   },
   { timestamps: true },
 )

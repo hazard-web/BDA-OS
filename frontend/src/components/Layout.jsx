@@ -266,7 +266,7 @@ export default function Layout() {
   }
 
   const unread = notifications.filter((n) => !n.isRead).length
-  const companyName = user?.companyName || 'People OS'
+  const companyName = user?.companyName || 'BDA OS'
 
   const sideMenu = (
     <Flex vertical style={{ height: '100%' }}>

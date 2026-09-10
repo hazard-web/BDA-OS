@@ -6,7 +6,7 @@ import './auth-shell.css'
 
 export default function AuthShell({
   title = 'Sign in',
-  subtitle = 'to access People OS',
+  subtitle = 'to access BDA OS',
   headerRight,
   children,
   footer,
@@ -35,14 +35,8 @@ export default function AuthShell({
       <div className="auth-board">
         <div className="auth-left">
           <div className="auth-top">
-            <Link to="/login" className="auth-logo" aria-label="People OS home">
-              <span className="auth-mark" aria-hidden="true">
-                <i style={{ background: '#e42527' }} />
-                <i style={{ background: '#f5c400' }} />
-                <i style={{ background: '#21a05a' }} />
-                <i style={{ background: '#2b8aed' }} />
-              </span>
-              <span className="auth-logo-text">PEOPLE OS</span>
+            <Link to="/login" className="auth-logo" aria-label="BDA Technologies">
+              <img src="/bda-logo-lockup.png" alt="BDA Technologies" className="auth-logo-mark" />
             </Link>
             {headerRight}
           </div>

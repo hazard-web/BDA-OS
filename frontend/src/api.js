@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const API_BASE = import.meta.env.DEV
   ? ''
-  : (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+  : (import.meta.env.VITE_API_BASE_URL || 'https://people-os-api-uat.onrender.com').replace(/\/+$/, '')
 
 // Default timeout for normal API calls. Heavy endpoints (PDF generation,
 // payslip emails, portal provisioning with SMTP) need more headroom -

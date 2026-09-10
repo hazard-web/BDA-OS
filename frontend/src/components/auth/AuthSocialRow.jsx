@@ -1,7 +1,7 @@
 import { oauthStartUrl } from './oauthUrls'
 
 const googleIcon = (
-  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
     <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5c-.3 1.5-1.1 2.7-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.7z" />
     <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3c-1.1.7-2.5 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9H1.4v3.1C3.3 21.4 7.4 24 12 24z" />
     <path fill="#FBBC05" d="M5.4 14.4c-.2-.7-.4-1.4-.4-2.4s.1-1.7.4-2.4V6.5H1.4C.5 8.3 0 10.1 0 12s.5 3.7 1.4 5.5l4-3.1z" />
@@ -58,11 +58,11 @@ const gitlabIcon = (
 
 const ICONS = [
   { id: 'google', name: 'Google', bg: '#fff', icon: googleIcon },
-  { id: 'facebook', name: 'Facebook', bg: '#1877F2', icon: facebookIcon },
-  { id: 'linkedin', name: 'LinkedIn', bg: '#0A66C2', icon: linkedInIcon },
-  { id: 'x', name: 'X', bg: '#000', icon: xIcon },
-  { id: 'apple', name: 'Apple', bg: '#000', icon: appleIcon },
-  { id: 'microsoft', name: 'Microsoft', bg: '#2f2f2f', icon: microsoftIcon },
+  // { id: 'facebook', name: 'Facebook', bg: '#1877F2', icon: facebookIcon },
+  // { id: 'linkedin', name: 'LinkedIn', bg: '#0A66C2', icon: linkedInIcon },
+  // { id: 'x', name: 'X', bg: '#000', icon: xIcon },
+  // { id: 'apple', name: 'Apple', bg: '#000', icon: appleIcon },
+  // { id: 'microsoft', name: 'Microsoft', bg: '#2f2f2f', icon: microsoftIcon },
 ]
 
 export const SIGNUP_SOCIAL = [
@@ -82,9 +82,9 @@ export const SOCIAL_GRID = [
   { id: 'gitlab', name: 'Gitlab', bg: '#fff', color: '#111', border: '#d5dbe3', icon: gitlabIcon },
 ]
 
-export default function AuthSocialRow({ onMore }) {
+export default function AuthSocialRow() {
   return (
-    <>
+    <div className="auth-using-row">
       <p className="auth-using">Sign in using</p>
       <div className="auth-idp-row">
         {ICONS.map((item) => (
@@ -99,7 +99,7 @@ export default function AuthSocialRow({ onMore }) {
             {item.icon}
           </a>
         ))}
-        <button
+        {/* <button
           type="button"
           className="auth-idp"
           title="More"
@@ -112,9 +112,9 @@ export default function AuthSocialRow({ onMore }) {
             <circle cx="12" cy="12" r="1.8" fill="#5c6370" />
             <circle cx="18" cy="12" r="1.8" fill="#5c6370" />
           </svg>
-        </button>
+        </button> */}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -139,7 +139,7 @@ export function AuthSocialGrid({ onBack }) {
         ))}
       </div>
       <button type="button" className="auth-social-home" onClick={onBack}>
-        Sign in with People OS
+        Sign in with BDA OS
         <span aria-hidden="true">›</span>
       </button>
     </div>

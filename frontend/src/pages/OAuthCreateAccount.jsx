@@ -202,7 +202,7 @@ export default function OAuthCreateAccount() {
 
   const finishLogin = (token, user) => {
     login(token, user)
-    toast.success('Welcome to People OS!')
+    toast.success('Welcome to BDA OS!')
     navigate(getPostLoginPath(user), { replace: true })
   }
 
@@ -249,7 +249,7 @@ export default function OAuthCreateAccount() {
     e.preventDefault()
     if (linking) return
     if (!password) {
-      toast.error('Enter your People OS password to link accounts.')
+      toast.error('Enter your BDA OS password to link accounts.')
       return
     }
     setLinking(true)
@@ -267,7 +267,7 @@ export default function OAuthCreateAccount() {
   if (expired || !profile) {
     return (
       <div className="oca-expired">
-        <AuthLogoLoader show={redirecting} label="Going to People OS" />
+        <AuthLogoLoader show={redirecting} label="Going to BDA OS" />
         <div className="oca-expired-visual" aria-hidden="true">
           <img className="oca-expired-bg" src="/auth-bg.svg" alt="" />
           <div className="oca-expired-art">
@@ -280,14 +280,14 @@ export default function OAuthCreateAccount() {
               <i style={{ background: '#21a05a' }} />
               <i style={{ background: '#2b8aed' }} />
             </span>
-            <strong>People OS</strong>
+            <strong>BDA OS</strong>
           </div>
         </div>
 
         <div className="oca-expired-panel">
           <div className="oca-expired-inner">
             <div className="oca-expired-logos">
-              <span className="oca-people-mark" aria-label="People OS">
+              <span className="oca-people-mark" aria-label="BDA OS">
                 <i style={{ background: '#e42527' }} />
                 <i style={{ background: '#f5c400' }} />
                 <i style={{ background: '#21a05a' }} />
@@ -299,7 +299,7 @@ export default function OAuthCreateAccount() {
               <GoogleLogo />
             </div>
 
-            <p className="oca-expired-eyebrow">People OS</p>
+            <p className="oca-expired-eyebrow">BDA OS</p>
             <h1 className="oca-expired-title">
               Sign-in session <span>expired</span>
             </h1>
@@ -317,7 +317,7 @@ export default function OAuthCreateAccount() {
               onClick={() => redirectTo('/')}
               disabled={redirecting}
             >
-              Back to People OS Homepage
+              Back to BDA OS Homepage
             </button>
           </div>
 
@@ -343,7 +343,7 @@ export default function OAuthCreateAccount() {
             <i />
             <i />
           </span>
-          <span className="oca-people-mark" aria-label="People OS">
+          <span className="oca-people-mark" aria-label="BDA OS">
             <i style={{ background: '#e42527' }} />
             <i style={{ background: '#f5c400' }} />
             <i style={{ background: '#21a05a' }} />
@@ -364,7 +364,7 @@ export default function OAuthCreateAccount() {
           <div>
             <h1>Welcome {displayName}!</h1>
             <p>
-              A new People OS account will be created for the email address <b>{profile.email}</b>.
+              A new BDA OS account will be created for the email address <b>{profile.email}</b>.
             </p>
           </div>
         </div>
@@ -457,7 +457,7 @@ export default function OAuthCreateAccount() {
           <div>
             <h2>Link existing accounts</h2>
             <p>
-              If you have a People OS account, you can link your <b>Google account</b> with it.
+              If you have a BDA OS account, you can link your <b>Google account</b> with it.
             </p>
           </div>
           {!showLink ? (

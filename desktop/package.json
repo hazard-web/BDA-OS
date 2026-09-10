@@ -1,14 +1,46 @@
 {
   "name": "pulse-desktop-timer",
+  "productName": "BDA OS Timer",
   "version": "1.0.0",
   "private": true,
-  "description": "Always-on-top Pulse check-in timer for macOS and Windows",
+  "description": "Always-on-top BDA OS check-in timer for macOS and Windows",
+  "author": "BDA Technologies",
   "main": "main.js",
   "scripts": {
     "start": "ELECTRON_RUN_AS_NODE= electron .",
-    "dev": "ELECTRON_RUN_AS_NODE= electron ."
+    "dev": "ELECTRON_RUN_AS_NODE= electron .",
+    "dist": "electron-builder --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "build": {
+    "appId": "in.bda.peopleos.pulse-timer",
+    "productName": "BDA OS Timer",
+    "copyright": "Copyright © BDA Technologies",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"],
+      "identity": null
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
   }
 }

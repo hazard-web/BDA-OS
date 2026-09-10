@@ -9,6 +9,19 @@ function normalizeEmail(value) {
     .toLowerCase()
 }
 
+/** `shivam` or `shivam@` → `shivam@bda.co.in`. Full addresses stay as typed. */
+function completeCompanyEmail(value) {
+  const raw = normalizeEmail(value).replace(/\s+/g, '')
+  if (!raw) return ''
+  const at = raw.indexOf('@')
+  if (at === -1) return `${raw}@${allowedEmailDomain()}`
+  const local = raw.slice(0, at)
+  const domain = raw.slice(at + 1)
+  if (!local) return ''
+  if (!domain) return `${local}@${allowedEmailDomain()}`
+  return `${local}@${domain}`
+}
+
 function domainFromEmail(email) {
   const domain = normalizeEmail(email).split('@')[1] || ''
   return domain.replace(/^@/, '')
@@ -60,6 +73,7 @@ function assertAllowedCompanyEmail(email) {
 module.exports = {
   PLATFORM_DOMAIN,
   normalizeEmail,
+  completeCompanyEmail,
   domainFromEmail,
   normalizeDomain,
   allowedEmailDomain,

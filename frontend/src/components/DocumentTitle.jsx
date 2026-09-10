@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { rememberPulsePath } from '../utils/pulseEntry'
+import { APP_BASE, APP_COMPANY, APP_NOTES, PULSE_HOME, isAppPath, rememberPulsePath } from '../utils/pulseEntry'
 import { formatElapsed, getElapsedSeconds, PULSE_CHECKIN_EVENT, readCheckInAt } from '../utils/pulseCheckIn'
 import { useAuth } from '../context/AuthContext'
 
@@ -10,15 +10,38 @@ const TITLES = [
   ['/oauth/create-account', 'Create Account'],
   ['/oauth/callback', 'Signing in'],
   ['/coming-soon', 'Coming Soon'],
-  ['/pulse/settings/service/getting-started', 'Getting Started'],
-  ['/pulse/getting-started', 'Getting Started'],
+  // Getting Started parked on `pulse/company-later-services`
+  // [`${APP_BASE}/settings/service/getting-started`, 'Getting Started'],
+  // [`${APP_BASE}/getting-started`, 'Getting Started'],
+  [APP_NOTES, 'Notebook'],
+  [`${APP_BASE}/onboarding`, 'Onboarding'],
+  [`${APP_COMPANY}/attendance`, 'Attendance'],
+  [`${APP_COMPANY}/time`, 'Time Tracker'],
+  [APP_COMPANY, 'Company'],
+  [`${APP_BASE}/leave`, 'Leave'],
+  [`${APP_BASE}/calendar`, 'Calendar'],
+  [`${APP_BASE}/attendance`, 'Attendance'],
+  [`${APP_BASE}/hours`, 'Timesheet'],
+  [`${APP_BASE}/time`, 'Timesheet'],
+  [`${APP_BASE}/performance`, 'Performance'],
+  [`${APP_BASE}/account`, 'Account'],
+  [`${APP_BASE}/apps`, 'App access'],
+  [PULSE_HOME, 'You'],
+  [APP_BASE, 'BDA OS'],
   ['/pulse/notes', 'Notebook'],
-  ['/pulse/home', 'My Space'],
-  ['/pulse', 'Pulse'],
-  ['/people-os', 'People OS'],
+  ['/pulse/onboarding', 'Employee'],
+  ['/pulse/company', 'Company'],
+  ['/pulse/leave', 'Leave Tracker'],
+  ['/pulse/attendance', 'Attendance'],
+  ['/pulse/time', 'Time Tracker'],
+  ['/pulse/apps', 'App access'],
+  ['/pulse/home', 'You'],
+  ['/pulse', 'BDA OS'],
+  ['/people-os', 'BDA OS'],
   ['/verify-email', 'Verify email'],
   ['/reset-password', 'Reset password'],
   ['/invite', 'Accept invite'],
+  ['/onboard', 'Complete your details'],
   ['/register', 'Create admin'],
   ['/forgot', 'Forgot password'],
   ['/verify', 'Verify'],
@@ -26,12 +49,12 @@ const TITLES = [
   ['/login', 'Sign in'],
 ]
 
-const FAVICON_DEFAULT = '/favicon.svg'
-const FAVICON_PULSE = '/favicon-pulse.svg'
-const FAVICON_BUST = 'v12'
+const FAVICON_DEFAULT = '/favicon-bda.png'
+const FAVICON_PULSE = '/favicon-bda.png'
+const FAVICON_BUST = 'v13'
 
 function titleFromSegment(segment) {
-  if (!segment) return 'People OS'
+  if (!segment) return 'BDA OS'
   return segment
     .split('-')
     .filter(Boolean)
@@ -41,9 +64,10 @@ function titleFromSegment(segment) {
 
 function pageTitle(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/'
-  if (path === '/') return 'Pulse'
+  if (path === '/') return 'BDA OS'
 
-  if (/^\/[^/]+\/settings\/service\/getting-started$/.test(path)) return 'Getting Started'
+  // Getting Started parked on `pulse/company-later-services`
+  // if (/^\/[^/]+\/settings\/service\/getting-started$/.test(path)) return 'Getting Started'
 
   const match = TITLES.find(([route]) => path === route || path.startsWith(`${route}/`))
   if (match) return match[1]
@@ -56,8 +80,9 @@ function faviconForPath(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/'
   if (
     path === '/' ||
-    path === '/pulse' ||
-    path.startsWith('/pulse/') ||
+    isAppPath(path) ||
+    path.startsWith('/onboard') ||
+    path.startsWith('/invite') ||
     path.startsWith('/people') ||
     /^\/[^/]+\/settings\/service\/getting-started$/.test(path)
   ) {
@@ -71,9 +96,10 @@ function setFavicon(href) {
   document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon']").forEach((el) => {
     el.parentNode?.removeChild(el)
   })
+  const isPng = /\.png(\?|$)/i.test(href)
   const icon = document.createElement('link')
   icon.rel = 'icon'
-  icon.type = 'image/svg+xml'
+  icon.type = isPng ? 'image/png' : 'image/svg+xml'
   icon.href = url
   document.head.appendChild(icon)
 
@@ -84,9 +110,9 @@ function setFavicon(href) {
 }
 
 function baseTitleForPage(name) {
-  if (name === 'Coming Soon') return 'Coming Soon | People OS'
-  if (name === 'Pulse') return 'Pulse'
-  if (name === 'Getting Started') return 'Getting Started | Pulse'
+  if (name === 'Coming Soon') return 'Coming Soon | BDA OS'
+  if (name === 'BDA OS') return 'BDA OS'
+  // if (name === 'Getting Started') return 'Getting Started | BDA OS'
   if (name === 'Accounts') return 'Accounts'
   return name
 }
@@ -94,7 +120,7 @@ function baseTitleForPage(name) {
 export default function DocumentTitle() {
   const { pathname } = useLocation()
   const { user } = useAuth()
-  const baseTitleRef = useRef('People OS')
+  const baseTitleRef = useRef('BDA OS')
 
   useLayoutEffect(() => {
     const name = pageTitle(pathname)

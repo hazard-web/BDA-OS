@@ -338,7 +338,7 @@ async function fetchJson(url, accessToken) {
   const res = await requestJson(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      'User-Agent': 'PeopleOS-OAuth',
+      'User-Agent': 'BDAOS-OAuth',
     },
   });
   if (!res.ok) {
@@ -505,7 +505,7 @@ router.post('/complete', async (req, res, next) => {
       return res.status(403).json({
         success: false,
         code: 'INVITE_ONLY',
-        message: 'Pulse is invite-only. Ask your admin for an invite link, then sign in with email and password.',
+        message: 'BDA OS is invite-only. Ask your admin for an invite link, then sign in with email and password.',
       });
     }
 
@@ -536,7 +536,7 @@ router.post('/complete', async (req, res, next) => {
       country: 'India',
       state: '',
       isVerified: true,
-      onboardingCompleted: false,
+      onboardingCompleted: true,
       pulseSetupCompleted: false,
       oauthProviders: [{ provider: data.provider, providerId: data.providerId }],
     });
@@ -552,7 +552,7 @@ router.post('/complete', async (req, res, next) => {
   }
 });
 
-// POST /api/auth/oauth/link - link Google to an existing People OS account
+// POST /api/auth/oauth/link - link Google to an existing BDA OS account
 router.post('/link', async (req, res, next) => {
   try {
     const { ticket, password } = req.body || {};
@@ -571,7 +571,7 @@ router.post('/link', async (req, res, next) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'No People OS account found for this Google email. Create a new account instead.',
+        message: 'No BDA OS account found for this Google email. Create a new account instead.',
       });
     }
 
@@ -809,7 +809,7 @@ async function handleOAuthCallback(req, res) {
     }
 
     if (workspaceIntent) {
-      return fail('Sign in to People OS first, then import Google linked apps.');
+      return fail('Sign in to BDA OS first, then import Google linked apps.');
     }
     if (!profile.email) {
       return redirectError(
@@ -822,7 +822,7 @@ async function handleOAuthCallback(req, res) {
     if (userCount > 0) {
       return redirectError(
         res,
-        'Pulse is invite-only. Ask your admin for an invite link, then sign in with email and password.',
+        'BDA OS is invite-only. Ask your admin for an invite link, then sign in with email and password.',
         provider,
       );
     }

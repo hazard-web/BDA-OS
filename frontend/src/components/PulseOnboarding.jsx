@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   App,
   Button,
@@ -17,18 +18,17 @@ import {
   Tag,
 } from 'antd'
 import {
-  DownOutlined,
-  ExpandOutlined,
+  DeleteOutlined,
   FileDoneOutlined,
+  CloseOutlined,
   FilterOutlined,
-  ImportOutlined,
   MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
-  UploadOutlined,
 } from '@ant-design/icons'
 import api from '../api'
+import { companyEmailRequiredMessage, isCompanyEmail, normalizeCompanyEmail } from '../utils/companyDomain'
 import PulseCandidateForm, {
   DEPARTMENTS,
   LOCATIONS,
@@ -39,46 +39,66 @@ import PulseCandidateForm, {
 import './pulse-onboarding.css'
 
 const ALL_COLUMNS = [
-  { key: 'firstName', title: 'First name' },
-  { key: 'lastName', title: 'Last name' },
-  { key: 'email', title: 'Email ID' },
-  { key: 'officialEmail', title: 'Official Email' },
-  { key: 'status', title: 'Onboarding Status' },
-  { key: 'department', title: 'Department' },
-  { key: 'sourceOfHire', title: 'Source of Hire' },
-  { key: 'pan', title: 'PAN card number' },
-  { key: 'aadhaar', title: 'Aadhaar card number' },
-  { key: 'uan', title: 'UAN number' },
-  { key: 'phone', title: 'Phone' },
-  { key: 'workLocation', title: 'Location' },
-  { key: 'title', title: 'Title' },
-  { key: 'experienceYears', title: 'Experience' },
-  { key: 'skillSet', title: 'Skill Set' },
-  { key: 'highestQualification', title: 'Highest Qualification' },
-  { key: 'currentSalary', title: 'Current Salary' },
-  { key: 'additionalInfo', title: 'Additional information' },
-  { key: 'tentativeJoiningDate', title: 'Tentative Joining Date' },
-  { key: 'candidateId', title: 'Candidate ID' },
+  { key: 'firstName', title: 'First name', width: 140 },
+  { key: 'lastName', title: 'Last name', width: 140 },
+  { key: 'email', title: 'Email ID', width: 200 },
+  { key: 'phone', title: 'Phone', width: 150, kind: 'phone' },
+  { key: 'dob', title: 'Date of birth', width: 140 },
+  { key: 'gender', title: 'Gender', width: 110 },
+  { key: 'emergencyName', title: 'Emergency name', width: 160 },
+  { key: 'emergencyRelationship', title: 'Emergency relationship', width: 170 },
+  { key: 'emergencyPhone', title: 'Emergency phone', width: 150 },
+  { key: 'photo', title: 'Photo', width: 140, kind: 'file' },
+  { key: 'aadhaar', title: 'Aadhaar card number', width: 170 },
+  { key: 'pan', title: 'PAN card number', width: 150 },
+  { key: 'aadhaarFront', title: 'Aadhaar front', width: 140, kind: 'file' },
+  { key: 'aadhaarBack', title: 'Aadhaar back', width: 140, kind: 'file' },
+  { key: 'panFront', title: 'PAN front', width: 140, kind: 'file' },
+  { key: 'panBack', title: 'PAN back', width: 140, kind: 'file' },
+  { key: 'presentAddressLine', title: 'Present address', width: 240 },
+  { key: 'permanentAddressLine', title: 'Permanent address', width: 240 },
+  { key: 'experienceYears', title: 'Experience', width: 130 },
+  { key: 'skillSet', title: 'Skill Set', width: 180 },
+  { key: 'highestQualification', title: 'Highest Qualification', width: 180 },
+  { key: 'educationSummary', title: 'Education', width: 220 },
+  { key: 'experienceSummary', title: 'Work history', width: 220 },
+  { key: 'additionalInfo', title: 'Additional information', width: 200 },
+  { key: 'officialEmail', title: 'Official Email', width: 190 },
+  { key: 'status', title: 'Onboarding Status', width: 160 },
+  { key: 'department', title: 'Department', width: 140 },
+  { key: 'sourceOfHire', title: 'Source of Hire', width: 140 },
+  { key: 'workLocation', title: 'Location', width: 140 },
+  { key: 'title', title: 'Title', width: 150 },
+  { key: 'currentSalary', title: 'Current Salary', width: 140 },
+  { key: 'tentativeJoiningDate', title: 'Joining date', width: 150 },
+  { key: 'candidateId', title: 'Employee ID', width: 130 },
+  { key: 'offerLetter', title: 'Offer letter', width: 150, kind: 'file' },
 ]
 
 const LOCKED_KEYS = ['firstName', 'lastName', 'email']
 const OPTIONAL_COLUMNS = ALL_COLUMNS.filter((col) => !LOCKED_KEYS.includes(col.key))
 const ALL_ON = Object.fromEntries(ALL_COLUMNS.map((col) => [col.key, true]))
 
-const SCOPE_OPTIONS = [
-  { value: 'all', label: 'Reportees + My Data' },
-  { value: 'reportees', label: "Reportees' Data" },
-  { value: 'direct', label: "Direct Reportees' Data" },
-  { value: 'mine', label: 'My Data' },
-]
-
 const STATUS_COLOR = {
   Draft: 'default',
   'Not started': 'gold',
   'In progress': 'blue',
+  'Details received': 'purple',
   'Offer sent': 'cyan',
   Joined: 'green',
   Withdrawn: 'red',
+}
+
+function employeeName(row) {
+  return [row?.firstName, row?.lastName].map((part) => String(part || '').trim()).filter(Boolean).join(' ')
+}
+
+function matchesDeleteConfirm(typed, row) {
+  const value = String(typed || '').trim().toLowerCase()
+  if (!value) return false
+  const id = String(row?.candidateId || '').trim().toLowerCase()
+  const name = employeeName(row).toLowerCase()
+  return Boolean((id && value === id) || (name && value === name))
 }
 
 function dash(value) {
@@ -93,27 +113,18 @@ function dash(value) {
   return value
 }
 
-function parseCsv(text) {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  if (lines.length < 2) return []
-  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/\s+/g, ''))
-  return lines.slice(1).map((line) => {
-    const cells = line.split(',').map((c) => c.trim())
-    const row = {}
-    headers.forEach((h, i) => {
-      row[h] = cells[i] || ''
-    })
-    return {
-      firstName: row.firstname || row.first || '',
-      lastName: row.lastname || row.last || '',
-      email: row.email || row.emailid || '',
-      officialEmail: row.officialemail || '',
-      phone: row.phone || row.mobile || '',
-      department: row.department || '',
-      sourceOfHire: row.sourceofhire || row.source || '',
-      workLocation: row.location || row.worklocation || '',
-    }
-  }).filter((row) => row.email || (row.firstName && row.lastName))
+function fileDash(value) {
+  if (!value) return '—'
+  if (typeof value === 'string') return dash(value)
+  return dash(value.name || (value.hasFile ? 'Uploaded' : ''))
+}
+
+function cellText(col, record) {
+  if (col.kind === 'phone') {
+    return dash([record.countryCode, record.phone].filter(Boolean).join(' '))
+  }
+  if (col.kind === 'file') return fileDash(record[col.key])
+  return dash(record[col.key])
 }
 
 function EmptyArt() {
@@ -130,16 +141,14 @@ function EmptyArt() {
 export default function PulseOnboarding() {
   const { message } = App.useApp()
   const [form] = Form.useForm()
-  const fileRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [sending, setSending] = useState(false)
   const [rows, setRows] = useState([])
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filterOpen, setFilterOpen] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
-  const [wide, setWide] = useState(false)
-  const [scope, setScope] = useState('all')
   const [query, setQuery] = useState('')
   const [draftFilters, setDraftFilters] = useState({ employee: '', department: 'all', location: 'all' })
   const [applied, setApplied] = useState({ employee: '', department: 'all', location: 'all' })
@@ -147,33 +156,65 @@ export default function PulseOnboarding() {
   const [draftVisible, setDraftVisible] = useState(ALL_ON)
   const [viewQuery, setViewQuery] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
+  const [removing, setRemoving] = useState(null)
+  const [confirmText, setConfirmText] = useState('')
+  const [removingBusy, setRemovingBusy] = useState(false)
+  const [mailFail, setMailFail] = useState(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts = {}) => {
+    const silent = Boolean(opts.silent)
+    if (!silent) setLoading(true)
     try {
       const res = await api.get('/candidates', {
         params: {
           q: applied.employee || query || undefined,
           department: applied.department,
           location: applied.location,
-          scope: scope === 'mine' ? 'mine' : 'all',
+          scope: 'all',
         },
       })
-      setRows(res.data?.data?.candidates || [])
-      setSelectedRowKeys([])
+      const candidates = res.data?.data?.candidates || []
+      setRows(candidates)
+      if (!silent) setSelectedRowKeys([])
+      setEditing((prev) => {
+        if (!prev?._id) return prev
+        const next = candidates.find((row) => String(row._id) === String(prev._id))
+        return next ? { ...prev, ...next } : prev
+      })
     } catch (err) {
-      setRows([])
-      message.error(err?.response?.data?.message || 'Could not load candidates')
+      if (!silent) {
+        setRows([])
+        message.error(err?.response?.data?.message || 'Could not load employees')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
-  }, [applied, query, scope, message])
+  }, [applied, query, message])
 
   useEffect(() => {
     load()
   }, [load])
 
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      load({ silent: true })
+    }, 8000)
+    return () => window.clearInterval(id)
+  }, [load])
+
+  const submittedOnOpen = useRef(false)
+  const submittedKey = editing?.employeeSubmittedAt && editing?._id
+    ? `${editing._id}:${editing.employeeSubmittedAt}`
+    : ''
+
+  const closeForm = () => {
+    submittedOnOpen.current = false
+    setOpen(false)
+    setEditing(null)
+  }
+
   const openAdd = () => {
+    submittedOnOpen.current = false
     setEditing(null)
     form.resetFields()
     form.setFieldsValue(emptyCandidate)
@@ -181,6 +222,7 @@ export default function PulseOnboarding() {
   }
 
   const openEdit = async (record) => {
+    submittedOnOpen.current = Boolean(record.employeeSubmittedAt)
     setEditing(record)
     setOpen(true)
     try {
@@ -191,59 +233,173 @@ export default function PulseOnboarding() {
     }
   }
 
-  const save = async ({ draft, andNew }) => {
+  useEffect(() => {
+    if (!open || !editing?._id || !editing.employeeSubmittedAt || submittedOnOpen.current) return undefined
+    submittedOnOpen.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await api.get(`/candidates/${editing._id}`)
+        if (cancelled) return
+        const keep = form.getFieldsValue([
+          'officialEmail',
+          'tentativeJoiningDate',
+          'offerLetter',
+          'department',
+          'title',
+          'workLocation',
+          'sourceOfHire',
+          'email',
+        ])
+        form.setFieldsValue({ ...valuesFromCandidate(res.data?.data), ...keep })
+      } catch {
+        /* keep current form */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, submittedKey, form])
+
+  const persistAdmin = async () => {
+    const values = form.getFieldsValue(true)
+    const payload = payloadFromValues(values, { draft: true, mode: 'admin' })
+    if (editing?._id) {
+      const res = await api.patch(`/candidates/${editing._id}`, payload)
+      const row = res.data?.data
+      if (row) setEditing((prev) => ({ ...prev, ...row }))
+      return row
+    }
+    const res = await api.post('/candidates', payload)
+    const row = res.data?.data
+    if (row) setEditing(row)
+    return row
+  }
+
+  const saveDraft = async () => {
     try {
-      if (!draft) await form.validateFields(['email', 'phone', 'firstName', 'lastName'])
-      const values = form.getFieldsValue(true)
-      const payload = payloadFromValues(values, { draft })
       setSaving(true)
-      if (editing?._id) {
-        await api.patch(`/candidates/${editing._id}`, payload)
-        message.success(draft ? 'Draft saved' : 'Candidate updated')
-      } else {
-        await api.post('/candidates', payload)
-        message.success(draft ? 'Draft saved' : 'Candidate added')
-      }
-      if (andNew) {
-        setEditing(null)
-        form.resetFields()
-        form.setFieldsValue(emptyCandidate)
-      } else {
-        setOpen(false)
-        setEditing(null)
-      }
+      await persistAdmin()
+      message.success('Saved')
       await load()
     } catch (err) {
-      if (err?.errorFields) return
-      message.error(err?.response?.data?.message || err.message || 'Could not save candidate')
+      message.error(err?.response?.data?.message || err.message || 'Could not save employee')
     } finally {
       setSaving(false)
     }
   }
 
-  const importCsv = async (file) => {
+  const sendDetailsEmail = async () => {
     try {
-      const text = await file.text()
-      const parsed = parseCsv(text)
-      if (!parsed.length) {
-        message.error('No rows found. Use a CSV with first name, last name, email, and phone.')
+      await form.validateFields(['email'])
+      setSending(true)
+      const row = await persistAdmin()
+      const id = row?._id || editing?._id
+      if (!id) throw new Error('Could not save employee')
+      const res = await api.post(`/candidates/${id}/send-onboarding`)
+      const onboardLink = res.data?.data?.devOnboardLink || res.data?.data?.onboardUrl
+      if (res.data?.emailSent === false) {
+        setMailFail({
+          title: 'Employee saved — email not sent',
+          message: res.data?.message || 'Record saved, but the email could not be sent',
+          link: onboardLink || '',
+          linkLabel: 'Details form link',
+        })
+        await load()
         return
       }
-      setSaving(true)
-      let ok = 0
-      for (const row of parsed) {
-        if (!row.email || !row.firstName || !row.lastName || !row.phone) continue
-        await api.post('/candidates', { ...row, countryCode: '+91' })
-        ok += 1
-      }
-      message.success(ok ? `${ok} candidate${ok === 1 ? '' : 's'} imported` : 'No complete rows to import')
+      message.success(res.data?.message || 'Details email sent')
+      closeForm()
       await load()
     } catch (err) {
-      message.error(err?.response?.data?.message || 'Could not import file')
+      if (err?.errorFields) return
+      message.error(err?.response?.data?.message || err.message || 'Could not send details email')
     } finally {
-      setSaving(false)
+      setSending(false)
     }
   }
+
+  const sendPulseInvite = async () => {
+    try {
+      await form.validateFields(['officialEmail'])
+      const values = form.getFieldsValue(true)
+      const workEmail = normalizeCompanyEmail(values.officialEmail)
+      if (!workEmail) {
+        message.error('Work email is required')
+        return
+      }
+      if (!isCompanyEmail(workEmail)) {
+        message.error(companyEmailRequiredMessage())
+        return
+      }
+      if (!values.tentativeJoiningDate) {
+        message.error('Joining date is required')
+        return
+      }
+      if (!values.offerLetter?.name && !values.offerLetter?.data) {
+        message.error('Upload the offer letter')
+        return
+      }
+      setSending(true)
+      const row = await persistAdmin()
+      const id = row?._id || editing?._id
+      if (!id) throw new Error('Could not save employee')
+      const res = await api.post(`/candidates/${id}/send-invite`)
+      const inviteLink = res.data?.data?.devInviteLink || res.data?.data?.inviteUrl
+      if (res.data?.emailSent === false) {
+        setMailFail({
+          title: 'Invite created — email not sent',
+          message: res.data?.message || 'Invite created, but the email could not be sent',
+          link: inviteLink || '',
+          linkLabel: 'BDA OS invite link',
+        })
+        await load()
+        return
+      }
+      message.success(res.data?.message || 'BDA OS invite sent')
+      closeForm()
+      await load()
+    } catch (err) {
+      if (err?.errorFields) return
+      message.error(err?.response?.data?.message || err.message || 'Could not send BDA OS invite')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const askDelete = (row, e) => {
+    e?.stopPropagation?.()
+    if (!row?._id) return
+    setConfirmText('')
+    setRemoving(row)
+  }
+
+  const closeDelete = () => {
+    if (removingBusy) return
+    setRemoving(null)
+    setConfirmText('')
+  }
+
+  const confirmDelete = async () => {
+    if (!removing?._id || !matchesDeleteConfirm(confirmText, removing)) return
+    try {
+      setRemovingBusy(true)
+      await api.delete(`/candidates/${removing._id}`)
+      message.success('Employee removed')
+      if (editing?._id && String(editing._id) === String(removing._id)) closeForm()
+      setRemoving(null)
+      setConfirmText('')
+      await load()
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not delete employee')
+    } finally {
+      setRemovingBusy(false)
+    }
+  }
+
+  const canConfirmDelete = matchesDeleteConfirm(confirmText, removing)
+  const deleteHintId = String(removing?.candidateId || '').trim()
+  const deleteHintName = employeeName(removing)
 
   const statusFilters = useMemo(
     () => [...new Set(rows.map((r) => r.status).filter(Boolean))].map((s) => ({ text: s, value: s })),
@@ -300,7 +456,7 @@ export default function PulseOnboarding() {
               fieldList.map((col) => (
                 <label key={col.key} className="ob-view-item">
                   <Checkbox
-                    checked={Boolean(draftVisible[col.key])}
+                    checked={draftVisible[col.key] !== false}
                     onChange={(e) => toggleColumn(col.key, e.target.checked)}
                   />
                   <span>{col.title}</span>
@@ -355,7 +511,7 @@ export default function PulseOnboarding() {
           indeterminate={someSelected}
           disabled={!rows.length}
           onChange={(e) => toggleAllRows(e.target.checked)}
-          aria-label="Select all candidates"
+          aria-label="Select all employees"
         />
       ),
       render: (_, record) => (
@@ -363,19 +519,19 @@ export default function PulseOnboarding() {
           checked={selectedRowKeys.includes(record._id)}
           onChange={(e) => toggleRow(record._id, e.target.checked)}
           onClick={(e) => e.stopPropagation()}
-          aria-label={`Select ${record.firstName || 'candidate'}`}
+          aria-label={`Select ${record.firstName || 'employee'}`}
         />
       ),
     },
-    ...ALL_COLUMNS.filter((col) => LOCKED_KEYS.includes(col.key) || visible[col.key]).map((col) => ({
+    ...ALL_COLUMNS.filter((col) => LOCKED_KEYS.includes(col.key) || visible[col.key] !== false).map((col) => ({
       title: col.title,
       dataIndex: col.key,
       key: col.key,
       ellipsis: true,
       className: LOCKED_KEYS.includes(col.key) ? 'ob-lock-col' : undefined,
       fixed: LOCKED_KEYS.includes(col.key) ? 'left' : undefined,
-      width: col.key === 'email' ? 180 : col.key === 'firstName' || col.key === 'lastName' ? 140 : 160,
-      sorter: (a, b) => String(a[col.key] || '').localeCompare(String(b[col.key] || '')),
+      width: col.width || 160,
+      sorter: (a, b) => String(cellText(col, a) || '').localeCompare(String(cellText(col, b) || '')),
       showSorterTooltip: false,
       ...(col.key === 'status'
         ? {
@@ -383,66 +539,71 @@ export default function PulseOnboarding() {
             onFilter: (value, record) => record.status === value,
             render: (v) => <Tag color={STATUS_COLOR[v] || 'default'}>{v || '—'}</Tag>,
           }
-        : { render: (v) => dash(v) }),
+        : { render: (_, record) => cellText(col, record) }),
     })),
+    {
+      key: '_actions',
+      title: '',
+      width: 48,
+      align: 'center',
+      fixed: 'right',
+      className: 'ob-lock-col',
+      render: (_, record) => (
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              {
+                key: 'delete',
+                icon: <DeleteOutlined />,
+                label: 'Delete',
+                danger: true,
+                onClick: ({ domEvent }) => askDelete(record, domEvent),
+              },
+            ],
+          }}
+        >
+          <Button
+            type="text"
+            size="small"
+            icon={<MoreOutlined />}
+            aria-label={`More for ${employeeName(record) || record.candidateId || 'employee'}`}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </Dropdown>
+      ),
+    },
   ]
 
   return (
-    <div className={`ob-page${wide ? ' is-wide' : ''}`}>
+    <div className="ob-page">
       <div className="ob-toolbar">
-        <Flex align="center" gap={8} wrap="wrap">
-          <Select defaultValue="candidate" size="small" options={[{ value: 'candidate', label: 'Candidate View' }]} className="ob-view-select" />
-          <Button type="link" size="small">Edit</Button>
-        </Flex>
-        <Flex align="center" gap={8} wrap="wrap">
-          <Button type="link" size="small" onClick={() => setScope('all')}>View All Data</Button>
-          <Select
-            size="small"
-            value={scope === 'mine' ? 'mine' : 'all'}
-            onChange={setScope}
-            options={SCOPE_OPTIONS}
-            className="ob-scope"
-          />
-          <Space.Compact>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-              Add Candidate
-            </Button>
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'import', icon: <ImportOutlined />, label: 'Import', onClick: () => fileRef.current?.click() },
-                  { key: 'bulk', icon: <UploadOutlined />, label: 'Bulk File Upload', onClick: () => fileRef.current?.click() },
-                ],
-              }}
-            >
-              <Button type="primary" icon={<DownOutlined />} aria-label="More candidate actions" />
-            </Dropdown>
-          </Space.Compact>
-          <Button type="text" icon={<ExpandOutlined />} aria-label="Full screen" onClick={() => setWide((v) => !v)} />
-          <Button type="text" icon={<FilterOutlined />} aria-label="Filter" onClick={() => setFilterOpen(true)} />
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'reload', icon: <ReloadOutlined />, label: 'Refresh', onClick: load },
-              ],
-            }}
-          >
-            <Button type="text" icon={<MoreOutlined />} aria-label="More" />
-          </Dropdown>
-        </Flex>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+          Add Employee
+        </Button>
+        <Button type="text" icon={<FilterOutlined />} aria-label="Filter" onClick={() => setFilterOpen(true)} />
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'reload', icon: <ReloadOutlined />, label: 'Refresh', onClick: load },
+              ...(selectedRowKeys.length === 1
+                ? [{
+                    key: 'delete',
+                    icon: <DeleteOutlined />,
+                    label: 'Delete',
+                    danger: true,
+                    onClick: () => {
+                      const row = rows.find((item) => item._id === selectedRowKeys[0])
+                      if (row) askDelete(row)
+                    },
+                  }]
+                : []),
+            ],
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="More" />
+        </Dropdown>
       </div>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".csv,text/csv"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          e.target.value = ''
-          if (file) importCsv(file)
-        }}
-      />
 
       <div className="ob-table-wrap">
         <Table
@@ -460,11 +621,11 @@ export default function PulseOnboarding() {
                 image={<EmptyArt />}
                 description={
                   <div className="ob-empty-copy">
-                    <strong>No candidates have been added yet</strong>
+                    <strong>No employees have been added yet</strong>
                     <p>
-                      Add candidates and trigger the pre-onboarding process, known as candidate onboarding, to gather
-                      personal, professional, and educational information from them, and complete their onboarding
-                      paperwork online to transition them into employees.
+                      Add an employee and send a details form to their personal email. After they submit, their
+                      information appears here. Then fill work email, joining date, and offer letter, and send the
+                      BDA OS invite to their work email.
                     </p>
                   </div>
                 }
@@ -533,29 +694,146 @@ export default function PulseOnboarding() {
         </div>
       </Drawer>
 
-      <Modal
-        title={editing ? 'Edit Candidate' : 'Add Candidate'}
-        open={open}
-        onCancel={() => { setOpen(false); setEditing(null) }}
+      <Drawer
+        title={editing ? 'Edit Employee' : 'Add Employee'}
+        placement="right"
         width={920}
+        open={open}
+        onClose={closeForm}
         destroyOnHidden
-        className="ob-modal"
+        rootClassName="ob-add-drawer"
+        closable={false}
         footer={
           <Space wrap>
-            <Button type="primary" loading={saving} onClick={() => save({ draft: false })}>
-              Submit
+            {editing?.employeeSubmittedAt ? (
+              <Button type="primary" loading={sending} onClick={sendPulseInvite}>
+                {editing?.pulseInviteSentAt ? 'Resend BDA OS invite' : 'Send BDA OS invite'}
+              </Button>
+            ) : (
+              <Button type="primary" loading={sending} onClick={sendDetailsEmail}>
+                {editing?.onboardingEmailSentAt ? 'Resend details email' : 'Send details email'}
+              </Button>
+            )}
+            <Button loading={saving} disabled={sending} onClick={saveDraft}>
+              Save
             </Button>
-            <Button type="primary" loading={saving} onClick={() => save({ draft: false, andNew: true })}>
-              Submit and New
-            </Button>
-            <Button loading={saving} onClick={() => save({ draft: true })}>
-              Save Draft
-            </Button>
-            <Button onClick={() => { setOpen(false); setEditing(null) }}>Cancel</Button>
+            {editing?._id ? (
+              <Button
+                danger
+                disabled={sending || saving}
+                onClick={() => askDelete(editing)}
+              >
+                Delete
+              </Button>
+            ) : null}
+            <Button onClick={closeForm}>Cancel</Button>
           </Space>
         }
       >
-        <PulseCandidateForm form={form} />
+        {editing?.onboardingEmailSentAt || editing?.employeeSubmittedAt || editing?.pulseInviteSentAt ? (
+          <p className="ob-form-status">
+            {editing.pulseInviteSentAt
+              ? 'BDA OS invite sent to their work email.'
+              : editing.employeeSubmittedAt
+                ? 'Details received. Fill work email, joining date, and offer letter, then send the BDA OS invite.'
+                : editing.onboardingEmailSentAt
+                  ? 'Details form emailed to their personal inbox. Waiting for them to submit.'
+                  : null}
+          </p>
+        ) : null}
+        <PulseCandidateForm form={form} mode="admin" reviewEmployee={Boolean(editing?.employeeSubmittedAt)} />
+      </Drawer>
+      {open
+        ? createPortal(
+            <button
+              type="button"
+              className="ob-drawer-close"
+              aria-label="Close"
+              onClick={closeForm}
+            >
+              <CloseOutlined />
+            </button>,
+            document.body,
+          )
+        : null}
+      <Modal
+        title="Delete employee"
+        open={Boolean(removing)}
+        onCancel={closeDelete}
+        destroyOnHidden
+        maskClosable={!removingBusy}
+        keyboard={!removingBusy}
+        rootClassName="ob-delete-modal-root"
+        className="ob-delete-modal"
+        footer={
+          <Space>
+            <Button onClick={closeDelete} disabled={removingBusy}>Cancel</Button>
+            <Button
+              danger
+              type="primary"
+              loading={removingBusy}
+              disabled={!canConfirmDelete}
+              onClick={confirmDelete}
+              style={{ color: '#fff' }}
+            >
+              Delete
+            </Button>
+          </Space>
+        }
+      >
+        <p className="ob-delete-copy">
+          This removes the employee record. Type{' '}
+          {deleteHintId ? <strong>{deleteHintId}</strong> : 'the employee ID'}
+          {deleteHintName ? (
+            <>
+              {' '}or <strong>{deleteHintName}</strong>
+            </>
+          ) : null}{' '}
+          to confirm.
+        </p>
+        <Input
+          autoFocus
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder={deleteHintName ? `${deleteHintId || 'Employee ID'} or name` : (deleteHintId || 'Employee ID')}
+          onPressEnter={confirmDelete}
+        />
+      </Modal>
+      <Modal
+        title={mailFail?.title || 'Email not sent'}
+        open={Boolean(mailFail)}
+        onCancel={() => setMailFail(null)}
+        rootClassName="ob-mail-fail-modal-root"
+        className="ob-mail-fail-modal"
+        footer={
+          <Space>
+            {mailFail?.link ? (
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(mailFail.link)
+                    message.success('Link copied')
+                  } catch {
+                    message.error('Could not copy the link')
+                  }
+                }}
+              >
+                Copy link
+              </Button>
+            ) : null}
+            <Button type="primary" onClick={() => setMailFail(null)}>
+              OK
+            </Button>
+          </Space>
+        }
+      >
+        <p className="ob-mail-fail-copy">{mailFail?.message}</p>
+        {mailFail?.link ? (
+          <>
+            <p className="ob-mail-fail-label">{mailFail.linkLabel || 'Share this link'}</p>
+            <p className="ob-mail-fail-link">{mailFail.link}</p>
+          </>
+        ) : null}
       </Modal>
     </div>
   )

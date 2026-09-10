@@ -1,0 +1,20 @@
+---
+description: Never use a green focus/hover ring on Pulse dropdowns, selects, or calendar year/month pickers.
+alwaysApply: true
+---
+
+# No green focus rings on Pulse controls
+
+Do not add a forest-green (`#1A5F4A` / `#1a5f4a`) border, outline, or box-shadow ring on focused or hovered selects, dropdowns, or calendar year/month pickers.
+
+- Keep green for brand fills (Check-in, `+`, active tab underline). Do not reuse it as a focus ring on form controls.
+- Pulse Ant Design `Select` controls stay a thin gray border (`#d9d9d9`). No green halo on click, hover, or focus. Override with `border-color: #d9d9d9` and `box-shadow: none` / `outline: none`.
+
+# Calendar month toolbar
+
+My Space → Calendar uses a custom toolbar, not Ant Design Year/Month `Select`s:
+
+- Segmented **prev / next**, then separate **month** and **year** pickers (`Sep` and `2026`).
+- Custom gray-border dropdowns only. Do not restore Ant Design Year/Month `Select` dropdowns.
+- No green halo on picker hover, focus, or open. Border stays `#d9d9d9`.
+- No calendar-icon button. No green line under weekday headers or green ring around today's cell. Today is a forest-green (`#1A5F4A`) rounded square with white numerals.

@@ -1,11 +1,6 @@
-import './pulse-open.css'
+import BdaGateLoader from './BdaGateLoader'
 
-/** Simple loading screen for Pulse routes (new tab / auth wait). */
-export default function PulseLoading({ label = 'Loading Pulse...' }) {
-  return (
-    <div className="pulse-loading" role="status" aria-live="polite" aria-label={label}>
-      <span className="pulse-loading-ring" aria-hidden="true" />
-      <p>{label}</p>
-    </div>
-  )
+/** Pulse wait screen: BDA OS mark in BDA green. */
+export default function PulseLoading({ label = 'Loading' }) {
+  return <BdaGateLoader show label={label} />
 }

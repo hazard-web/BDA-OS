@@ -1,6 +1,6 @@
 import './pulse-sample-data.css'
 
-/** Sample-data choice step inside Getting Started onboarding. */
+/** Sample-data step for Getting Started — parked on branch `pulse/company-later-services`. */
 export default function PulseSampleDataStep({ busy = false, onYes, onNo }) {
   return (
     <div className="psd-page is-embedded">
@@ -9,14 +9,14 @@ export default function PulseSampleDataStep({ busy = false, onYes, onNo }) {
           <img
             className="psd-art"
             src={`/pulse-sample-hero.png?v=11`}
-            alt="Person exploring Pulse sample dashboards"
+            alt="Person exploring BDA OS sample dashboards"
           />
         </div>
 
         <div className="psd-body">
-          <h1 id="psd-title">Would you like us to load sample data into your Pulse account?</h1>
+          <h1 id="psd-title">Would you like us to load sample data into your BDA OS account?</h1>
           <p className="psd-lead">
-            Load sample data to your Pulse account to help you settle in comfortably as you
+            Load sample data to your BDA OS account to help you settle in comfortably as you
             familiarize yourself with the various features.
           </p>
           <p className="psd-note">

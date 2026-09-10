@@ -64,7 +64,7 @@ export default function PulseSupportCta({ open, startView = 'home' }) {
   const showTabs = view === 'home' || view === 'conversation'
 
   return (
-    <div className="psup-root" role="dialog" aria-label="Pulse Support">
+    <div className="psup-root" role="dialog" aria-label="BDA OS Support">
       <div className={`psup-card${view === 'form' ? ' is-form' : ''}${view === 'home' ? ' is-home' : ''}`}>
         {view === 'home' ? (
           <>
@@ -85,7 +85,7 @@ export default function PulseSupportCta({ open, startView = 'home' }) {
                 </svg>
               </div>
               <div className="psup-hero-copy">
-                <h2>Pulse Support</h2>
+                <h2>BDA OS Support</h2>
                 <p>We are here to help you!</p>
               </div>
             </header>
@@ -203,7 +203,7 @@ export default function PulseSupportCta({ open, startView = 'home' }) {
           <span className="psup-foot-mark" aria-hidden="true">
             <PulseMark size={14} />
           </span>
-          Powered by Pulse Support
+          Powered by BDA OS Support
         </footer>
       </div>
     </div>

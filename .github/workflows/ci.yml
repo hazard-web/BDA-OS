@@ -1,5 +1,6 @@
 # Checks on development. No deploy from this branch.
-# Flow: feature → development → uat → production
+# Web flow: PR development → uat, then PR uat → production.
+# Desktop lives on the separate `electron` branch.
 
 name: CI
 

@@ -23,6 +23,7 @@ const RecentRow = React.memo(({ log, navigate }) => {
       case 'PULSE_CHECK_OUT': return { icon: LogOut, color: 'var(--primary)', label: 'Pulse check-out' }
       case 'PULSE_RESUME': return { icon: Clock, color: 'var(--primary)', label: 'Pulse resume' }
       case 'PULSE_TIMESHEET_DAY': return { icon: FileText, color: 'var(--primary)', label: 'Timesheet day' }
+      case 'PULSE_TIMESHEET_SUBMIT': return { icon: FileText, color: 'var(--primary)', label: 'Timesheet submit' }
       case 'PULSE_TARGET_REACHED': return { icon: CheckCircle2, color: 'var(--primary)', label: '9h target' }
       default: return { icon: Activity, color: 'var(--primary)', label: 'System' }
     }

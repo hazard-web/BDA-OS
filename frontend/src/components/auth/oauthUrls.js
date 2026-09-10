@@ -17,6 +17,6 @@ export function oauthStartUrl(providerId) {
   const key = map[id] || id
   const apiBase = import.meta.env.DEV
     ? ''
-    : (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+    : (import.meta.env.VITE_API_BASE_URL || 'https://people-os-api-uat.onrender.com').replace(/\/+$/, '')
   return `${apiBase}/api/auth/oauth/${key}`
 }

@@ -1,6 +1,6 @@
 # UAT testers — not production.
-# Flow: development → uat → production
-# Push to `uat` → UAT Vercel + UAT Hostinger (matching UI + API).
+# Flow: open PR development → uat, merge. Frontend: Vercel people-os-uat. API: Render (see render.yaml).
+# Do not push to uat directly.
 #
 # GitHub → Settings → Environments → create `uat`
 # Put these secrets on the **uat** environment (not production):
@@ -13,7 +13,8 @@
 name: Deploy UAT
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [uat]
   workflow_dispatch:
 
@@ -24,6 +25,7 @@ concurrency:
 jobs:
   frontend:
     name: Vercel UAT
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: uat
     defaults:
@@ -31,6 +33,8 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -57,10 +61,13 @@ jobs:
 
   backend:
     name: Hostinger UAT
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: uat
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - name: Pack backend
         run: |
           tar -czf backend-release.tgz \
@@ -94,7 +101,7 @@ jobs:
             rm -f /tmp/backend-release.tgz
             cd "$APP_DIR"
             if [ ! -f .env ]; then
-              echo "Missing $APP_DIR/.env — create it from backend/.env.example before first deploy."
+              echo "Missing $APP_DIR/.env — set it in the host dashboard (Render env vars)."
               exit 1
             fi
             command -v node

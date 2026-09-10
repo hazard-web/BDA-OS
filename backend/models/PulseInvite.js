@@ -48,6 +48,16 @@ const pulseInviteSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   },
+  firstName: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  lastName: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   createdAt: {
     type: Date,
     default: Date.now,

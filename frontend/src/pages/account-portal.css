@@ -4,6 +4,12 @@
   background: #f4f2ec;
 }
 
+.acc-shell.is-embedded.ant-layout {
+  height: 100%;
+  min-height: 0;
+  background: #f4f2ec;
+}
+
 .acc-top.ant-layout-header {
   display: flex;
   align-items: center;

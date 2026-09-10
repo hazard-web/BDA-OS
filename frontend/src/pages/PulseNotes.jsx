@@ -48,7 +48,6 @@ import {
   Typography,
 } from 'antd'
 import PulseMark from '../components/PulseMark'
-import PulseLoading from '../components/PulseLoading'
 import { useAuth } from '../context/AuthContext'
 import {
   NOTE_COLORS,
@@ -67,8 +66,9 @@ import {
   savePulseNotes,
   splitNote,
 } from '../utils/pulseNotes'
-import { hasPulseAccount, hasPulseSampleChoice, getPulseGettingStartedPath } from '../utils/pulseEntry'
+import { APP_BASE, PULSE_HOME, hasPulseAccount } from '../utils/pulseEntry'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
+import { AuthLogoLoader, useAccountSignOut } from '../components/auth/AuthLogoLoader'
 import './pulse-antd.css'
 import './pulse-notes.css'
 
@@ -193,7 +193,8 @@ function ListHeader({ title, onSearch, starred, onStar, moreItems }) {
 
 export default function PulseNotes() {
   const navigate = useNavigate()
-  const { user, loading, logout } = useAuth()
+  const { user, loading } = useAuth()
+  const { signingOut, signOutLogo, beginSignOut } = useAccountSignOut()
   const today = pulseNotesDayKey()
   const [nav, setNav] = useState('all')
   const [notebooks, setNotebooks] = useState([{ id: 'my-notebook', name: 'My Notebook' }])
@@ -224,8 +225,8 @@ export default function PulseNotes() {
 
   useEffect(() => {
     if (loading || !user) return
-    if (!hasPulseAccount(user) || !hasPulseSampleChoice()) {
-      navigate(getPulseGettingStartedPath(user), { replace: true })
+    if (!hasPulseAccount(user)) {
+      navigate(APP_BASE, { replace: true })
     }
   }, [user, loading, navigate])
 
@@ -331,8 +332,8 @@ export default function PulseNotes() {
     go(`board:${next[next.length - 1].id}`)
   }
 
-  if (loading || !user || !hasPulseAccount(user) || !hasPulseSampleChoice()) {
-    return <PulseLoading />
+  if (loading || !user || !hasPulseAccount(user)) {
+    return <AuthLogoLoader show label={signOutLogo ? 'Signing out' : 'Opening BDA OS'} />
   }
 
   const selectedNav = nav.startsWith('board:') ? nav : nav
@@ -432,12 +433,13 @@ export default function PulseNotes() {
 
   return (
     <AntLayout className="pulse-shell pn-shell">
+      <AuthLogoLoader show={signOutLogo} label="Signing out" />
       <Header className="pulse-top">
-        <button type="button" className="pulse-rail-logo pn-mark" onClick={() => navigate('/pulse/home')} aria-label="Pulse home">
+        <button type="button" className="pulse-rail-logo pn-mark" onClick={() => navigate(PULSE_HOME)} aria-label="BDA OS home">
           <PulseMark size={28} />
         </button>
-        <button type="button" className="pulse-space" onClick={() => navigate('/pulse/home')}>
-          My Space
+        <button type="button" className="pulse-space" onClick={() => navigate(PULSE_HOME)}>
+          You
         </button>
         <button type="button" className="pulse-space is-on">
           Notebook
@@ -460,12 +462,13 @@ export default function PulseNotes() {
           </Dropdown.Button>
           <PulseAppearanceToggle />
           <Tooltip title="Settings">
-            <Button type="text" icon={<SettingOutlined />} onClick={() => navigate('/pulse/home')} />
+            <Button type="text" icon={<SettingOutlined />} onClick={() => navigate(PULSE_HOME)} />
           </Tooltip>
           <Dropdown
+            disabled={signingOut}
             menu={{
               items: [
-                { key: 'out', icon: <LogoutOutlined />, danger: true, label: 'Sign out', onClick: () => { logout(); navigate('/login') } },
+                { key: 'out', icon: <LogoutOutlined />, danger: true, label: signingOut ? 'Signing out' : 'Sign out', disabled: signingOut, onClick: () => beginSignOut() },
               ],
             }}
           >

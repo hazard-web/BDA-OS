@@ -5,14 +5,14 @@ export default function PeopleOsLive() {
   return (
     <div className="soon-page">
       <header className="soon-nav">
-        <Link to="/login" className="soon-brand" aria-label="People OS home">
+        <Link to="/login" className="soon-brand" aria-label="BDA OS home">
           <span className="soon-mark" aria-hidden="true">
             <i style={{ background: '#e42527' }} />
             <i style={{ background: '#f5c400' }} />
             <i style={{ background: '#21a05a' }} />
             <i style={{ background: '#2b8aed' }} />
           </span>
-          <span>PEOPLE OS</span>
+          <span>BDA OS</span>
         </Link>
         <Link to="/login" className="soon-signin">
           Sign in

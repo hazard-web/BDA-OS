@@ -51,7 +51,7 @@ export function PasswordlessIllustration() {
         fill="#2b2b2b"
         fontFamily="Nunito Sans, Segoe UI, sans-serif"
       >
-        hr@peopleos.in
+        hr@bda.co.in
       </text>
 
       {/* Auth icon bubbles */}
@@ -186,7 +186,7 @@ export function TeamIllustration() {
   )
 }
 
-/** People OS live - dashboard laptop with two people */
+/** BDA OS live - dashboard laptop with two people */
 export function PayrollIllustration() {
   return (
     <svg className="auth-illu" viewBox="0 0 420 250" aria-hidden="true">

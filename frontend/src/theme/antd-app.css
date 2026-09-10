@@ -34,6 +34,7 @@
 .hr-brand img,
 .hr-brand .people-os-mark {
   flex-shrink: 0;
+  object-fit: contain;
 }
 
 .hr-brand-name {

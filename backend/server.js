@@ -29,6 +29,7 @@ const announcementsRoutes = require('./routes/announcements');
 const assignedTasksRoutes = require('./routes/assignedTasks');
 const searchRoutes = require('./routes/search');
 const pulseCheckInRoutes = require('./routes/pulseCheckIn');
+const pulseZipRoutes = require('./routes/pulseZip');
 const inviteRoutes = require('./routes/invites');
 const launcherRoutes = require('./routes/launcher');
 const candidateRoutes = require('./routes/candidates');
@@ -63,7 +64,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check stays DB-independent so local debugging is instant.
+// Health check stays DB-independent so local debugging and Render probes are instant.
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', service: 'people-os-api' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -91,6 +96,15 @@ const DB_READY_TIMEOUT_MS = 15000;
 // Ensure API data routes do not sit on Mongoose's long query buffering when
 // Atlas is blocked/slow. Return a clear 503 quickly instead.
 app.use('/api', async (req, res, next) => {
+  // OAuth start must redirect even when Atlas is still connecting.
+  // Callback still waits for DB below.
+  const apiPath = (req.path || '').split('?')[0];
+  const isOAuthStart =
+    req.method === 'GET' &&
+    apiPath.startsWith('/auth/oauth/') &&
+    !apiPath.endsWith('/callback');
+  if (isOAuthStart) return next();
+
   if (mongoose.connection.readyState === 1) return next();
 
   try {
@@ -127,13 +141,14 @@ app.use('/api/announcements', announcementsRoutes);
 app.use('/api/assigned-tasks', assignedTasksRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/pulse-checkin', pulseCheckInRoutes);
+app.use('/api/pulse-zip', pulseZipRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/launcher', launcherRoutes);
 app.use('/api/candidates', candidateRoutes);
 
 const path = require('path');
 
-// Hostinger UAT serves API only. Vercel hosts the frontend.
+// UAT/production API-only (Render / Hostinger). Vercel hosts the frontend.
 // Set SERVE_FRONTEND=true only if this Node process should also ship the SPA.
 const serveFrontend = !process.env.VERCEL && process.env.SERVE_FRONTEND === 'true';
 if (serveFrontend) {
@@ -192,7 +207,6 @@ app.use((err, req, res, next) => {
 
 // Connect to MongoDB then start server (updated URI database path)
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/payslip_generator';
-console.log('🔍 MONGODB_URI =', process.env.MONGODB_URI);
 const { runShiftCheck, runOfficeClosingCheck } = require('./utils/cronJobs');
 const http = require('http');
 
@@ -235,7 +249,7 @@ if (!process.env.VERCEL) {
   // Start the HTTP server FIRST so requests get clean error responses
   // even when the database is down. This avoids HTTP 000 / connection-refused.
   const server = http.createServer(app);
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     const localIP = getLocalIP();
     console.log(`🚀 Server running locally  → http://localhost:${PORT}`);
     if (localIP !== 'localhost') console.log(`🚀 Server running on network → http://${localIP}:${PORT}`);

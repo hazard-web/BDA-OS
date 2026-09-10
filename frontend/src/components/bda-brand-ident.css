@@ -1,0 +1,12 @@
+.bda-ident {
+  display: grid;
+  place-items: center;
+}
+
+.bda-ident-mark {
+  display: block;
+  width: 168px;
+  height: auto;
+  max-width: 72vw;
+  object-fit: contain;
+}

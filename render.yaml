@@ -1,0 +1,42 @@
+# UAT API on Render (free Web Service). Frontend stays on Vercel.
+# https://people-os-uat.vercel.app
+#
+# Deploy: Render Dashboard → New → Blueprint → this repo → this file
+# Or New → Web Service with the same settings (Root Directory = backend).
+#
+# After the first deploy, set MONGODB_URI in the dashboard (Atlas DB peopleos_uat).
+# Then on Vercel people-os-uat set VITE_API_BASE_URL to the Render origin and redeploy.
+
+services:
+  - type: web
+    name: people-os-api-uat
+    runtime: node
+    plan: free
+    region: singapore
+    branch: development
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_FRONTEND
+        value: "false"
+      - key: FRONTEND_URL
+        value: https://people-os-uat.vercel.app
+      - key: APP_URL
+        value: https://people-os-uat.vercel.app
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: bda.co.in
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BACKEND_URL
+        fromService:
+          name: people-os-api-uat
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: MONGODB_URI
+        sync: false

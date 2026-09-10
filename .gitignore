@@ -2,10 +2,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
-!.env.example
-!**/.env.example
 dist/
 build/
+release/
+desktop/release/
 frontend/dist/
 frontend/build/
 .DS_Store
@@ -23,5 +23,5 @@ npm-debug.log*
 .vscode/
 
 .env*
-!.env.example
-!**/.env.example
+!.env.production
+!frontend/.env.production

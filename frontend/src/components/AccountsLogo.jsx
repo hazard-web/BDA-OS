@@ -1,7 +1,7 @@
 /**
- * People OS Accounts mark - filled shield + person.
+ * BDA OS mark - filled shield + person.
  */
-export default function AccountsLogo({ size = 32, className = '', title = 'People OS Accounts' }) {
+export default function AccountsLogo({ size = 32, className = '', title = 'BDA OS' }) {
   return (
     <svg
       width={size}

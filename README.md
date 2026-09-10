@@ -29,7 +29,7 @@ payslip-generator/
 │   │   └── emailService.js     # Nodemailer email with branded HTML template
 │   ├── server.js               # Express app entry point
 │   ├── package.json
-│   └── .env.example
+│   └── .env                    # local secrets, not in git
 │
 └── frontend/
     ├── src/
@@ -76,13 +76,7 @@ cd backend
 npm install
 ```
 
-Create your `.env` file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+Create `backend/.env` (not committed). Local and Render/Vercel each have their own values.
 
 ```env
 PORT=5000
