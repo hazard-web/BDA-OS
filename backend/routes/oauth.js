@@ -367,7 +367,7 @@ async function findExistingOAuthUser({ provider, providerId, email }) {
   return user;
 }
 
-async function attachOAuthProvider(user, { provider, providerId, emailVerified }) {
+async function attachOAuthProvider(user, { provider, providerId, emailVerified, picture }) {
   const already = (user.oauthProviders || []).some(
     (p) => p.provider === provider && p.providerId === providerId,
   );
@@ -376,6 +376,7 @@ async function attachOAuthProvider(user, { provider, providerId, emailVerified }
     user.oauthProviders.push({ provider, providerId });
   }
   if (emailVerified && !user.isVerified) user.isVerified = true;
+  if (picture && !user.avatarUrl) user.avatarUrl = String(picture);
   await user.save();
   return user;
 }
@@ -495,6 +496,7 @@ router.post('/complete', async (req, res, next) => {
         provider: data.provider,
         providerId: data.providerId,
         emailVerified: data.emailVerified,
+        picture: data.picture,
       });
       const token = issueToken(existing);
       return res.json({ success: true, token, user: await publicUser(existing) });
@@ -593,6 +595,7 @@ router.post('/link', async (req, res, next) => {
       provider: data.provider,
       providerId: data.providerId,
       emailVerified: true,
+      picture: data.picture,
     });
 
     const token = issueToken(user);
@@ -799,7 +802,12 @@ async function handleOAuthCallback(req, res) {
           provider,
           providerId: profile.providerId,
           emailVerified: true,
+          picture: profile.picture,
         });
+      }
+      if (profile.picture && !existing.avatarUrl) {
+        existing.avatarUrl = profile.picture;
+        await existing.save();
       }
       if (!existing.isVerified && profile.emailVerified) {
         existing.isVerified = true;

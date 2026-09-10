@@ -1,14 +1,15 @@
-const LOCKUP = '/bda-logo-lockup.png'
+const LOGO = '/bda-logo.png'
 
-/** BDA Technologies lockup — used as the Home / brand mark. */
-export default function PeopleOsMark({ size = 18, className = '', title = 'BDA Technologies' }) {
+/** BDA Technologies wordmark — Home dock brand mark. */
+export default function PeopleOsMark({ size = 22, className = '', title = 'BDA Technologies' }) {
   return (
     <img
-      src={LOCKUP}
+      src={LOGO}
       alt={title}
       width={size}
       height={size}
       className={`people-os-mark${className ? ` ${className}` : ''}`}
+      draggable={false}
     />
   )
 }

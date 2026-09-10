@@ -218,6 +218,7 @@ export default function PeopleHome() {
   const { user, loading } = useAuth()
   const [start] = useState(() => readPulseLocation(window.location.pathname, window.location.search))
   const [bootView] = useState(() => (start.boot ? start : null))
+  const [serviceGate, setServiceGate] = useState(() => Boolean(start.boot))
   const [space, setSpace] = useState(start.space)
   const [sub, setSub] = useState(start.sub)
   const [module, setModule] = useState(start.module)
@@ -313,6 +314,14 @@ export default function PeopleHome() {
   }, [user?.email, user?.assignedAppCount])
 
   const skipWelcome = Boolean(bootView) || isPulseServicePath(location.pathname)
+
+  useEffect(() => {
+    if (!serviceGate) return undefined
+    if (loading || !user || !hasPulseAccount(user)) return undefined
+    const labelMs = 900
+    const timer = window.setTimeout(() => setServiceGate(false), labelMs)
+    return () => window.clearTimeout(timer)
+  }, [serviceGate, loading, user])
 
   useEffect(() => {
     if (loading || !user?.email) return
@@ -493,10 +502,17 @@ export default function PeopleHome() {
     return MORE_SERVICES.filter((item) => item.name.toLowerCase().includes(q))
   }, [moreQuery])
 
-  if (loading || !user || !hasPulseAccount(user)) {
-    if (signOutLogo) return <AuthLogoLoader show label="Signing out" />
-    if (bootView) return <div style={{ minHeight: '100vh', background: '#fff' }} aria-hidden="true" />
-    return <AuthLogoLoader show label="Opening BDA OS" />
+  if (signOutLogo) {
+    return <AuthLogoLoader show label="Signing out" />
+  }
+
+  if (serviceGate || loading || !user || !hasPulseAccount(user)) {
+    return (
+      <AuthLogoLoader
+        show
+        label={bootView?.label || 'Opening BDA OS'}
+      />
+    )
   }
 
   if (!skipWelcome && !hasSeenWelcomeCurtain(user.email) && (intro === 'pending' || intro === 'logo')) {

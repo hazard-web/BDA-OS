@@ -3922,7 +3922,7 @@ body:has(.pulse-shell),
 .pulse-org-logo {
   width: 112px;
   height: 112px;
-  border-radius: 24px;
+  border-radius: 16px;
   background: #fff;
   border: 0;
   outline: none;
@@ -3942,7 +3942,18 @@ body:has(.pulse-shell),
   display: block;
 }
 
+.pulse-org-logo.is-lockup {
+  width: 168px;
+  height: auto;
+  min-height: 72px;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
 .pulse-org-logo.is-lockup img {
+  width: 100%;
+  height: auto;
+  max-height: 72px;
   mix-blend-mode: normal;
 }
 

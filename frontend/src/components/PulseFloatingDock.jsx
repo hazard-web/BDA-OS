@@ -14,7 +14,7 @@ function usePrefersReducedMotion() {
   return reduced
 }
 
-function DockIcon({ mouseX, title, icon, active, onClick, reduced }) {
+function DockIcon({ mouseX, title, icon, active, onClick, reduced, brand = false }) {
   const ref = useRef(null)
   const [hovered, setHovered] = useState(false)
 
@@ -25,14 +25,15 @@ function DockIcon({ mouseX, title, icon, active, onClick, reduced }) {
 
   const sizeTransform = useTransform(distance, [-150, 0, 150], [44, 80, 44])
   const iconTransform = useTransform(distance, [-150, 0, 150], [20, 40, 20])
+  const brandTransform = useTransform(distance, [-150, 0, 150], [34, 62, 34])
   const spring = { mass: 0.1, stiffness: 150, damping: 12 }
   const size = useSpring(sizeTransform, spring)
-  const iconSize = useSpring(iconTransform, spring)
+  const iconSize = useSpring(brand ? brandTransform : iconTransform, spring)
 
   return (
     <button
       type="button"
-      className={`pulse-fd-hit${active ? ' is-on' : ''}`}
+      className={`pulse-fd-hit${active ? ' is-on' : ''}${brand ? ' is-brand' : ''}`}
       aria-label={title}
       aria-current={active ? 'page' : undefined}
       onClick={onClick}
@@ -58,7 +59,13 @@ function DockIcon({ mouseX, title, icon, active, onClick, reduced }) {
         </AnimatePresence>
         <motion.span
           className="pulse-fd-glyph"
-          style={reduced ? { width: 20, height: 20 } : { width: iconSize, height: iconSize }}
+          style={
+            brand
+              ? undefined
+              : reduced
+                ? { width: 20, height: 20 }
+                : { width: iconSize, height: iconSize }
+          }
         >
           {icon}
         </motion.span>
@@ -90,6 +97,7 @@ export default function PulseFloatingDock({ items }) {
             active={item.active}
             onClick={item.onClick}
             reduced={reduced}
+            brand={item.key === 'home'}
           />
         ))}
       </motion.nav>
