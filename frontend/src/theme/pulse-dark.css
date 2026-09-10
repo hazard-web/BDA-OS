@@ -86,6 +86,26 @@
   color: #d6d3d1;
 }
 
+:root[data-theme='dark'] .pulse-appearance-btn {
+  color: #d6d3d1;
+  background: none !important;
+  background-color: transparent !important;
+  color-scheme: only dark;
+}
+
+:root[data-theme='dark'] .pulse-appearance-btn:hover,
+:root[data-theme='dark'] .pulse-appearance-btn:focus,
+:root[data-theme='dark'] .pulse-appearance-btn:focus-visible,
+:root[data-theme='dark'] .pulse-appearance-btn:active,
+:root[data-theme='dark'] .pulse-appearance-btn.ant-tooltip-open {
+  color: #f5f2ec !important;
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
 :root[data-theme='dark'] .pulse-head-timer {
   background: rgba(255, 255, 255, 0.08);
   color: #f5f2ec;

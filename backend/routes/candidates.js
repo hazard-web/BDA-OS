@@ -331,6 +331,23 @@ function requireIdCards(payload, existing) {
   }
 }
 
+function requireEducation(payload) {
+  if (!cleanStr(payload.highestQualification)) {
+    throw httpError(400, 'Highest qualification is required')
+  }
+  const rows = Array.isArray(payload.education) ? payload.education : []
+  const filled = rows.filter(
+    (row) =>
+      cleanStr(row?.schoolName) &&
+      cleanStr(row?.degree) &&
+      cleanStr(row?.fieldOfStudy) &&
+      cleanStr(row?.dateOfCompletion),
+  )
+  if (!filled.length) {
+    throw httpError(400, 'Add at least one education entry with school, degree, field, and year')
+  }
+}
+
 function requirePersonalEmail(row) {
   const email = cleanStr(row.email).toLowerCase()
   if (!email || !email.includes('@')) {
@@ -493,6 +510,7 @@ router.post('/onboard/:token', async (req, res) => {
       })
     }
     requireIdCards(payload, row)
+    requireEducation(payload)
 
     Object.assign(row, payload)
     row.employeeSubmittedAt = new Date()

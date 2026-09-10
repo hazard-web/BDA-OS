@@ -78,14 +78,20 @@ const LOCKED_KEYS = ['firstName', 'lastName', 'email', 'status']
 const OPTIONAL_COLUMNS = ALL_COLUMNS.filter((col) => !LOCKED_KEYS.includes(col.key))
 const ALL_ON = Object.fromEntries(ALL_COLUMNS.map((col) => [col.key, true]))
 
-const STATUS_COLOR = {
-  Draft: 'default',
-  'Not started': 'gold',
-  'In progress': 'processing',
-  'Details received': 'purple',
-  'Offer sent': 'cyan',
-  Joined: 'success',
-  Withdrawn: 'error',
+/** Tone keys map to `.ob-status-tag--*` (avoid Ant `processing` = primary green washout). */
+const STATUS_TONE = {
+  Draft: 'draft',
+  'Not started': 'not-started',
+  'In progress': 'in-progress',
+  'Details received': 'details',
+  'Offer sent': 'offer',
+  Joined: 'joined',
+  Withdrawn: 'withdrawn',
+}
+
+function statusTagClass(status) {
+  const tone = STATUS_TONE[status] || 'draft'
+  return `ob-status-tag ob-status-tag--${tone}`
 }
 
 function employeeName(row) {
@@ -537,7 +543,7 @@ export default function PulseOnboarding() {
             filters: statusFilters,
             onFilter: (value, record) => record.status === value,
             render: (v) => (
-              <Tag color={STATUS_COLOR[v] || 'default'} className="ob-status-tag">
+              <Tag bordered={false} className={statusTagClass(v || 'Draft')}>
                 {v || 'Draft'}
               </Tag>
             ),
@@ -735,7 +741,7 @@ export default function PulseOnboarding() {
       >
         {editing?._id ? (
           <div className="ob-form-status-row">
-            <Tag color={STATUS_COLOR[editing.status] || 'default'} className="ob-status-tag">
+            <Tag bordered={false} className={statusTagClass(editing.status || 'Draft')}>
               {editing.status || 'Draft'}
             </Tag>
             {editing?.onboardingEmailSentAt || editing?.employeeSubmittedAt || editing?.pulseInviteSentAt ? (
