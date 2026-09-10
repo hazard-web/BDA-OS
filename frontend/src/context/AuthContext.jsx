@@ -62,6 +62,9 @@ export function AuthProvider({ children }) {
       return
     }
 
+    // Keep the BDA "Opening" gate up while profile loads (Coolify can be slow).
+    setLoading(true)
+
     // Coolify / Atlas cold starts often exceed 5s — that used to force logout
     // and look like a session timeout / onboarding reload loop.
     const controller = new AbortController()
@@ -69,30 +72,33 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.get('/auth/profile', { signal: controller.signal, __skipCache: true })
       setUser(res.data.user)
+      setLoading(false)
     } catch (err) {
       const status = err?.response?.status
       if (status === 401 || status === 403) {
         logout()
-      } else if (userRef.current) {
+        setLoading(false)
+        return
+      }
+      if (userRef.current) {
         // Keep the in-memory session if profile refresh failed transiently.
-        console.warn('[Auth] Profile refresh failed — keeping session.', err?.message)
-      } else {
-        // No profile yet: retry once before giving up (still keep the token).
-        try {
-          const retry = await api.get('/auth/profile', { __skipCache: true, timeout: 20000 })
-          setUser(retry.data.user)
-        } catch (retryErr) {
-          const retryStatus = retryErr?.response?.status
-          if (retryStatus === 401 || retryStatus === 403) {
-            logout()
-          } else {
-            console.warn('[Auth] Profile unreachable — keeping token.', retryErr?.message)
-          }
+        setLoading(false)
+        return
+      }
+      // No profile yet: retry once while the BDA gate stays visible.
+      try {
+        const retry = await api.get('/auth/profile', { __skipCache: true, timeout: 20000 })
+        setUser(retry.data.user)
+      } catch (retryErr) {
+        const retryStatus = retryErr?.response?.status
+        if (retryStatus === 401 || retryStatus === 403) {
+          logout()
         }
+      } finally {
+        setLoading(false)
       }
     } finally {
       clearTimeout(timer)
-      setLoading(false)
     }
   }, [logout])
 

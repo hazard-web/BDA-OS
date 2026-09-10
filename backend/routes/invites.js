@@ -335,11 +335,27 @@ router.post('/accept', async (req, res) => {
     const familyName = lastName || invite.lastName || ''
     const joinedRole = normalizePulseRole(invite.role) || 'member'
 
+    const candidate = await Candidate.findOne({
+      organizationId: invite.organizationId,
+      $or: [{ officialEmail: invite.email }, { email: invite.email }],
+    })
+      .select('photo firstName lastName')
+      .lean()
+
+    let avatarUrl = ''
+    if (candidate?.photo?.data) {
+      const raw = String(candidate.photo.data)
+      if (raw.startsWith('data:')) avatarUrl = raw
+      else if (raw.length <= 350000) {
+        avatarUrl = `data:${candidate.photo.mime || 'image/jpeg'};base64,${raw}`
+      }
+    }
+
     const user = new User({
       email: invite.email,
       password,
-      firstName: givenName,
-      lastName: familyName,
+      firstName: givenName || candidate?.firstName || '',
+      lastName: familyName || candidate?.lastName || '',
       role: joinedRole,
       organizationId: invite.organizationId,
       companyName: (admin && admin.companyName) || invite.companyName || '',
@@ -352,12 +368,14 @@ router.post('/accept', async (req, res) => {
       companyWebsite: (admin && admin.companyWebsite) || '',
       companyLogo: (admin && admin.companyLogo) || '',
       industry: (admin && admin.industry) || '',
+      avatarUrl,
       gender: DEFAULT_GENDER,
       country: 'India',
       isVerified: true,
       onboardingCompleted: true,
       pulseSetupCompleted: true,
-      pulsePortalId: (admin && admin.pulsePortalId) || '',
+      // Portal slug is unique to the org owner — never copy it onto invitees.
+      pulsePortalId: '',
     })
     await user.save()
 
@@ -383,6 +401,16 @@ router.post('/accept', async (req, res) => {
     })
   } catch (err) {
     console.error('Accept invite error:', err)
+    if (err?.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0] || 'field'
+      return res.status(409).json({
+        success: false,
+        message:
+          field === 'email'
+            ? 'An account already exists for this email. Sign in instead.'
+            : 'Could not create this account because of a conflicting company setting. Ask your admin to resend the invite.',
+      })
+    }
     res.status(500).json({ success: false, message: err.message || 'Failed to accept invite' })
   }
 })

@@ -19,18 +19,21 @@ export const PULSE_SHELL_VIEWS = {
     space: 'myspace',
     module: 'home',
     sub: 'overview',
+    label: 'Opening BDA OS',
   },
   calendar: {
     path: `${APP_BASE}/calendar`,
     space: 'myspace',
     module: 'home',
     sub: 'calendar',
+    label: 'Opening Calendar',
   },
   company: {
     path: `${APP_BASE}/company`,
     space: 'organization',
     module: 'home',
     sub: 'overview',
+    label: 'Opening Company',
   },
   onboarding: {
     path: `${APP_BASE}/onboarding`,
@@ -85,7 +88,7 @@ export const PULSE_SHELL_VIEWS = {
     module: 'home',
     sub: 'time',
     admin: true,
-    label: 'Opening Time Tracker',
+    label: 'Opening Timesheet',
   },
   performance: {
     path: `${APP_BASE}/performance`,
@@ -98,6 +101,7 @@ export const PULSE_SHELL_VIEWS = {
     space: 'myspace',
     module: 'account',
     sub: 'overview',
+    label: 'Opening Account',
   },
   apps: {
     path: `${APP_BASE}/apps`,
@@ -172,10 +176,11 @@ export function readPulseLocation(pathname = window.location.pathname, search = 
     .find(([, view]) => view.path === path)
   if (found) {
     const [key, view] = found
-    return { key, ...view, boot: Boolean(PULSE_OPEN_VIEWS[key]) && boot }
+    // Any `?boot=1` open (dock / Company services) shows the BDA gate first.
+    return { key, ...view, boot: params.get('boot') === '1' || Boolean(PULSE_OPEN_VIEWS[key]) }
   }
 
-  return { key: 'home', ...PULSE_SHELL_VIEWS.home, boot: false }
+  return { key: 'home', ...PULSE_SHELL_VIEWS.home, boot: params.get('boot') === '1' }
 }
 
 export function readPulseOpenView(search = window.location.search) {
@@ -205,7 +210,7 @@ export function isPulseAuxiliaryTab(pathname = typeof window !== 'undefined' ? w
   return PULSE_AUXILIARY_PATHS.has(path)
 }
 
-const LOCKUP = '/bda-logo-lockup.png'
+const LOCKUP = '/bda-logo.png'
 
 function warmOpenAssets() {
   try {

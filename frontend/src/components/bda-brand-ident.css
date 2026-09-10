@@ -5,8 +5,7 @@
 
 .bda-ident-mark {
   display: block;
-  width: 168px;
+  width: min(220px, 72vw);
   height: auto;
-  max-width: 72vw;
   object-fit: contain;
 }

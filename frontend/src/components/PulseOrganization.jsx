@@ -20,8 +20,8 @@ import { openPulsePage } from '../utils/pulseOpenPage'
 // Later build — restore from branch `pulse/company-later-services`
 // import { PulseAnnouncementsBoard } from './PulseLiveWorkspace'
 
-export const BDA_LOGO = '/bda-logo-lockup.png'
-export const BDA_LOGO_WIDE = '/bda-logo-lockup.png'
+export const BDA_LOGO = '/bda-logo.png'
+export const BDA_LOGO_WIDE = '/bda-logo-wide.png'
 
 export const ORG_TABS = [
   { key: 'overview', label: 'Overview' },
@@ -47,7 +47,7 @@ const SERVICES = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined, hint: 'Employees' },
   { key: 'leave', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Apply and requests' },
   { key: 'attendance', label: 'Attendance', Icon: CarryOutOutlined, hint: 'Org check-in' },
-  { key: 'companyTime', label: 'Time Tracker', Icon: ThunderboltOutlined, hint: 'Tasks and check-in' },
+  { key: 'companyTime', label: 'Timesheet', Icon: ThunderboltOutlined, hint: 'Tasks and hours' },
   { key: 'apps', label: 'App access', Icon: AppstoreOutlined, hint: 'Assigned apps' },
 ]
 
@@ -191,16 +191,8 @@ function PeoplePanel({ user }) {
 }
 
 /** Organization — org home aligned with Overview. */
-export default function PulseOrganization({ user, tab = 'overview', onSoon, onTab, liveProps }) {
+export default function PulseOrganization({ user, tab = 'overview', onSoon, liveProps }) {
   const openService = (key) => {
-    if (key === 'onboarding' || key === 'apps' || key === 'attendance') {
-      onTab?.(key === 'attendance' ? 'attendance' : key)
-      return
-    }
-    if (key === 'companyTime') {
-      onTab?.('time')
-      return
-    }
     openPulsePage(key)
   }
 

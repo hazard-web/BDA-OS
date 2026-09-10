@@ -36,7 +36,7 @@ export default function AuthShell({
         <div className="auth-left">
           <div className="auth-top">
             <Link to="/login" className="auth-logo" aria-label="BDA Technologies">
-              <img src="/bda-logo-lockup.png" alt="BDA Technologies" className="auth-logo-mark" />
+              <img src="/bda-logo.png" alt="BDA Technologies" className="auth-logo-mark" />
             </Link>
             {headerRight}
           </div>
