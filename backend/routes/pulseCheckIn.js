@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { auth } = require('./auth');
 const PulseWorkDay = require('../models/PulseWorkDay');
 const User = require('../models/User');
@@ -182,6 +183,88 @@ function serializeDay(doc) {
   };
 }
 
+/** HTTP(S) avatars only — data: URLs from Candidate backfill blow up Attendance payloads. */
+function safeListAvatarUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) && url.length <= 2048) return url;
+  return '';
+}
+
+function slimLocation(loc) {
+  if (!loc || typeof loc !== 'object') return undefined;
+  return {
+    city: loc.city || undefined,
+    locality: loc.locality || undefined,
+    sector: loc.sector || undefined,
+    state: loc.state || undefined,
+    country: loc.country || undefined,
+    displayName: loc.displayName || undefined,
+    lat: loc.lat,
+    lng: loc.lng,
+  };
+}
+
+function lastCheckOutAt(plain) {
+  const events = [...(plain.events || [])].reverse();
+  const event = events.find((item) => item.type === 'CHECK_OUT' || item.type === 'MIDNIGHT_CLOSE');
+  if (event?.at) return event.at;
+  const session = [...(plain.sessions || [])].reverse().find((item) => item.checkOutAt);
+  return session?.checkOutAt || null;
+}
+
+/** Compact org Attendance / Timesheet admin rows (avoids full event UA payloads). */
+function serializeAdminDay(doc, fallbackDate = '') {
+  if (!doc) {
+    return {
+      ...emptyTimesheet(fallbackDate),
+      status: 'idle',
+      events: [],
+      sessions: [],
+      checkOutAt: null,
+      anomaly: null,
+    };
+  }
+  const plain = doc.toObject ? doc.toObject() : doc;
+  const events = Array.isArray(plain.events) ? plain.events : [];
+  return {
+    date: plain.date || fallbackDate,
+    status: plain.status || 'idle',
+    totalActiveMs: Number(plain.totalActiveMs) || 0,
+    totalActiveHours: msToHours(plain.totalActiveMs),
+    targetHours: plain.targetHours || TARGET_HOURS,
+    checkInAt: firstCheckInAt(plain),
+    checkOutAt: lastCheckOutAt(plain),
+    taskMinutes: taskMinutesOf(plain),
+    timesheetSubmitted: Boolean(plain.timesheetSubmitted),
+    timesheetSubmittedAt: plain.timesheetSubmittedAt || null,
+    taskEntries: Array.isArray(plain.taskEntries) ? plain.taskEntries : [],
+    anomaly: plain.anomaly?.flagged
+      ? {
+          flagged: true,
+          reason: plain.anomaly.reason || '',
+          at: plain.anomaly.at || null,
+          wallMs: plain.anomaly.wallMs || 0,
+          activeMs: plain.anomaly.activeMs || plain.totalActiveMs || 0,
+        }
+      : null,
+    lastHeartbeatAt: plain.lastHeartbeatAt || null,
+    events: events.map((event) => ({
+      _id: event._id,
+      type: event.type,
+      at: event.at,
+      activeMsAtEvent: event.activeMsAtEvent || 0,
+      ip: event.ip || '',
+      location: slimLocation(event.location),
+    })),
+    sessions: (plain.sessions || []).map((session) => ({
+      checkInAt: session.checkInAt,
+      checkOutAt: session.checkOutAt,
+      durationMs: session.durationMs || 0,
+    })),
+  };
+}
+
 function shiftKey(key, days) {
   const [y, m, d] = String(key).split('-').map(Number);
   const dt = new Date(y, m - 1, d + days);
@@ -250,8 +333,11 @@ router.get('/admin/days', auth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Admin access required' });
     }
     const organizationId = orgIdOf(req.user);
+    const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
+      ? new mongoose.Types.ObjectId(organizationId)
+      : organizationId;
     const members = await User.find({
-      $or: [{ organizationId }, { _id: organizationId }],
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
     })
       .select('_id firstName lastName displayName email avatarUrl')
       .lean();
@@ -260,18 +346,23 @@ router.get('/admin/days', auth, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // Do not load Candidate photo.data here — base64 payloads can be multi‑MB and
-    // OOM/timeout this endpoint (empty Attendance UI). Avatars come from User.avatarUrl.
-    const personOf = (id) => {
-      const person = members.find((item) => String(item._id) === String(id));
-      if (!person) return { name: 'Employee', email: '', avatarUrl: '' };
-      const parts = [person.firstName, person.lastName].filter(Boolean);
-      return {
-        name: parts.length ? parts.join(' ') : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
-        email: person.email || '',
-        avatarUrl: String(person.avatarUrl || '').trim(),
-      };
-    };
+    const personById = new Map(
+      members.map((person) => {
+        const parts = [person.firstName, person.lastName].filter(Boolean);
+        return [
+          String(person._id),
+          {
+            name: parts.length
+              ? parts.join(' ')
+              : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
+            email: person.email || '',
+            // Skip data: URLs — prior Candidate backfill can be multi‑MB and stall Attendance.
+            avatarUrl: safeListAvatarUrl(person.avatarUrl),
+          },
+        ];
+      }),
+    );
+    const personOf = (id) => personById.get(String(id)) || { name: 'Employee', email: '', avatarUrl: '' };
 
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 60));
     const dayKey = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
@@ -279,7 +370,9 @@ router.get('/admin/days', auth, async (req, res) => {
       : '';
     const query = { user: { $in: userIds } };
     if (dayKey) query.date = dayKey;
+    // Lean list projection — full serializeDay spreads every event UA/IP blob.
     const days = await PulseWorkDay.find(query)
+      .select('user date status totalActiveMs targetHours anomaly events sessions taskEntries timesheetSubmitted timesheetSubmittedAt lastHeartbeatAt')
       .sort({ date: -1, updatedAt: -1 })
       .limit(dayKey ? 400 : limit)
       .lean();
@@ -290,11 +383,10 @@ router.get('/admin/days', auth, async (req, res) => {
         success: true,
         data: members.map((member) => {
           const row = byUser.get(String(member._id));
-          const person = personOf(member._id);
           return {
-            ...(serializeDay(row) || emptyTimesheet(dayKey)),
+            ...serializeAdminDay(row, dayKey),
             user: member._id,
-            ...person,
+            ...personOf(member._id),
           };
         }),
       });
@@ -302,7 +394,7 @@ router.get('/admin/days', auth, async (req, res) => {
 
     res.json({
       success: true,
-      data: days.map((d) => ({ ...serializeDay(d), ...personOf(d.user) })),
+      data: days.map((d) => ({ ...serializeAdminDay(d), ...personOf(d.user) })),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to load days' });
