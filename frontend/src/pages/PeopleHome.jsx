@@ -506,7 +506,9 @@ export default function PeopleHome() {
     return <AuthLogoLoader show label="Signing out" />
   }
 
-  if (serviceGate || loading || !user || !hasPulseAccount(user)) {
+  // Block only while session is unknown. Service open (`?boot=1`) overlays the
+  // gate so Company Attendance/Timesheet can mount and fetch during the beat.
+  if (loading || !user || !hasPulseAccount(user)) {
     return (
       <AuthLogoLoader
         show
@@ -671,6 +673,7 @@ export default function PeopleHome() {
   return (
     <AntLayout className={`pulse-shell pulse-id${showOnboarding ? ' is-onboarding' : ''}`}>
       <AuthLogoLoader show={signOutLogo} label="Signing out" />
+      <AuthLogoLoader show={serviceGate} label={bootView?.label || 'Opening BDA OS'} />
       <AntLayout className="pulse-chrome">
       <Header className="pulse-top">
         {showOnboarding ? (

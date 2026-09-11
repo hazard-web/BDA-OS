@@ -111,7 +111,29 @@ export default function PulseAttendanceAdmin() {
   }
 
   useEffect(() => {
-    load()
+    let cancelled = false
+    setLoading(true)
+    api
+      .get('/pulse-checkin/admin/days', { params: { limit: 80, date } })
+      .then((res) => {
+        if (!cancelled) setDays(res.data?.data || [])
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setDays([])
+        const status = err?.response?.status
+        message.error(
+          status === 403
+            ? 'Admin access required'
+            : err?.response?.data?.message || 'Could not load attendance',
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date])
 
