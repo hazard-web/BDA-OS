@@ -785,33 +785,29 @@ async function handleOAuthCallback(req, res) {
       return redirectSuccess(res, issueToken(user), { next: '/account', section: 'connected-apps' });
     }
 
-    // Returning user → sign in directly
+    // Returning user → sign in directly (link Google on first use for invitees).
     if (existing) {
       const linkedByProvider = (existing.oauthProviders || []).some(
         (p) => p.provider === provider && p.providerId === profile.providerId,
       );
-      if (!linkedByProvider && !workspaceIntent) {
-        if (!profile.email) {
-          return fail('Google did not return an email. Cannot continue.');
-        }
-        const ticket = issueSignupTicket(profile);
-        return redirectSignup(res, ticket);
-      }
-      if (!linkedByProvider && workspaceIntent) {
+      if (!linkedByProvider) {
+        // Password / invite members do not have oauthProviders yet. Link and continue —
+        // do not send them to Create Account (that path is invite-only blocked).
         await attachOAuthProvider(existing, {
           provider,
           providerId: profile.providerId,
-          emailVerified: true,
+          emailVerified: Boolean(profile.emailVerified),
           picture: profile.picture,
         });
-      }
-      if (profile.picture && !existing.avatarUrl) {
-        existing.avatarUrl = profile.picture;
-        await existing.save();
-      }
-      if (!existing.isVerified && profile.emailVerified) {
-        existing.isVerified = true;
-        await existing.save();
+      } else {
+        if (profile.picture && !existing.avatarUrl) {
+          existing.avatarUrl = profile.picture;
+          await existing.save();
+        }
+        if (!existing.isVerified && profile.emailVerified) {
+          existing.isVerified = true;
+          await existing.save();
+        }
       }
       return finishWorkspaceImport(existing);
     }
