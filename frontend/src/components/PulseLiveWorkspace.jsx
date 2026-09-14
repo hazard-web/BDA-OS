@@ -7,6 +7,8 @@ import PulseGlassBoard from './PulseGlassBoard'
 import PulseTimesheetForm from './PulseTimesheetForm'
 import PulseTimesheetAdmin from './PulseTimesheetAdmin'
 import PulseAttendanceAdmin from './PulseAttendanceAdmin'
+import PulsePerformance from './PulsePerformance'
+import PulsePerformanceAdmin from './PulsePerformanceAdmin'
 import PulseInviteAdmin from './PulseInviteAdmin'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
@@ -355,11 +357,6 @@ export default function PulseLiveModule({
     { key: 'c1', task: 'August payslip', owner: 'Finance', due: '1 Sep', status: 'Paid', done: true },
     { key: 'c2', task: 'September cycle', owner: 'Finance', due: '30 Sep', status: 'On track', done: false },
   ])
-  const performance = useBoard(org ? 'org-perf' : 'perf', [
-    { key: 'p1', task: 'Q3 goal: ship BDA OS live', owner: name, due: '30 Sep', status: 'On track', done: false },
-    { key: 'p2', task: 'Manager 1:1 notes', owner: name, due: 'Every 2 weeks', status: 'Done', done: true },
-    { key: 'p3', task: 'Peer feedback round', owner: org ? 'People' : name, due: '15 Sep', status: 'Waiting', done: false },
-  ])
   const onboard = useBoard('me-onboard', [
     { key: 'o1', task: 'Complete profile', owner: name, due: 'Day 1', status: 'On track', done: false },
     { key: 'o2', task: 'Upload ID documents', owner: name, due: 'Day 2', status: 'Waiting', done: false },
@@ -423,21 +420,13 @@ export default function PulseLiveModule({
   }
 
   if (kind === 'performance') {
+    if (org) {
+      return <PulsePerformanceAdmin />
+    }
     return (
-      <PulseGlassBoard
-        title="Performance"
-        kicker={org ? 'Team goals' : 'Your goals'}
-        ctaLabel="Add goal"
-        onCta={() => addNamed(performance, 'goal')}
-        metrics={[
-          { label: 'Goals', value: String(performance.rows.length), hint: 'This cycle' },
-          { label: 'Done', value: String(performance.rows.filter((row) => row.done).length), hint: 'Closed' },
-          { label: 'Waiting', value: String(performance.rows.filter((row) => row.status === 'Waiting').length), hint: 'Needs you' },
-          { label: 'Review', value: 'Q3', hint: 'Sep close' },
-        ]}
-        groups={[{ title: org ? 'Team' : 'My goals', hint: 'Tap a row to move status', rows: performance.rows }]}
-        onRow={(row) => performance.cycle(row.key)}
-      />
+      <div className="pulse-ts-page">
+        <PulsePerformance />
+      </div>
     )
   }
 
