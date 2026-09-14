@@ -1,0 +1,336 @@
+.pulse-perf-page,
+.pulse-perf-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.25rem 0 1.5rem;
+}
+
+.pulse-perf-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 1rem;
+}
+
+.pulse-perf-score-card,
+.pulse-perf-bonus-card,
+.pulse-perf-areas,
+.pulse-perf-rules,
+.pulse-perf-notes {
+  padding: 1.1rem 1.2rem;
+}
+
+.pulse-perf-score {
+  display: block;
+  font-size: 2.75rem;
+  line-height: 1;
+  font-weight: 700;
+  color: #10271f;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.pulse-perf-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+}
+
+.pulse-perf-status.is-top {
+  background: rgba(26, 95, 74, 0.14);
+  color: #1a5f4a;
+}
+
+.pulse-perf-status.is-strong {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.pulse-perf-status.is-ok {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+}
+
+.pulse-perf-status.is-mid {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.pulse-perf-status.is-low {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.pulse-perf-promo {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #1a5f4a;
+}
+
+.pulse-perf-promo.is-muted {
+  color: #64748b;
+}
+
+.pulse-perf-bonus-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.pulse-perf-bonus-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.92rem;
+  color: #334155;
+}
+
+.pulse-perf-bonus-list em {
+  font-style: normal;
+  font-weight: 700;
+  color: #10271f;
+}
+
+.pulse-perf-bonus-list .is-total {
+  margin-top: 0.25rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  font-weight: 600;
+}
+
+.pulse-perf-cap {
+  margin-top: 0.85rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.pulse-perf-section-head {
+  margin-bottom: 0.85rem;
+}
+
+.pulse-perf-section-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #10271f;
+}
+
+.pulse-perf-section-head p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.pulse-perf-area-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 1.25rem;
+}
+
+.pulse-perf-area-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.15rem;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.pulse-perf-area-top em {
+  font-style: normal;
+  font-weight: 700;
+  color: #10271f;
+}
+
+.pulse-perf-area > p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.pulse-perf-tiers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.pulse-perf-tier {
+  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+  padding: 0.7rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.pulse-perf-tier strong {
+  font-size: 0.82rem;
+  color: #10271f;
+}
+
+.pulse-perf-tier span,
+.pulse-perf-tier em {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-style: normal;
+}
+
+.pulse-perf-tier.is-on {
+  border-color: #1a5f4a;
+  background: rgba(26, 95, 74, 0.08);
+}
+
+.pulse-perf-notes {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.pulse-perf-notes p {
+  margin: 0.25rem 0 0;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.pulse-perf-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.pulse-perf-actions p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.pulse-perf-cta.ant-btn-primary,
+.pulse-perf-cta.ant-btn-primary:hover,
+.pulse-perf-cta.ant-btn-primary:focus {
+  background: #1a5f4a !important;
+  border-color: #1a5f4a !important;
+  box-shadow: none !important;
+}
+
+.pulse-perf-modal-hint {
+  margin: 0 0 0.75rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.pulse-perf-card {
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.pulse-perf-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pulse-perf-edit-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.pulse-perf-edit-summary strong {
+  display: block;
+  font-size: 1.6rem;
+  margin: 0.2rem 0;
+}
+
+.pulse-perf-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.pulse-perf-edit-grid > label,
+.pulse-perf-note-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.pulse-perf-switch {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+}
+
+.pulse-perf-select,
+.pulse-perf-input {
+  width: 100%;
+}
+
+.pulse-perf-select .ant-select-selector,
+.pulse-perf-select.ant-select-focused .ant-select-selector,
+.pulse-perf-select.ant-select-open .ant-select-selector,
+.pulse-perf-select:hover .ant-select-selector {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.pulse-perf-correction {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #475569;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .pulse-perf-hero,
+  .pulse-perf-area-grid,
+  .pulse-perf-tiers,
+  .pulse-perf-edit-grid,
+  .pulse-perf-edit-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root[data-theme='dark'] .pulse-perf-score,
+:root[data-theme='dark'] .pulse-perf-section-head h3,
+:root[data-theme='dark'] .pulse-perf-area-top em,
+:root[data-theme='dark'] .pulse-perf-bonus-list em,
+:root[data-theme='dark'] .pulse-perf-tier strong {
+  color: #f8fafc;
+}
+
+:root[data-theme='dark'] .pulse-perf-bonus-list li,
+:root[data-theme='dark'] .pulse-perf-area-top,
+:root[data-theme='dark'] .pulse-perf-notes p {
+  color: #cbd5e1;
+}
+
+:root[data-theme='dark'] .pulse-perf-promo.is-muted,
+:root[data-theme='dark'] .pulse-perf-cap,
+:root[data-theme='dark'] .pulse-perf-section-head p,
+:root[data-theme='dark'] .pulse-perf-actions p {
+  color: #94a3b8;
+}
+
+:root[data-theme='dark'] .pulse-perf-tier {
+  background: rgba(15, 23, 42, 0.35);
+  border-color: #334155;
+}
+
+:root[data-theme='dark'] .pulse-perf-bonus-list .is-total {
+  border-top-color: rgba(148, 163, 184, 0.2);
+}

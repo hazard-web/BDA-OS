@@ -7,6 +7,7 @@ import {
   BookOutlined,
   CarryOutOutlined,
   PlusOutlined,
+  RiseOutlined,
   RocketOutlined,
   SearchOutlined,
   UserAddOutlined,
@@ -49,7 +50,7 @@ import { isPulseAdmin as userIsPulseAdmin } from '../utils/pulseRoles'
 import { useAuth } from '../context/AuthContext'
 import { APP_BASE, APP_COMPANY, APP_NOTES, PULSE_HOME, getPulseOpenPath, getPulseSampleChoice, hasPulseAccount, isBdaOsAppLink, toAppPath } from '../utils/pulseEntry'
 import { hasSeenWelcomeCurtain } from '../utils/pulseWelcomeCurtain'
-import { ORG_OPEN_SUBS, isPulseServicePath, openPulsePage, openPulsePath, pathForShell, readPulseLocation } from '../utils/pulseOpenPage'
+import { ORG_OPEN_SUBS, isPulseServicePath, PULSE_SHELL_VIEWS, pathForShell, readPulseLocation } from '../utils/pulseOpenPage'
 import {
   formatElapsed,
   getElapsedSeconds,
@@ -75,6 +76,7 @@ const RAIL_TOP = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined },
   { key: 'leave', label: 'Leave & Attendance', Icon: CarryOutOutlined },
   { key: 'time', label: 'Timesheet', Icon: AuditOutlined },
+  { key: 'performance', label: 'Performance', Icon: RiseOutlined },
   { key: 'account', label: 'Account', Icon: UserOutlined },
 ]
 
@@ -219,6 +221,8 @@ export default function PeopleHome() {
   const [start] = useState(() => readPulseLocation(window.location.pathname, window.location.search))
   const [bootView] = useState(() => (start.boot ? start : null))
   const [serviceGate, setServiceGate] = useState(() => Boolean(start.boot))
+  const [serviceGateLabel, setServiceGateLabel] = useState(() => bootView?.label || 'Opening BDA OS')
+  const [serviceGateTick, setServiceGateTick] = useState(0)
   const [space, setSpace] = useState(start.space)
   const [sub, setSub] = useState(start.sub)
   const [module, setModule] = useState(start.module)
@@ -321,7 +325,7 @@ export default function PeopleHome() {
     const labelMs = 900
     const timer = window.setTimeout(() => setServiceGate(false), labelMs)
     return () => window.clearTimeout(timer)
-  }, [serviceGate, loading, user])
+  }, [serviceGate, serviceGateTick, loading, user])
 
   useEffect(() => {
     if (loading || !user?.email) return
@@ -395,6 +399,14 @@ export default function PeopleHome() {
     const path = pathForShell(next)
     const here = toAppPath(location.pathname.replace(/\/+$/, '') || '/')
     if (path !== here) navigate(path)
+  }
+
+  /** Same-tab open with the BDA logo beat (no new tab). */
+  const openWithLogo = (patch, label) => {
+    setServiceGateLabel(label || 'Opening BDA OS')
+    setServiceGate(true)
+    setServiceGateTick((n) => n + 1)
+    goShell(patch)
   }
 
   useEffect(() => {
@@ -529,16 +541,17 @@ export default function PeopleHome() {
   const showAttendance = space === 'myspace' && module === 'attendance'
   const showAccount = space === 'myspace' && module === 'account'
   const showTimesheet = space === 'myspace' && module === 'time'
+  const showPerformance = space === 'myspace' && module === 'performance'
   const showOnboarding = space === 'organization' && sub === 'onboarding'
   const showOrgOverview = space === 'organization' && sub === 'overview'
   const showOrgTime = space === 'organization' && sub === 'time'
   const showOrgAttendance = space === 'organization' && sub === 'attendance'
+  const showOrgPerformance = space === 'organization' && sub === 'performance'
   const showOrgApps = space === 'organization' && sub === 'apps'
   const showOrgPeople = space === 'organization' && sub === 'people'
-  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgApps || showOrgPeople
+  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgApps || showOrgPeople
   const liveKind = space === 'myspace' && ({
     onboarding: 'onboarding',
-    performance: 'performance',
     files: 'files',
     engagement: 'engagement',
     letters: 'letters',
@@ -579,12 +592,43 @@ export default function PeopleHome() {
       return
     }
     setMoreOpen(false)
-    const path = pathForShell(
-      key === 'leave'
-        ? { space: 'myspace', module: 'leave', sub: 'overview' }
-        : { space: 'myspace', module: key, sub: 'overview' },
+    if (key === 'onboarding') {
+      openWithLogo(
+        { space: 'organization', module: 'home', sub: 'onboarding' },
+        PULSE_SHELL_VIEWS.onboarding.label,
+      )
+      return
+    }
+    if (key === 'leave') {
+      openWithLogo(
+        { space: 'myspace', module: 'leave', sub: 'overview', leaveTab: 'mydata', leaveSubTab: 'requests' },
+        PULSE_SHELL_VIEWS.leave.label,
+      )
+      return
+    }
+    const view = PULSE_SHELL_VIEWS[key]
+    openWithLogo(
+      { space: 'myspace', module: key, sub: 'overview' },
+      view?.label || `Opening ${RAIL_TOP.find((item) => item.key === key)?.label || 'BDA OS'}`,
     )
-    openPulsePath(path)
+  }
+
+  const openCompanyService = (key) => {
+    const view = PULSE_SHELL_VIEWS[key]
+    if (!view) {
+      soon('That module')
+      return
+    }
+    openWithLogo(
+      {
+        space: view.space,
+        module: view.module,
+        sub: view.sub,
+        leaveTab: view.leaveTab,
+        leaveSubTab: view.leaveSubTab,
+      },
+      view.label || `Opening ${key}`,
+    )
   }
 
   const openDashTarget = (target) => {
@@ -631,6 +675,7 @@ export default function PeopleHome() {
       tab={sub}
       onSoon={soon}
       onTab={setSub}
+      onOpenService={openCompanyService}
       liveProps={liveProps}
     />
   )
@@ -673,7 +718,7 @@ export default function PeopleHome() {
   return (
     <AntLayout className={`pulse-shell pulse-id${showOnboarding ? ' is-onboarding' : ''}`}>
       <AuthLogoLoader show={signOutLogo} label="Signing out" />
-      <AuthLogoLoader show={serviceGate} label={bootView?.label || 'Opening BDA OS'} />
+      <AuthLogoLoader show={serviceGate} label={serviceGateLabel || bootView?.label || 'Opening BDA OS'} />
       <AntLayout className="pulse-chrome">
       <Header className="pulse-top">
         {showOnboarding ? (
@@ -688,6 +733,10 @@ export default function PeopleHome() {
           <button type="button" className="pulse-space is-on">
             Attendance
           </button>
+        ) : showOrgPerformance ? (
+          <button type="button" className="pulse-space is-on">
+            Performance
+          </button>
         ) : showOrgApps ? (
           <button type="button" className="pulse-space is-on">
             App access
@@ -695,6 +744,10 @@ export default function PeopleHome() {
         ) : showTimesheet || showOrgTime ? (
           <button type="button" className="pulse-space is-on">
             Timesheet
+          </button>
+        ) : showPerformance ? (
+          <button type="button" className="pulse-space is-on">
+            Performance
           </button>
         ) : showLeave || showAttendance ? (
           LEAVE_TABS.map((item) => (
@@ -841,7 +894,7 @@ export default function PeopleHome() {
 
       <AntLayout className="pulse-mid">
         <AntLayout className="pulse-maincol">
-          {!showAccount && !showOnboarding && !showAttendance && !showTimesheet && !showOrgTime && !showOrgAttendance && !showOrgApps ? (
+          {!showAccount && !showOnboarding && !showAttendance && !showTimesheet && !showPerformance && !showOrgTime && !showOrgAttendance && !showOrgPerformance && !showOrgApps ? (
           <div className={`pulse-sub${showOverview || showOrgOverview || showOrgPeople || showCalendar || showLeave || showAttendance ? ' pulse-sub-overview' : ''}`} role="tablist" aria-label={showLeave ? 'Leave Tracker sections' : space === 'organization' ? 'Company sections' : 'You sections'}>
             <div className="pulse-sub-tabs">
               {space === 'organization'
@@ -894,7 +947,7 @@ export default function PeopleHome() {
           </div>
           ) : null}
 
-          <Content className={`pulse-body${showOverview || showCalendar || showLeave || showAttendance || showAccount || showTimesheet || showOrgSurface ? ' pulse-body-surface' : ''}${liveKind || (space === 'organization' && !showOrgSurface) ? ' pulse-body-overview' : ''}${showAccount ? ' pulse-body-account' : ''}${space === 'organization' ? ' pulse-body-org' : ''}`}>
+          <Content className={`pulse-body${showOverview || showCalendar || showLeave || showAttendance || showAccount || showTimesheet || showPerformance || showOrgSurface ? ' pulse-body-surface' : ''}${liveKind || (space === 'organization' && !showOrgSurface) ? ' pulse-body-overview' : ''}${showAccount ? ' pulse-body-account' : ''}${space === 'organization' ? ' pulse-body-org' : ''}`}>
             {showAccount ? (
               <div className="pulse-strip-root">
                 <PulseStripBackdrop />
@@ -944,6 +997,13 @@ export default function PeopleHome() {
                   <PulseLiveModule kind="time" scope="me" {...liveProps} />
                 </div>
               </div>
+            ) : showPerformance ? (
+              <div className="pulse-strip-root">
+                <PulseStripBackdrop />
+                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
+                  <PulseLiveModule kind="performance" scope="me" {...liveProps} />
+                </div>
+              </div>
             ) : liveKind ? (
               <div className="pulse-scroll pulse-scroll-live">
                 <PulseLiveModule kind={liveKind} scope="me" {...liveProps} />
@@ -973,7 +1033,7 @@ export default function PeopleHome() {
           </Content>
         </AntLayout>
 
-        {showOverview || showOrgSurface || liveKind || showAccount || showCalendar || showLeave || showAttendance || showTimesheet ? null : (
+        {showOverview || showOrgSurface || liveKind || showAccount || showCalendar || showLeave || showAttendance || showTimesheet || showPerformance ? null : (
         <Sider className="pulse-sider-right" width={44} theme="light" collapsedWidth={44} trigger={null}>
           <aside className="pulse-aside" aria-label="Shortcuts">
             <button type="button" aria-label="Directory" onClick={() => (isPulseAdmin ? navigate(APP_COMPANY) : soon('Directory'))}><UserAddOutlined /></button>
@@ -983,7 +1043,10 @@ export default function PeopleHome() {
                 aria-label="Onboarding"
                 onClick={() => {
                   setMoreOpen(false)
-                  openPulsePage('onboarding')
+                  openWithLogo(
+                    { space: 'organization', module: 'home', sub: 'onboarding' },
+                    PULSE_SHELL_VIEWS.onboarding.label,
+                  )
                 }}
               >
                 <RocketOutlined />

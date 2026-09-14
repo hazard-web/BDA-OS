@@ -90,11 +90,20 @@ export const PULSE_SHELL_VIEWS = {
     admin: true,
     label: 'Opening Timesheet',
   },
+  companyPerformance: {
+    path: `${APP_BASE}/company/performance`,
+    space: 'organization',
+    module: 'home',
+    sub: 'performance',
+    admin: true,
+    label: 'Opening Performance',
+  },
   performance: {
     path: `${APP_BASE}/performance`,
     space: 'myspace',
     module: 'performance',
     sub: 'overview',
+    label: 'Opening Performance',
   },
   account: {
     path: `${APP_BASE}/account`,
@@ -128,12 +137,12 @@ export const PULSE_SHELL_VIEWS = {
 }
 
 export const PULSE_OPEN_VIEWS = Object.fromEntries(
-  ['onboarding', 'leave', 'attendance', 'time', 'hours', 'apps', 'companyTime', 'people'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
+  ['onboarding', 'leave', 'attendance', 'time', 'hours', 'apps', 'companyTime', 'companyPerformance', 'people', 'performance'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
 )
 
 export const PULSE_SHELL_PATHS = [...new Set(Object.values(PULSE_SHELL_VIEWS).map((view) => view.path))]
 
-export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time', 'people'])
+export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time', 'people', 'performance'])
 
 export function pathForShell({ space, module, sub } = {}) {
   if (space === 'organization') {
@@ -141,6 +150,7 @@ export function pathForShell({ space, module, sub } = {}) {
     if (sub === 'apps') return PULSE_SHELL_VIEWS.apps.path
     if (sub === 'attendance') return PULSE_SHELL_VIEWS.attendance.path
     if (sub === 'time') return PULSE_SHELL_VIEWS.companyTime.path
+    if (sub === 'performance') return PULSE_SHELL_VIEWS.companyPerformance.path
     if (sub === 'people') return PULSE_SHELL_VIEWS.people.path
     return PULSE_SHELL_VIEWS.company.path
   }

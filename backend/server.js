@@ -33,6 +33,7 @@ const pulseZipRoutes = require('./routes/pulseZip');
 const inviteRoutes = require('./routes/invites');
 const launcherRoutes = require('./routes/launcher');
 const candidateRoutes = require('./routes/candidates');
+const pulsePerformanceRoutes = require('./routes/pulsePerformance');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -145,6 +146,7 @@ app.use('/api/pulse-zip', pulseZipRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/launcher', launcherRoutes);
 app.use('/api/candidates', candidateRoutes);
+app.use('/api/pulse-performance', pulsePerformanceRoutes);
 
 const path = require('path');
 
