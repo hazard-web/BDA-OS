@@ -215,7 +215,7 @@ function lastCheckOutAt(plain) {
 }
 
 /** Compact org Attendance / Timesheet admin rows (avoids full event UA payloads). */
-function serializeAdminDay(doc, fallbackDate = '') {
+function serializeAdminDay(doc, fallbackDate = '', { previewEvents = false } = {}) {
   if (!doc) {
     return {
       ...emptyTimesheet(fallbackDate),
@@ -228,6 +228,14 @@ function serializeAdminDay(doc, fallbackDate = '') {
   }
   const plain = doc.toObject ? doc.toObject() : doc;
   const events = Array.isArray(plain.events) ? plain.events : [];
+  const mappedEvents = events.map((event) => ({
+    _id: event._id,
+    type: event.type,
+    at: event.at,
+    activeMsAtEvent: event.activeMsAtEvent || 0,
+    ip: previewEvents ? undefined : (event.ip || ''),
+    location: previewEvents ? undefined : slimLocation(event.location),
+  }));
   return {
     date: plain.date || fallbackDate,
     status: plain.status || 'idle',
@@ -250,14 +258,7 @@ function serializeAdminDay(doc, fallbackDate = '') {
         }
       : null,
     lastHeartbeatAt: plain.lastHeartbeatAt || null,
-    events: events.map((event) => ({
-      _id: event._id,
-      type: event.type,
-      at: event.at,
-      activeMsAtEvent: event.activeMsAtEvent || 0,
-      ip: event.ip || '',
-      location: slimLocation(event.location),
-    })),
+    events: previewEvents ? mappedEvents.slice(-4) : mappedEvents,
     sessions: (plain.sessions || []).map((session) => ({
       checkInAt: session.checkInAt,
       checkOutAt: session.checkOutAt,
@@ -396,10 +397,11 @@ router.get('/admin/days', auth, async (req, res) => {
     const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
       ? new mongoose.Types.ObjectId(organizationId)
       : organizationId;
+    // Skip avatarUrl — Candidate data: URLs can be multi‑MB and stall Attendance cards.
     const members = await User.find({
       $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
     })
-      .select('_id firstName lastName displayName email avatarUrl')
+      .select('_id firstName lastName displayName email')
       .lean();
     const userIds = members.map((m) => m._id);
     if (!userIds.length) {
@@ -416,8 +418,7 @@ router.get('/admin/days', auth, async (req, res) => {
               ? parts.join(' ')
               : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
             email: person.email || '',
-            // Skip data: URLs — prior Candidate backfill can be multi‑MB and stall Attendance.
-            avatarUrl: safeListAvatarUrl(person.avatarUrl),
+            avatarUrl: '',
           },
         ];
       }),
@@ -428,36 +429,100 @@ router.get('/admin/days', auth, async (req, res) => {
     const dayKey = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
       ? String(req.query.date)
       : '';
+    const cardsView = String(req.query.view || '') === 'cards';
     const query = { user: { $in: userIds } };
     if (dayKey) query.date = dayKey;
-    // Lean list projection — full serializeDay spreads every event UA/IP blob.
+
+    // Project only fields used by cards — never pull event UA / location blobs for the grid.
     const days = await PulseWorkDay.find(query)
-      .select('user date status totalActiveMs targetHours anomaly events sessions taskEntries timesheetSubmitted timesheetSubmittedAt lastHeartbeatAt')
+      .select(
+        cardsView
+          ? 'user date status totalActiveMs anomaly.flagged anomaly.reason events.type events.at sessions.checkInAt sessions.checkOutAt'
+          : 'user date status totalActiveMs anomaly.flagged anomaly.reason timesheetSubmitted timesheetSubmittedAt taskEntries.description taskEntries.minutes taskEntries.project events.type events.at events._id events.activeMsAtEvent sessions.checkInAt sessions.checkOutAt sessions.durationMs',
+      )
       .sort({ date: -1, updatedAt: -1 })
       .limit(dayKey ? 400 : limit)
       .lean();
 
     if (dayKey) {
       const byUser = new Map(days.map((row) => [String(row.user), row]));
-      return res.json({
-        success: true,
-        data: members.map((member) => {
-          const row = byUser.get(String(member._id));
-          return {
-            ...serializeAdminDay(row, dayKey),
-            user: member._id,
-            ...personOf(member._id),
-          };
-        }),
+      const rows = members.map((member) => {
+        const row = byUser.get(String(member._id));
+        return {
+          ...serializeAdminDay(row, dayKey, { previewEvents: true }),
+          user: member._id,
+          ...personOf(member._id),
+        };
       });
+      // Active employees first so live status is visible without scrolling.
+      rows.sort((a, b) => {
+        const aLive = a.status === 'active' ? 0 : 1;
+        const bLive = b.status === 'active' ? 0 : 1;
+        if (aLive !== bLive) return aLive - bLive;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+      return res.json({ success: true, data: rows });
     }
 
     res.json({
       success: true,
-      data: days.map((d) => ({ ...serializeAdminDay(d), ...personOf(d.user) })),
+      data: days.map((d) => ({
+        ...serializeAdminDay(d, '', { previewEvents: true }),
+        ...personOf(d.user),
+      })),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to load days' });
+  }
+});
+
+// GET /api/pulse-checkin/admin/days/detail — full event log for one employee (modal)
+router.get('/admin/days/detail', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    const userId = String(req.query.user || '').trim();
+    const date = todayKey(req.query.date);
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'user is required' });
+    }
+
+    const organizationId = orgIdOf(req.user);
+    const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
+      ? new mongoose.Types.ObjectId(organizationId)
+      : organizationId;
+    const member = await User.findOne({
+      _id: userId,
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+    })
+      .select('_id firstName lastName displayName email')
+      .lean();
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const doc = await PulseWorkDay.findOne({ user: member._id, date })
+      .select('user date status totalActiveMs targetHours anomaly events sessions taskEntries timesheetSubmitted timesheetSubmittedAt lastHeartbeatAt')
+      .lean();
+
+    const parts = [member.firstName, member.lastName].filter(Boolean);
+    const name = parts.length
+      ? parts.join(' ')
+      : (member.displayName || String(member.email || '').split('@')[0] || 'Employee');
+
+    res.json({
+      success: true,
+      data: {
+        ...serializeAdminDay(doc, date, { previewEvents: false }),
+        user: member._id,
+        name,
+        email: member.email || '',
+        avatarUrl: '',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load day detail' });
   }
 });
 
