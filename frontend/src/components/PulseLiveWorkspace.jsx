@@ -9,10 +9,14 @@ import PulseTimesheetAdmin from './PulseTimesheetAdmin'
 import PulseAttendanceAdmin from './PulseAttendanceAdmin'
 import PulsePerformance from './PulsePerformance'
 import PulsePerformanceAdmin from './PulsePerformanceAdmin'
+import PulsePayroll from './PulsePayroll'
+import PulsePayrollAdmin from './PulsePayrollAdmin'
 import PulseInviteAdmin from './PulseInviteAdmin'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
 import PulseLeaveTracker from './PulseLeaveTracker'
+import PulseMyFiles from './PulseMyFiles'
+import PulseCompanyFiles from './PulseCompanyFiles'
 import api from '../api'
 import { getPulseSampleChoice } from '../utils/pulseEntry'
 import { PULSE_CHECKIN_EVENT } from '../utils/pulseCheckIn'
@@ -430,6 +434,17 @@ export default function PulseLiveModule({
     )
   }
 
+  if (kind === 'payroll') {
+    if (org) {
+      return <PulsePayrollAdmin />
+    }
+    return (
+      <div className="pulse-ts-page">
+        <PulsePayroll />
+      </div>
+    )
+  }
+
   if (kind === 'onboarding') {
     if (org) {
       return (
@@ -456,15 +471,17 @@ export default function PulseLiveModule({
   }
 
   if (kind === 'files') {
+    if (org) {
+      return (
+        <div className="pulse-ts-page">
+          <PulseCompanyFiles />
+        </div>
+      )
+    }
     return (
-      <PulseGlassBoard
-        title="Files"
-        kicker={org ? 'Company files' : 'My documents'}
-        ctaLabel="Add file"
-        onCta={() => addNamed(files, 'file')}
-        groups={[{ title: 'Documents', hint: 'Tap to mark done', rows: files.rows }]}
-        onRow={(row) => files.cycle(row.key)}
-      />
+      <div className="pulse-ts-page">
+        <PulseMyFiles />
+      </div>
     )
   }
 

@@ -1,10 +1,31 @@
 import './bda-brand-ident.css'
 
-/** BDA Technologies wordmark for loaders and gates (full logo, not circular). */
+const GREEN = '#1A5F4A'
+
+/** Green People OS four-square mark for loaders / gates only. */
+function PeopleOsTiles({ size = 72, className = '' }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 18 18"
+      className={`bda-ident-tiles${className ? ` ${className}` : ''}`}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect x="0" y="0" width="8" height="8" rx="1.6" fill={GREEN} />
+      <rect x="10" y="0" width="8" height="8" rx="1.6" fill={GREEN} />
+      <rect x="0" y="10" width="8" height="8" rx="1.6" fill={GREEN} />
+      <rect x="10" y="10" width="8" height="8" rx="1.6" fill={GREEN} />
+    </svg>
+  )
+}
+
+/** Loading / gate brand mark — People OS tiles in BDA green. */
 export default function BdaBrandIdent() {
   return (
     <div className="bda-ident" aria-hidden="true">
-      <img className="bda-ident-mark" src="/bda-logo.png" alt="" />
+      <PeopleOsTiles size={72} className="bda-ident-mark" />
     </div>
   )
 }

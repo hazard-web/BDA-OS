@@ -14,7 +14,7 @@ function usePrefersReducedMotion() {
   return reduced
 }
 
-function DockIcon({ mouseX, title, icon, active, onClick, reduced, brand = false }) {
+function DockIcon({ mouseX, title, icon, active, onClick, reduced, brand = false, pressScale = false }) {
   const ref = useRef(null)
   const [hovered, setHovered] = useState(false)
 
@@ -44,6 +44,12 @@ function DockIcon({ mouseX, title, icon, active, onClick, reduced, brand = false
         ref={ref}
         className="pulse-fd-well"
         style={reduced ? { width: 44, height: 44 } : { width: size, height: size }}
+        whileTap={
+          pressScale && !reduced
+            ? { scale: 0.9 }
+            : undefined
+        }
+        transition={{ type: 'spring', stiffness: 520, damping: 28, mass: 0.35 }}
       >
         <AnimatePresence>
           {hovered ? (
@@ -98,6 +104,7 @@ export default function PulseFloatingDock({ items }) {
             onClick={item.onClick}
             reduced={reduced}
             brand={item.key === 'home'}
+            pressScale={item.key === 'home' || item.key === 'leave'}
           />
         ))}
       </motion.nav>

@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import {
   AppstoreOutlined,
   AuditOutlined,
+  BankOutlined,
   BookOutlined,
   CarryOutOutlined,
   PlusOutlined,
@@ -23,6 +24,7 @@ import {
   Input,
   Layout as AntLayout,
   List,
+  Popover,
   Tag,
   Typography,
 } from 'antd'
@@ -77,6 +79,7 @@ const RAIL_TOP = [
   { key: 'leave', label: 'Leave & Attendance', Icon: CarryOutOutlined },
   { key: 'time', label: 'Timesheet', Icon: AuditOutlined },
   { key: 'performance', label: 'Performance', Icon: RiseOutlined },
+  { key: 'payroll', label: 'Payroll', Icon: BankOutlined },
   { key: 'account', label: 'Account', Icon: UserOutlined },
 ]
 
@@ -91,8 +94,7 @@ const LEAVE_TABS = [
   { key: 'mydata', label: 'My Data' },
   { key: 'team', label: 'Team' },
   { key: 'attendance', label: 'Attendance' },
-  // Holidays — parked on branch `pulse/company-later-services`
-  // { key: 'holidays', label: 'Holidays' },
+  { key: 'holidays', label: 'Holidays', adminOnly: true },
 ]
 
 const LEAVE_MY_DATA_TABS = [
@@ -212,6 +214,112 @@ function HeaderCheckInTimer({ elapsed, checkedInAt, onOpen }) {
   )
 }
 
+function presenceName(row) {
+  return row?.name || String(row?.email || '').split('@')[0] || 'Employee'
+}
+
+function HeaderTeamPresence({ enabled }) {
+  const [board, setBoard] = useState({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
+
+  useEffect(() => {
+    if (!enabled) return undefined
+    let live = true
+    const load = () => {
+      api
+        .get('/pulse-checkin/admin/presence')
+        .then((res) => {
+          if (!live) return
+          const data = res.data?.data || {}
+          setBoard({
+            active: Array.isArray(data.active) ? data.active : [],
+            inactive: Array.isArray(data.inactive) ? data.inactive : [],
+            activeCount: Number(data.activeCount) || 0,
+            inactiveCount: Number(data.inactiveCount) || 0,
+          })
+        })
+        .catch(() => {
+          if (!live) return
+          setBoard({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
+        })
+    }
+    load()
+    const timer = window.setInterval(load, 30_000)
+    return () => {
+      live = false
+      window.clearInterval(timer)
+    }
+  }, [enabled])
+
+  if (!enabled) return null
+
+  const label = `${board.activeCount} active, ${board.inactiveCount} not active`
+
+  const panel = (
+    <div className="pulse-head-presence-panel">
+      <section className="pulse-head-presence-col is-active" aria-label={`Active ${board.activeCount}`}>
+        <header className="pulse-head-presence-h">
+          <span>Active</span>
+          <em>{board.activeCount}</em>
+        </header>
+        {board.active.length ? (
+          <ul>
+            {board.active.map((row) => (
+              <li key={row.id}>{presenceName(row)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pulse-head-presence-empty">No one checked in</p>
+        )}
+      </section>
+      <section className="pulse-head-presence-col is-idle" aria-label={`Not active ${board.inactiveCount}`}>
+        <header className="pulse-head-presence-h">
+          <span>Not active</span>
+          <em>{board.inactiveCount}</em>
+        </header>
+        {board.inactive.length ? (
+          <ul>
+            {board.inactive.map((row) => (
+              <li key={row.id}>{presenceName(row)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pulse-head-presence-empty">Everyone is active</p>
+        )}
+      </section>
+    </div>
+  )
+
+  return (
+    <Popover
+      trigger="hover"
+      placement="bottomRight"
+      mouseEnterDelay={0.12}
+      mouseLeaveDelay={0.16}
+      content={panel}
+      rootClassName="pulse-head-presence-pop"
+      arrow={false}
+      destroyOnHidden
+    >
+      <button
+        type="button"
+        className="pulse-head-presence"
+        aria-label={label}
+      >
+        <span className="pulse-head-presence-live">
+          <i aria-hidden="true" />
+          <strong>{board.activeCount}</strong>
+          <span className="pulse-head-presence-cap">active</span>
+        </span>
+        <span className="pulse-head-presence-sep" aria-hidden="true" />
+        <span className="pulse-head-presence-idle">
+          <strong>{board.inactiveCount}</strong>
+          <span className="pulse-head-presence-cap">not</span>
+        </span>
+      </button>
+    </Popover>
+  )
+}
+
 /** Pulse My Space — employee home (welcome curtain on first visit). */
 export default function PeopleHome() {
   const navigate = useNavigate()
@@ -229,9 +337,7 @@ export default function PeopleHome() {
   const [leaveTab, setLeaveTab] = useState(
     start.module === 'attendance' || start.leaveTab === 'attendance'
       ? 'attendance'
-      : start.leaveTab === 'holidays'
-        ? 'mydata'
-        : (start.leaveTab || 'mydata'),
+      : (start.leaveTab || 'mydata'),
   )
   const [leaveSubTab, setLeaveSubTab] = useState('requests')
   const [moreOpen, setMoreOpen] = useState(false)
@@ -360,7 +466,7 @@ export default function PeopleHome() {
     setModule(next.module)
     setSub(next.sub)
     if (next.module === 'attendance') setLeaveTab('attendance')
-    else if (next.leaveTab && next.leaveTab !== 'holidays' && next.leaveTab !== 'attendance') setLeaveTab(next.leaveTab)
+    else if (next.leaveTab && next.leaveTab !== 'attendance') setLeaveTab(next.leaveTab)
     if (next.leaveSubTab) setLeaveSubTab(next.leaveSubTab)
   }, [location.pathname])
 
@@ -394,7 +500,7 @@ export default function PeopleHome() {
     if (patch.space != null) setSpace(patch.space)
     if (patch.module != null) setModule(patch.module)
     if (patch.sub != null) setSub(patch.sub)
-    if (patch.leaveTab != null && patch.leaveTab !== 'holidays') setLeaveTab(patch.leaveTab)
+    if (patch.leaveTab != null && patch.leaveTab !== 'attendance') setLeaveTab(patch.leaveTab)
     if (patch.leaveSubTab != null) setLeaveSubTab(patch.leaveSubTab)
     const path = pathForShell(next)
     const here = toAppPath(location.pathname.replace(/\/+$/, '') || '/')
@@ -542,14 +648,17 @@ export default function PeopleHome() {
   const showAccount = space === 'myspace' && module === 'account'
   const showTimesheet = space === 'myspace' && module === 'time'
   const showPerformance = space === 'myspace' && module === 'performance'
+  const showPayroll = space === 'myspace' && module === 'payroll'
   const showOnboarding = space === 'organization' && sub === 'onboarding'
   const showOrgOverview = space === 'organization' && sub === 'overview'
   const showOrgTime = space === 'organization' && sub === 'time'
   const showOrgAttendance = space === 'organization' && sub === 'attendance'
   const showOrgPerformance = space === 'organization' && sub === 'performance'
+  const showOrgPayroll = space === 'organization' && sub === 'payroll'
   const showOrgApps = space === 'organization' && sub === 'apps'
   const showOrgPeople = space === 'organization' && sub === 'people'
-  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgApps || showOrgPeople
+  const showOrgFiles = space === 'organization' && sub === 'files'
+  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgPayroll || showOrgApps || showOrgPeople || showOrgFiles
   const liveKind = space === 'myspace' && ({
     onboarding: 'onboarding',
     files: 'files',
@@ -645,13 +754,8 @@ export default function PeopleHome() {
       goShell({ space: 'myspace', module: 'leave', sub: 'overview', leaveTab: 'mydata', leaveSubTab: 'requests' })
       return
     }
-    // Holidays — parked on branch `pulse/company-later-services`
-    // if (target === 'holidays') {
-    //   goShell({ space: 'myspace', module: 'leave', sub: 'overview', leaveTab: 'holidays' })
-    //   return
-    // }
     if (target === 'holidays') {
-      goShell({ space: 'myspace', module: 'leave', sub: 'overview', leaveTab: 'mydata', leaveSubTab: 'requests' })
+      goShell({ space: 'myspace', module: 'leave', sub: 'overview', leaveTab: 'holidays' })
       return
     }
     if (target === 'attendance') {
@@ -737,6 +841,14 @@ export default function PeopleHome() {
           <button type="button" className="pulse-space is-on">
             Performance
           </button>
+        ) : showOrgPayroll ? (
+          <button type="button" className="pulse-space is-on">
+            Payroll
+          </button>
+        ) : showOrgFiles ? (
+          <button type="button" className="pulse-space is-on">
+            Company files
+          </button>
         ) : showOrgApps ? (
           <button type="button" className="pulse-space is-on">
             App access
@@ -749,8 +861,12 @@ export default function PeopleHome() {
           <button type="button" className="pulse-space is-on">
             Performance
           </button>
+        ) : showPayroll ? (
+          <button type="button" className="pulse-space is-on">
+            Payroll
+          </button>
         ) : showLeave || showAttendance ? (
-          LEAVE_TABS.map((item) => (
+          LEAVE_TABS.filter((item) => !item.adminOnly || isPulseAdmin).map((item) => (
             <button
               key={item.key}
               type="button"
@@ -800,6 +916,7 @@ export default function PeopleHome() {
         )}
         <div className="pulse-top-tools">
           <HeaderAssignedApps apps={assignedApps.slice(0, HEADER_APP_CAP)} user={user} />
+          <HeaderTeamPresence enabled={isPulseAdmin} />
           <HeaderCheckInTimer
             elapsed={elapsed}
             checkedInAt={checkedInAt}
@@ -894,7 +1011,7 @@ export default function PeopleHome() {
 
       <AntLayout className="pulse-mid">
         <AntLayout className="pulse-maincol">
-          {!showAccount && !showOnboarding && !showAttendance && !showTimesheet && !showPerformance && !showOrgTime && !showOrgAttendance && !showOrgPerformance && !showOrgApps ? (
+          {!showAccount && !showOnboarding && !showAttendance && !showTimesheet && !showPerformance && !showPayroll && !showOrgTime && !showOrgAttendance && !showOrgPerformance && !showOrgPayroll && !showOrgApps && !showOrgFiles ? (
           <div className={`pulse-sub${showOverview || showOrgOverview || showOrgPeople || showCalendar || showLeave || showAttendance ? ' pulse-sub-overview' : ''}`} role="tablist" aria-label={showLeave ? 'Leave Tracker sections' : space === 'organization' ? 'Company sections' : 'You sections'}>
             <div className="pulse-sub-tabs">
               {space === 'organization'
@@ -923,7 +1040,11 @@ export default function PeopleHome() {
                   ))
                 : showLeave && leaveTab === 'team'
                 ? (
-                    <button type="button" className="pulse-sub-tab is-on">On Leave</button>
+                    <button type="button" className="pulse-sub-tab is-on">Company leave</button>
+                  )
+                : showLeave && leaveTab === 'holidays'
+                ? (
+                    <button type="button" className="pulse-sub-tab is-on">Company holidays</button>
                   )
                 : space === 'myspace' && module === 'home'
                 ? SUB_TABS.map((item) => (
@@ -947,7 +1068,7 @@ export default function PeopleHome() {
           </div>
           ) : null}
 
-          <Content className={`pulse-body${showOverview || showCalendar || showLeave || showAttendance || showAccount || showTimesheet || showPerformance || showOrgSurface ? ' pulse-body-surface' : ''}${liveKind || (space === 'organization' && !showOrgSurface) ? ' pulse-body-overview' : ''}${showAccount ? ' pulse-body-account' : ''}${space === 'organization' ? ' pulse-body-org' : ''}`}>
+          <Content className={`pulse-body${showOverview || showCalendar || showLeave || showAttendance || showAccount || showTimesheet || showPerformance || showPayroll || showOrgSurface ? ' pulse-body-surface' : ''}${liveKind || (space === 'organization' && !showOrgSurface) ? ' pulse-body-overview' : ''}${showAccount ? ' pulse-body-account' : ''}${space === 'organization' ? ' pulse-body-org' : ''}`}>
             {showAccount ? (
               <div className="pulse-strip-root">
                 <PulseStripBackdrop />
@@ -976,6 +1097,7 @@ export default function PeopleHome() {
                 <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
                   <PulseLeaveTracker
                     sample={sample}
+                    isAdmin={isPulseAdmin}
                     mainTab={leaveTab}
                     myTab={leaveSubTab}
                     onMyTabChange={setLeaveSubTab}
@@ -1002,6 +1124,13 @@ export default function PeopleHome() {
                 <PulseStripBackdrop />
                 <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
                   <PulseLiveModule kind="performance" scope="me" {...liveProps} />
+                </div>
+              </div>
+            ) : showPayroll ? (
+              <div className="pulse-strip-root">
+                <PulseStripBackdrop />
+                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
+                  <PulseLiveModule kind="payroll" scope="me" {...liveProps} />
                 </div>
               </div>
             ) : liveKind ? (
@@ -1033,7 +1162,7 @@ export default function PeopleHome() {
           </Content>
         </AntLayout>
 
-        {showOverview || showOrgSurface || liveKind || showAccount || showCalendar || showLeave || showAttendance || showTimesheet || showPerformance ? null : (
+        {showOverview || showOrgSurface || liveKind || showAccount || showCalendar || showLeave || showAttendance || showTimesheet || showPerformance || showPayroll ? null : (
         <Sider className="pulse-sider-right" width={44} theme="light" collapsedWidth={44} trigger={null}>
           <aside className="pulse-aside" aria-label="Shortcuts">
             <button type="button" aria-label="Directory" onClick={() => (isPulseAdmin ? navigate(APP_COMPANY) : soon('Directory'))}><UserAddOutlined /></button>

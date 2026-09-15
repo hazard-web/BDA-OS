@@ -16,6 +16,15 @@ export const AREA_LABELS = {
   bms: 'BMS discipline and teamwork',
 }
 
+/** Short labels for the product UI */
+export const AREA_SHORT = {
+  outcomes: 'Outcomes',
+  quality: 'Quality',
+  deadline: 'Deadline',
+  ownership: 'Ownership',
+  bms: 'BMS',
+}
+
 export const AREA_KEYS = Object.keys(AREA_WEIGHTS)
 
 export const PERFORMANCE_TIERS = [
@@ -27,10 +36,10 @@ export const PERFORMANCE_TIERS = [
 ]
 
 export const PROJECT_TIER_OPTIONS = [
-  { value: 'Core', label: 'Core · ₹0' },
-  { value: 'Enhanced', label: 'Enhanced · ₹1,000' },
-  { value: 'Significant', label: 'Significant · ₹3,000' },
-  { value: 'Strategic', label: 'Strategic · ₹5,000' },
+  { value: 'Core', label: 'Core' },
+  { value: 'Enhanced', label: 'Enhanced' },
+  { value: 'Significant', label: 'Significant' },
+  { value: 'Strategic', label: 'Strategic' },
 ]
 
 export function monthKey(d = new Date()) {

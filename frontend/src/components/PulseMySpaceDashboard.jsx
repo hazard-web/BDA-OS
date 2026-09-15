@@ -17,6 +17,8 @@ import {
   Typography,
 } from 'antd'
 import { DRAG_THRESHOLD, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
+import { isPulseFileRow } from '../utils/pulseOpenFile'
+import PulseFileViewModal from './PulseFileViewModal'
 import api from '../api'
 
 const STORAGE_KEY = 'pulseMySpaceDashWidgets'
@@ -142,13 +144,15 @@ export const DEMO = {
     { id: 't7', title: 'Submit training feedback', meta: 'Due 30 Aug' },
   ],
   files: [
-    { id: 'file1', title: 'Offer_Letter_Template.pdf', meta: 'PDF · 240 KB', section: 'org' },
-    { id: 'file2', title: 'Code_of_Conduct.pdf', meta: 'PDF · 1.1 MB', section: 'org' },
-    { id: 'file3', title: 'WFH_Guidelines.docx', meta: 'Doc · 88 KB', section: 'org' },
-    { id: 'file4', title: 'Onboarding_Checklist.xlsx', meta: 'Sheet · 56 KB', section: 'org' },
-    { id: 'file7', title: 'Holiday_Calendar_2026.xlsx', meta: 'Sheet · 44 KB', section: 'org' },
-    { id: 'file8', title: 'IT_Asset_Policy.pdf', meta: 'PDF · 620 KB', section: 'org' },
-    { id: 'file9', title: 'Salary_Structure.pdf', meta: 'PDF · 190 KB', section: 'org' },
+    { id: 'file1', title: 'Offer_Letter_Template.pdf', meta: 'PDF · 240 KB', section: 'org', url: '#' },
+    { id: 'file2', title: 'Code_of_Conduct.pdf', meta: 'PDF · 1.1 MB', section: 'org', url: '#' },
+    { id: 'file3', title: 'WFH_Guidelines.docx', meta: 'Doc · 88 KB', section: 'org', url: '#' },
+    { id: 'file4', title: 'Onboarding_Checklist.xlsx', meta: 'Sheet · 56 KB', section: 'org', url: '#' },
+    { id: 'file5', title: 'Aadhaar front', meta: 'Image · Onboarding', section: 'employee', url: '#' },
+    { id: 'file6', title: 'PAN front', meta: 'Image · Onboarding', section: 'employee', url: '#' },
+    { id: 'file7', title: 'Holiday_Calendar_2026.xlsx', meta: 'Sheet · 44 KB', section: 'org', url: '#' },
+    { id: 'file8', title: 'IT_Asset_Policy.pdf', meta: 'PDF · 620 KB', section: 'org', url: '#' },
+    { id: 'file9', title: 'Salary_Structure.pdf', meta: 'PDF · 190 KB', section: 'org', url: '#' },
     { id: 'file5', title: 'ID_Proof_Scan.pdf', meta: 'PDF · 2.4 MB', section: 'employee' },
     { id: 'file6', title: 'Bank_Mandate.pdf', meta: 'PDF · 310 KB', section: 'employee' },
     { id: 'file10', title: 'Form_16_FY25.pdf', meta: 'PDF · 1.8 MB', section: 'employee' },
@@ -235,7 +239,7 @@ function rowInitial(title = '') {
 
 const FILE_TABS = [
   { id: 'org', label: 'Company Files' },
-  { id: 'employee', label: 'Employee Files' },
+  { id: 'employee', label: 'My Files' },
 ]
 
 export const EMPTY_DASH = {
@@ -389,7 +393,9 @@ export function DashListWidget({
         <div className={fileTabs ? 'pulse-dash-files-body' : undefined}>
           <ul className="pulse-dash-rows">
             {visibleItems.map((item) => {
-              const clickable = Boolean(item.to) && typeof onRow === 'function' && !floating
+              const clickable = (Boolean(item.to) || Boolean(item.url) || Boolean(item.openPath))
+                && typeof onRow === 'function'
+                && !floating
               const body = (
                 <>
                   {fileTabs ? (
@@ -405,6 +411,9 @@ export function DashListWidget({
                     <p className="pulse-dash-row-title">{item.title}</p>
                     {item.meta ? <p className="pulse-dash-row-meta">{item.meta}</p> : null}
                   </div>
+                  {fileTabs ? (
+                    <span className="pulse-dash-file-view">View</span>
+                  ) : null}
                 </>
               )
               return (
@@ -603,6 +612,7 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
   const [liveData, setLiveData] = useState(null)
   const [ghost, setGhost] = useState(null)
   const [fileTab, setFileTab] = useState('org')
+  const [viewFile, setViewFile] = useState(null)
   const cardRefs = useRef(new Map())
   const dragRef = useRef(null)
   const ghostPosRef = useRef({ x: 0, y: 0 })
@@ -634,6 +644,10 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
   }, [useSample, liveData])
 
   const openRow = useCallback((item) => {
+    if (isPulseFileRow(item)) {
+      setViewFile(item)
+      return
+    }
     if (item?.to && typeof onOpen === 'function') {
       onOpen(item.to)
       return
@@ -903,6 +917,11 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
             document.body,
           )
         : null}
+      <PulseFileViewModal
+        open={Boolean(viewFile)}
+        file={viewFile}
+        onClose={() => setViewFile(null)}
+      />
     </div>
   )
 }
