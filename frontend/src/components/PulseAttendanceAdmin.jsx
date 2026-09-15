@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { App, Button, DatePicker, Empty, Modal, Select, Table, Tag } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
@@ -11,6 +11,9 @@ const DATE_FILTERS = [
   { value: 'today', label: 'Today' },
   { value: 'custom', label: 'Custom' },
 ]
+
+/** Live status refresh while viewing today. */
+const LIVE_POLL_MS = 12_000
 
 function dayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -30,6 +33,7 @@ function personInitial(row) {
 }
 
 function lastCheckOutAt(row) {
+  if (row?.checkOutAt) return row.checkOutAt
   const events = [...(row.events || [])].reverse()
   const event = events.find((item) => item.type === 'CHECK_OUT' || item.type === 'MIDNIGHT_CLOSE')
   if (event?.at) return event.at
@@ -78,7 +82,6 @@ function eventTag(type) {
   }
 }
 
-
 export default function PulseAttendanceAdmin() {
   const { message } = App.useApp()
   const [days, setDays] = useState([])
@@ -86,35 +89,47 @@ export default function PulseAttendanceAdmin() {
   const [period, setPeriod] = useState('today')
   const [customDate, setCustomDate] = useState(() => dayjs())
   const [selected, setSelected] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const viewed = useMemo(() => {
     const next = period === 'custom' && customDate ? customDate.toDate() : new Date()
     return next
   }, [period, customDate])
   const date = dayKey(viewed)
+  const isToday = date === dayKey()
+  const dateRef = useRef(date)
+  dateRef.current = date
 
-  const load = async () => {
-    setLoading(true)
+  const fetchDays = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
     try {
-      const res = await api.get('/pulse-checkin/admin/days', { params: { limit: 80, date } })
+      const res = await api.get('/pulse-checkin/admin/days', {
+        params: { limit: 80, date: dateRef.current, view: 'cards' },
+      })
+      if (dateRef.current !== date) return
       setDays(res.data?.data || [])
     } catch (err) {
-      setDays([])
-      const status = err?.response?.status
-      message.error(
-        status === 403
-          ? 'Admin access required'
-          : err?.response?.data?.message || 'Could not load attendance',
-      )
+      if (dateRef.current !== date) return
+      if (!silent) {
+        setDays([])
+        const status = err?.response?.status
+        message.error(
+          status === 403
+            ? 'Admin access required'
+            : err?.response?.data?.message || 'Could not load attendance',
+        )
+      }
     } finally {
-      setLoading(false)
+      if (dateRef.current === date && !silent) setLoading(false)
     }
-  }
+  }, [date, message])
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     api
-      .get('/pulse-checkin/admin/days', { params: { limit: 80, date } })
+      .get('/pulse-checkin/admin/days', {
+        params: { limit: 80, date, view: 'cards' },
+      })
       .then((res) => {
         if (!cancelled) setDays(res.data?.data || [])
       })
@@ -134,8 +149,39 @@ export default function PulseAttendanceAdmin() {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date])
+  }, [date, message])
+
+  // Live status: poll while viewing today so Active / Not active updates without refresh.
+  useEffect(() => {
+    if (!isToday) return undefined
+    const id = window.setInterval(() => {
+      void fetchDays({ silent: true })
+    }, LIVE_POLL_MS)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void fetchDays({ silent: true })
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [isToday, fetchDays])
+
+  const openDetail = async (row) => {
+    setSelected(row)
+    setDetailLoading(true)
+    try {
+      const res = await api.get('/pulse-checkin/admin/days/detail', {
+        params: { user: row.user, date },
+      })
+      const detail = res.data?.data
+      if (detail) setSelected(detail)
+    } catch {
+      /* keep card preview in modal */
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   const selectedEvents = useMemo(
     () => (selected ? [...(selected.events || [])].reverse() : []),
@@ -172,7 +218,13 @@ export default function PulseAttendanceAdmin() {
               }}
             />
           ) : null}
-          <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
+          <Button
+            type="text"
+            icon={<ReloadOutlined />}
+            onClick={() => void fetchDays({ silent: false })}
+            loading={loading}
+            aria-label="Refresh"
+          />
         </div>
       </header>
 
@@ -197,14 +249,10 @@ export default function PulseAttendanceAdmin() {
               type="button"
               key={String(row.user || row.email)}
               className="pov-glass pulse-ts-person is-clickable"
-              onClick={() => setSelected(row)}
+              onClick={() => void openDetail(row)}
             >
               <header className="pulse-ts-person-head">
-                {row.avatarUrl ? (
-                  <img className="pulse-ts-person-avatar" src={row.avatarUrl} alt="" referrerPolicy="no-referrer" />
-                ) : (
-                  <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{personInitial(row)}</span>
-                )}
+                <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{personInitial(row)}</span>
                 <div>
                   <h3>{personName(row)}</h3>
                   <p>{row.email || 'No email'}</p>
@@ -261,7 +309,10 @@ export default function PulseAttendanceAdmin() {
       >
         {selected ? (
           <div className="pulse-att-detail">
-            <p className="pulse-att-detail-sub">{selected.email || 'No email'}</p>
+            <p className="pulse-att-detail-sub">
+              {selected.email || 'No email'}
+              {detailLoading ? ' · Loading full activity…' : ''}
+            </p>
             <div className="pulse-ts-person-metrics pulse-att-detail-metrics">
               <div>
                 <p>Status</p>
@@ -293,6 +344,7 @@ export default function PulseAttendanceAdmin() {
             <Table
               size="small"
               pagination={false}
+              loading={detailLoading}
               rowKey={(e) => e._id || `${e.type}-${e.at}`}
               dataSource={selectedEvents}
               scroll={{ x: 720 }}
