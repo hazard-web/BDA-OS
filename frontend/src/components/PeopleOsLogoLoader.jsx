@@ -1,8 +1,9 @@
 import { useId } from 'react'
-import PeopleOsMark from './PeopleOsMark'
 import './people-os-logo-load.css'
 
-/** BDA OS mark with a spinning four-colour ring. */
+const GREEN = '#1A5F4A'
+
+/** People OS four-square mark with a spinning green ring. */
 export default function PeopleOsLogoLoader({
   label = 'Loading',
   overlay = false,
@@ -22,10 +23,9 @@ export default function PeopleOsLogoLoader({
         <svg className="pos-logo-load-ring" viewBox="0 0 80 80">
           <defs>
             <linearGradient id={`pos-ring-${uid}`} x1="8" y1="4" x2="72" y2="76" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#e42527" />
-              <stop offset="0.33" stopColor="#f5c400" />
-              <stop offset="0.66" stopColor="#21a05a" />
-              <stop offset="1" stopColor="#2b8aed" />
+              <stop stopColor={GREEN} />
+              <stop offset="0.55" stopColor="#2d8a6e" />
+              <stop offset="1" stopColor={GREEN} />
             </linearGradient>
           </defs>
           <circle cx="40" cy="40" r="32" fill="none" stroke="#eceae6" strokeWidth="3" />
@@ -40,7 +40,12 @@ export default function PeopleOsLogoLoader({
             strokeDasharray="58 143"
           />
         </svg>
-        <PeopleOsMark size={28} />
+        <svg className="people-os-mark" width={28} height={28} viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="0" y="0" width="8" height="8" rx="1.6" fill={GREEN} />
+          <rect x="10" y="0" width="8" height="8" rx="1.6" fill={GREEN} />
+          <rect x="0" y="10" width="8" height="8" rx="1.6" fill={GREEN} />
+          <rect x="10" y="10" width="8" height="8" rx="1.6" fill={GREEN} />
+        </svg>
       </span>
     </div>
   )

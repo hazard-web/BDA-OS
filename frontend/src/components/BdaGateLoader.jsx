@@ -1,12 +1,11 @@
 import { useEffect } from 'react'
-import BdaBrandIdent from './BdaBrandIdent'
 import './bda-gate-loader.css'
 
-/** Brand intro used when Pulse is opening a page. */
+/** People OS four-square mark rotates as one unit. No ring, no glow, no text. */
 export default function BdaGateLoader({
   show = false,
   leaving = false,
-  label = 'Opening',
+  label = 'Loading',
 }) {
   useEffect(() => {
     if (!show) return undefined
@@ -23,11 +22,17 @@ export default function BdaGateLoader({
       className={`bda-gate${leaving ? ' is-out' : ''}`}
       role="status"
       aria-live="polite"
-      aria-label={label}
+      aria-label={label || 'Loading'}
     >
       <div className="bda-gate-stage">
-        <BdaBrandIdent />
-        <p className="bda-gate-label">{label}</p>
+        <span className="bda-gate-spin" aria-hidden="true">
+          <span className="bda-gate-mark">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        </span>
       </div>
     </div>
   )

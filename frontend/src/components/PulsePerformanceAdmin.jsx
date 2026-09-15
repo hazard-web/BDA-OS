@@ -17,7 +17,7 @@ import dayjs from 'dayjs'
 import api from '../api'
 import {
   AREA_KEYS,
-  AREA_LABELS,
+  AREA_SHORT,
   PROJECT_TIER_OPTIONS,
   formatInr,
   monthKey,
@@ -68,7 +68,7 @@ export default function PulsePerformanceAdmin() {
       message.error(
         status === 403
           ? 'Admin access required'
-          : err?.response?.data?.message || 'Could not load team performance',
+          : err?.response?.data?.message || 'Could not load team',
       )
     } finally {
       setLoading(false)
@@ -125,7 +125,7 @@ export default function PulsePerformanceAdmin() {
         status: next.status === 'locked' ? 'locked' : next.status || 'draft',
         resolveCorrection: false,
       })
-      message.success('Performance saved')
+      message.success('Saved')
     } catch (err) {
       message.error(err?.response?.data?.message || 'Could not save')
     } finally {
@@ -142,7 +142,7 @@ export default function PulsePerformanceAdmin() {
       setRows((prev) => prev.map((row) => (row.user === next.user ? next : row)))
       setSelected(next)
       setDraft((prev) => (prev ? { ...prev, status: 'locked' } : prev))
-      message.success('Locked for payroll')
+      message.success('Locked · payslip ready')
     } catch (err) {
       message.error(err?.response?.data?.message || 'Could not lock')
     } finally {
@@ -161,10 +161,7 @@ export default function PulsePerformanceAdmin() {
   return (
     <div className="pulse-ts-admin pulse-perf-admin">
       <header className="pulse-ts-admin-head">
-        <div>
-          <p className="pov-kicker">Team performance</p>
-          <h2>{monthLabel(month)}</h2>
-        </div>
+        <h2>{monthLabel(month)}</h2>
         <div className="pulse-ts-admin-filter">
           <DatePicker
             picker="month"
@@ -182,13 +179,11 @@ export default function PulsePerformanceAdmin() {
         </div>
       </header>
 
-      {loading && !rows.length ? (
-        <p className="pulse-ts-admin-empty">Loading employee scores…</p>
-      ) : null}
+      {loading && !rows.length ? <p className="pulse-ts-admin-empty">Loading…</p> : null}
 
       {!loading && !rows.length ? (
         <div className="pov-glass pulse-ts-person">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No employees to show yet" />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No employees yet" />
         </div>
       ) : null}
 
@@ -208,10 +203,10 @@ export default function PulsePerformanceAdmin() {
               )}
               <div>
                 <h3>{personName(row)}</h3>
-                <p>{row.email || 'No email'}</p>
+                <p>{row.email || '—'}</p>
               </div>
-              <span className={`pulse-ts-person-tag${row.correctionRequested ? ' is-on' : ''}`}>
-                {row.status === 'locked' ? 'Locked' : row.correctionRequested ? 'Correction' : row.status}
+              <span className={`pulse-ts-person-tag${row.status === 'locked' || row.correctionRequested ? ' is-on' : ''}`}>
+                {row.status === 'locked' ? 'Locked' : row.correctionRequested ? 'Correction' : row.performanceStatus || '—'}
               </span>
             </header>
 
@@ -219,10 +214,6 @@ export default function PulsePerformanceAdmin() {
               <div>
                 <p>Score</p>
                 <strong>{row.weightedScore ?? 0}</strong>
-              </div>
-              <div>
-                <p>Status</p>
-                <strong className={statusTone(row.performanceStatus)}>{row.performanceStatus || '—'}</strong>
               </div>
               <div>
                 <p>Variable</p>
@@ -240,7 +231,7 @@ export default function PulsePerformanceAdmin() {
           setSelected(null)
           setDraft(null)
         }}
-        width={720}
+        width={520}
         footer={[
           <Button
             key="close"
@@ -252,38 +243,31 @@ export default function PulsePerformanceAdmin() {
             Close
           </Button>,
           <Button key="lock" danger disabled={locked || saving} onClick={lockMonth}>
-            Lock payroll
+            Lock
           </Button>,
           <Button key="save" type="primary" className="pulse-perf-cta" loading={saving} disabled={locked} onClick={save}>
-            Save scores
+            Save
           </Button>,
         ]}
         destroyOnClose
       >
         {draft ? (
           <div className="pulse-perf-edit">
-            <div className="pulse-perf-edit-summary">
-              <div>
-                <p className="pov-kicker">Live score</p>
-                <strong>{preview?.weightedScore ?? 0}</strong>
-                <span className={`pulse-perf-status ${statusTone(preview?.performanceStatus)}`}>
-                  {preview?.performanceStatus}
-                </span>
-              </div>
-              <div>
-                <p className="pov-kicker">Variable</p>
-                <strong>{formatInr(preview?.totalBonus)}</strong>
-                <span className="pulse-perf-cap">Cap ₹10,000</span>
-              </div>
+            <div className="pulse-perf-edit-head">
+              <strong>{preview?.weightedScore ?? 0}</strong>
+              <span className={`pulse-perf-status ${statusTone(preview?.performanceStatus)}`}>
+                {preview?.performanceStatus}
+              </span>
+              <em>{formatInr(preview?.totalBonus)}</em>
             </div>
 
-            <div className="pulse-perf-area-grid is-edit">
+            <div className="pulse-perf-sliders">
               {AREA_KEYS.map((key) => (
-                <label key={key} className="pulse-perf-area">
-                  <div className="pulse-perf-area-top">
-                    <span>{AREA_LABELS[key]}</span>
+                <label key={key} className="pulse-perf-slider">
+                  <span>
+                    {AREA_SHORT[key]}
                     <em>{draft.scores[key] ?? 0}</em>
-                  </div>
+                  </span>
                   <Slider
                     min={0}
                     max={100}
@@ -300,93 +284,92 @@ export default function PulsePerformanceAdmin() {
               ))}
             </div>
 
-            <div className="pulse-perf-edit-grid">
+            <div className="pulse-perf-edit-row">
+              <InputNumber
+                min={0}
+                disabled={locked}
+                value={draft.fixedPay}
+                onChange={(value) => setDraft((prev) => ({ ...prev, fixedPay: Number(value) || 0 }))}
+                className="pulse-perf-input"
+                placeholder="Fixed pay"
+              />
+              <Select
+                value={draft.projectTier}
+                disabled={locked}
+                options={PROJECT_TIER_OPTIONS}
+                onChange={(value) => setDraft((prev) => ({ ...prev, projectTier: value }))}
+                className="pulse-perf-select"
+                classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
+                aria-label="Project tier"
+              />
+              <Select
+                value={locked ? 'locked' : draft.status}
+                disabled={locked}
+                options={[
+                  { value: 'draft', label: 'Draft' },
+                  { value: 'review', label: 'Review' },
+                  { value: 'confirmed', label: 'Confirmed' },
+                  { value: 'locked', label: 'Locked', disabled: true },
+                ]}
+                onChange={(value) => setDraft((prev) => ({ ...prev, status: value }))}
+                className="pulse-perf-select"
+                classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
+                aria-label="Status"
+              />
+            </div>
+
+            <div className="pulse-perf-toggles">
               <label>
-                <span>Fixed pay</span>
-                <InputNumber
-                  min={0}
-                  disabled={locked}
-                  value={draft.fixedPay}
-                  onChange={(value) => setDraft((prev) => ({ ...prev, fixedPay: Number(value) || 0 }))}
-                  className="pulse-perf-input"
-                />
-              </label>
-              <label>
-                <span>Project tier</span>
-                <Select
-                  value={draft.projectTier}
-                  disabled={locked}
-                  options={PROJECT_TIER_OPTIONS}
-                  onChange={(value) => setDraft((prev) => ({ ...prev, projectTier: value }))}
-                  className="pulse-perf-select"
-                  classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
-                />
-              </label>
-              <label className="pulse-perf-switch">
-                <span>Project approved</span>
+                <span>Project</span>
                 <Switch
+                  size="small"
                   checked={draft.projectApproved}
                   disabled={locked}
                   onChange={(checked) => setDraft((prev) => ({ ...prev, projectApproved: checked }))}
                 />
               </label>
-              <label className="pulse-perf-switch">
-                <span>Learning approved</span>
+              <label>
+                <span>Learning</span>
                 <Switch
+                  size="small"
                   checked={draft.learningApproved}
                   disabled={locked}
                   onChange={(checked) => setDraft((prev) => ({ ...prev, learningApproved: checked }))}
                 />
               </label>
-              <label className="pulse-perf-switch">
-                <span>Innovation approved</span>
+              <label>
+                <span>Innovation</span>
                 <Switch
+                  size="small"
                   checked={draft.innovationApproved}
                   disabled={locked}
                   onChange={(checked) => setDraft((prev) => ({ ...prev, innovationApproved: checked }))}
                 />
               </label>
-              <label>
-                <span>Review status</span>
-                <Select
-                  value={locked ? 'locked' : draft.status}
-                  disabled={locked}
-                  options={[
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'review', label: 'In review' },
-                    { value: 'confirmed', label: 'Confirmed' },
-                    { value: 'locked', label: 'Locked', disabled: true },
-                  ]}
-                  onChange={(value) => setDraft((prev) => ({ ...prev, status: value }))}
-                  className="pulse-perf-select"
-                  classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
-                />
-              </label>
+              {selected?.correctionRequested ? (
+                <label>
+                  <span>Resolve</span>
+                  <Switch
+                    size="small"
+                    checked={draft.resolveCorrection}
+                    disabled={locked}
+                    onChange={(checked) => setDraft((prev) => ({ ...prev, resolveCorrection: checked }))}
+                  />
+                </label>
+              ) : null}
             </div>
 
-            <label className="pulse-perf-note-field">
-              <span>Manager note</span>
-              <Input.TextArea
-                rows={3}
-                maxLength={2000}
-                disabled={locked}
-                value={draft.managerNote}
-                onChange={(e) => setDraft((prev) => ({ ...prev, managerNote: e.target.value }))}
-              />
-            </label>
+            <Input.TextArea
+              rows={2}
+              maxLength={2000}
+              disabled={locked}
+              value={draft.managerNote}
+              onChange={(e) => setDraft((prev) => ({ ...prev, managerNote: e.target.value }))}
+              placeholder="Note"
+            />
 
-            {selected?.correctionRequested ? (
-              <label className="pulse-perf-switch">
-                <span>Resolve correction request</span>
-                <Switch
-                  checked={draft.resolveCorrection}
-                  disabled={locked}
-                  onChange={(checked) => setDraft((prev) => ({ ...prev, resolveCorrection: checked }))}
-                />
-              </label>
-            ) : null}
             {selected?.correctionNote ? (
-              <p className="pulse-perf-correction">Employee evidence: {selected.correctionNote}</p>
+              <p className="pulse-perf-note">{selected.correctionNote}</p>
             ) : null}
           </div>
         ) : null}

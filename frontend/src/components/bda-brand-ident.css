@@ -5,7 +5,27 @@
 
 .bda-ident-mark {
   display: block;
-  width: min(220px, 72vw);
-  height: auto;
-  object-fit: contain;
+  width: 72px;
+  height: 72px;
+  animation: bda-ident-breathe 1.35s ease-in-out infinite;
+}
+
+.bda-ident-tiles.bda-ident-mark {
+  overflow: visible;
+}
+
+@keyframes bda-ident-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bda-ident-mark {
+    animation: none;
+  }
 }

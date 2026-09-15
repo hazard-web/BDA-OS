@@ -50,7 +50,25 @@ export const PULSE_SHELL_VIEWS = {
     sub: 'overview',
     leaveTab: 'mydata',
     leaveSubTab: 'requests',
-    label: 'Opening Leave & Attendance',
+    label: 'Opening Leave Tracker',
+  },
+  leaveTeam: {
+    path: `${APP_BASE}/leave/team`,
+    space: 'myspace',
+    module: 'leave',
+    sub: 'overview',
+    leaveTab: 'team',
+    leaveSubTab: 'requests',
+    label: 'Opening Leave Tracker',
+  },
+  leaveHolidays: {
+    path: `${APP_BASE}/leave/holidays`,
+    space: 'myspace',
+    module: 'leave',
+    sub: 'overview',
+    leaveTab: 'holidays',
+    leaveSubTab: 'requests',
+    label: 'Opening Holidays',
   },
   hours: {
     path: `${APP_BASE}/hours`,
@@ -105,6 +123,21 @@ export const PULSE_SHELL_VIEWS = {
     sub: 'overview',
     label: 'Opening Performance',
   },
+  payroll: {
+    path: `${APP_BASE}/payroll`,
+    space: 'myspace',
+    module: 'payroll',
+    sub: 'overview',
+    label: 'Opening Payroll',
+  },
+  companyPayroll: {
+    path: `${APP_BASE}/company/payroll`,
+    space: 'organization',
+    module: 'home',
+    sub: 'payroll',
+    admin: true,
+    label: 'Opening Payroll',
+  },
   account: {
     path: `${APP_BASE}/account`,
     space: 'myspace',
@@ -119,6 +152,14 @@ export const PULSE_SHELL_VIEWS = {
     sub: 'apps',
     admin: true,
     label: 'Opening App access',
+  },
+  companyFiles: {
+    path: `${APP_BASE}/company/files`,
+    space: 'organization',
+    module: 'home',
+    sub: 'files',
+    admin: true,
+    label: 'Opening Company Files',
   },
   people: {
     path: `${APP_BASE}/company/people`,
@@ -137,30 +178,37 @@ export const PULSE_SHELL_VIEWS = {
 }
 
 export const PULSE_OPEN_VIEWS = Object.fromEntries(
-  ['onboarding', 'leave', 'attendance', 'time', 'hours', 'apps', 'companyTime', 'companyPerformance', 'people', 'performance'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
+  ['onboarding', 'leave', 'leaveTeam', 'leaveHolidays', 'attendance', 'time', 'hours', 'apps', 'companyTime', 'companyPerformance', 'companyPayroll', 'companyFiles', 'people', 'performance', 'payroll', 'files'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
 )
 
 export const PULSE_SHELL_PATHS = [...new Set(Object.values(PULSE_SHELL_VIEWS).map((view) => view.path))]
 
-export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time', 'people', 'performance'])
+export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time', 'people', 'performance', 'payroll', 'files'])
 
-export function pathForShell({ space, module, sub } = {}) {
+export function pathForShell({ space, module, sub, leaveTab } = {}) {
   if (space === 'organization') {
     if (sub === 'onboarding') return PULSE_SHELL_VIEWS.onboarding.path
     if (sub === 'apps') return PULSE_SHELL_VIEWS.apps.path
     if (sub === 'attendance') return PULSE_SHELL_VIEWS.attendance.path
     if (sub === 'time') return PULSE_SHELL_VIEWS.companyTime.path
     if (sub === 'performance') return PULSE_SHELL_VIEWS.companyPerformance.path
+    if (sub === 'payroll') return PULSE_SHELL_VIEWS.companyPayroll.path
     if (sub === 'people') return PULSE_SHELL_VIEWS.people.path
+    if (sub === 'files') return PULSE_SHELL_VIEWS.companyFiles.path
     return PULSE_SHELL_VIEWS.company.path
   }
   if (module === 'home') {
     return sub === 'calendar' ? PULSE_SHELL_VIEWS.calendar.path : PULSE_SHELL_VIEWS.home.path
   }
-  if (module === 'leave') return PULSE_SHELL_VIEWS.leave.path
+  if (module === 'leave') {
+    if (leaveTab === 'team') return PULSE_SHELL_VIEWS.leaveTeam.path
+    if (leaveTab === 'holidays') return PULSE_SHELL_VIEWS.leaveHolidays.path
+    return PULSE_SHELL_VIEWS.leave.path
+  }
   if (module === 'time') return PULSE_SHELL_VIEWS.hours.path
   if (module === 'attendance') return PULSE_SHELL_VIEWS.myAttendance.path
   if (module === 'performance') return PULSE_SHELL_VIEWS.performance.path
+  if (module === 'payroll') return PULSE_SHELL_VIEWS.payroll.path
   if (module === 'account') return PULSE_SHELL_VIEWS.account.path
   if (PULSE_SHELL_VIEWS[module]) return PULSE_SHELL_VIEWS[module].path
   return PULSE_SHELL_VIEWS.home.path

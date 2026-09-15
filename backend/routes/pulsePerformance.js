@@ -4,6 +4,7 @@ const { auth } = require('./auth')
 const User = require('../models/User')
 const PulsePerformanceMonth = require('../models/PulsePerformanceMonth')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
+const { upsertPayslipFromPerformance } = require('./pulsePayroll')
 const {
   AREA_LABELS,
   AREA_WEIGHTS,
@@ -332,7 +333,26 @@ router.post('/admin/:userId/lock', auth, async (req, res) => {
     doc.lockedAt = new Date()
     doc.reviewedBy = req.user._id
     await doc.save()
-    res.json({ success: true, data: serializeRow(doc, member) })
+
+    let payslip = null
+    try {
+      payslip = await upsertPayslipFromPerformance({
+        organizationId: orgObjectId,
+        member,
+        performance: doc,
+        actorId: req.user._id,
+      })
+    } catch {
+      /* payslip generation should not block lock */
+    }
+
+    res.json({
+      success: true,
+      data: serializeRow(doc, member),
+      meta: {
+        payslipId: payslip?._id ? String(payslip._id) : null,
+      },
+    })
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to lock performance' })
   }

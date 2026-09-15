@@ -4,6 +4,7 @@ import DocumentTitle from './components/DocumentTitle'
 import PulseAuthSync from './components/PulseAuthSync'
 import PulseLoading from './components/PulseLoading'
 import PulseCheckInHeartbeat from './components/PulseCheckInHeartbeat'
+import PulseForceExitGuard from './components/PulseForceExitGuard'
 import { useAuth } from './context/AuthContext'
 import { lockPulsePageZoom } from './utils/pulsePageZoom'
 import { closePulseAuxiliaryTab } from './utils/pulseAuthSync'
@@ -77,6 +78,7 @@ export default function App() {
       <DocumentTitle />
       <PulseAuthSync />
       <PulseCheckInHeartbeat />
+      <PulseForceExitGuard />
       <PulsePageZoomLock />
       <Routes>
         <Route path="/login" element={<Login />} />

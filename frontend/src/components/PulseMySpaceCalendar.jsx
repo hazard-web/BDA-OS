@@ -38,8 +38,10 @@ function dayCaption(value, holiday, team, mine) {
   const when = value.format('ddd D MMM')
   if (holiday) return `${when} · ${holiday.name}`
   if (team.length) {
-    const names = team.map((row) => row.name.split(' ')[0]).join(', ')
-    return `${when} · ${names} off`
+    const names = team
+      .map((row) => `${row.name}${row.type ? ` · ${row.type}` : ''}`)
+      .join('; ')
+    return `${when} · ${names}`
   }
   if (mine.onLeave) return `${when} · You are on leave`
   if (mine.absent) return `${when} · You were absent`
@@ -297,11 +299,15 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
       chips.push({ tone: 'holiday', label: holiday.name })
     }
     if (team.length) {
-      const names = team.slice(0, 2).map((row) => row.name.split(' ')[0]).join(', ')
-      chips.push({
-        tone: 'leave',
-        label: team.length > 2 ? `${names} +${team.length - 2}` : `${names} off`,
+      team.slice(0, 3).forEach((row) => {
+        chips.push({
+          tone: 'leave',
+          label: `${row.name}${row.type ? ` · ${row.type}` : ''}`,
+        })
       })
+      if (team.length > 3) {
+        chips.push({ tone: 'leave', label: `+${team.length - 3} more` })
+      }
     }
     if (mine.absent || weekDay?.status === 'Absent') chips.push({ tone: 'absent', label: 'Absent' })
     if (mine.present || weekDay?.present || (weekDay?.today && checkedInAt)) {
@@ -351,7 +357,6 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
       <CalendarToolbar value={value} onChange={setValue} />
       {compact ? (
         <p className="pulse-cal-legend pulse-cal-legend-mini">
-          <span className="is-leave">Team off</span>
           <span className="is-holiday">Holiday</span>
           <span className="is-present">Hours in</span>
           <span className="is-absent">Absent</span>
@@ -359,7 +364,6 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
       ) : (
         <p className="pulse-cal-legend">
           <span className="is-holiday">Holiday</span>
-          <span className="is-leave">Team leave</span>
           <span className="is-absent">Absent</span>
           <span className="is-present">Hours in</span>
         </p>
@@ -378,7 +382,11 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
       />
       {compact ? (
         <p className="pulse-cal-caption">{dayCaption(value, selectedHoliday, selectedTeam, selected)}</p>
-      ) : null}
+      ) : (
+        <p className="pulse-cal-caption pulse-cal-caption-full">
+          {dayCaption(value, selectedHoliday, selectedTeam, selected)}
+        </p>
+      )}
     </div>
   )
 }

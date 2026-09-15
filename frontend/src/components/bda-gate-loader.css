@@ -1,4 +1,5 @@
 .bda-gate {
+  --bda-green: #1a5f4a;
   position: fixed;
   inset: 0;
   z-index: 8000;
@@ -7,16 +8,36 @@
   padding: 24px;
   box-sizing: border-box;
   background: #fcfcfa;
-  color: #1c2418;
+  animation: bda-gate-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .bda-gate-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  width: min(280px, 82vw);
+  display: grid;
+  place-items: center;
+}
+
+.bda-gate-spin {
+  display: grid;
+  place-items: center;
+  animation: bda-gate-spin 2.8s linear infinite;
+}
+
+.bda-gate-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
+  animation: bda-gate-pulse 2s ease-in-out infinite;
+}
+
+.bda-gate-mark i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--bda-green);
 }
 
 .pulse-open-under.is-gated {
@@ -25,30 +46,53 @@
 }
 
 .bda-gate-label {
-  margin: 0;
-  text-align: center;
-  font-family: Figtree, system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #6b7368;
+  display: none;
 }
 
 .bda-gate.is-out {
   pointer-events: none;
-  animation: bda-gate-leave 0.38s ease forwards;
+  animation: bda-gate-out 0.3s ease forwards;
 }
 
-@keyframes bda-gate-leave {
+@keyframes bda-gate-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bda-gate-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes bda-gate-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes bda-gate-out {
   to {
     opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bda-gate.is-out {
+  .bda-gate,
+  .bda-gate-spin,
+  .bda-gate-mark {
     animation: none;
+  }
+
+  .bda-gate.is-out {
     opacity: 0;
   }
 }

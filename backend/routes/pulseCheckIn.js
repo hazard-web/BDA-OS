@@ -14,6 +14,7 @@ const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth');
 const { sendLeaveRequestEmail } = require('../utils/emailService');
 const { uploadBase64 } = require('../utils/cloudinary');
 const { getProductionBaseUrl } = require('../utils/urlHelper');
+const { collectMyFiles } = require('./pulseFiles');
 const {
   clientIp,
   clientUserAgent,
@@ -326,6 +327,65 @@ router.get('/today', auth, async (req, res) => {
   }
 });
 
+// GET /api/pulse-checkin/admin/presence — who is checked in right now (admin / superadmin)
+router.get('/admin/presence', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    const organizationId = orgIdOf(req.user);
+    const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
+      ? new mongoose.Types.ObjectId(organizationId)
+      : organizationId;
+    const members = await User.find({
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+    })
+      .select('_id firstName lastName displayName email')
+      .lean();
+
+    const today = todayKey();
+    const userIds = members.map((m) => m._id);
+    const days = userIds.length
+      ? await PulseWorkDay.find({ user: { $in: userIds }, date: today })
+        .select('user status')
+        .lean()
+      : [];
+    const statusByUser = new Map(days.map((row) => [String(row.user), row.status]));
+
+    const active = [];
+    const inactive = [];
+    members.forEach((member) => {
+      const parts = [member.firstName, member.lastName].filter(Boolean);
+      const name = parts.length
+        ? parts.join(' ')
+        : (member.displayName || String(member.email || '').split('@')[0] || 'Employee');
+      const row = {
+        id: String(member._id),
+        name,
+        email: member.email || '',
+      };
+      if (statusByUser.get(String(member._id)) === 'active') active.push(row);
+      else inactive.push(row);
+    });
+
+    active.sort((a, b) => a.name.localeCompare(b.name));
+    inactive.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      success: true,
+      data: {
+        date: today,
+        activeCount: active.length,
+        inactiveCount: inactive.length,
+        active,
+        inactive,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load presence' });
+  }
+});
+
 // GET /api/pulse-checkin/admin/days — org-wide check-in audit (admin only)
 router.get('/admin/days', auth, async (req, res) => {
   try {
@@ -583,6 +643,16 @@ router.post('/check-out', auth, async (req, res) => {
     const doc = await getOrCreateDay(req.user._id, email, date);
     if (doc.status === 'closed') {
       return res.status(400).json({ success: false, message: 'This day is already closed for timesheet' });
+    }
+
+    // Idempotent: tab-close may fire keepalive + sendBeacon together.
+    const alreadyOut = doc.status === 'stopped' && !findOpenSession(doc);
+    if (alreadyOut) {
+      const trustedIdle = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
+      doc.totalActiveMs = Math.max(Number(doc.totalActiveMs) || 0, trustedIdle.totalActiveMs || 0);
+      touchHeartbeat(doc, now);
+      await doc.save();
+      return res.json({ success: true, data: serializeDay(doc) });
     }
 
     const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
@@ -1043,18 +1113,34 @@ function rollingHolidayWindow(now = new Date()) {
   return { from, to: dateToKey(end) };
 }
 
+function policyHolidayEntries(policyHolidays) {
+  const byDate = new Map();
+  (policyHolidays || []).forEach((entry) => {
+    if (typeof entry === 'string') {
+      const date = dayKeyOf(entry);
+      if (!date) return;
+      byDate.set(date, {
+        date,
+        name: NAMED_HOLIDAYS[date]?.name || 'Holiday',
+      });
+      return;
+    }
+    if (entry && typeof entry === 'object') {
+      const date = dayKeyOf(entry.date || entry.day);
+      if (!date) return;
+      const name = String(entry.name || '').trim() || NAMED_HOLIDAYS[date]?.name || 'Holiday';
+      byDate.set(date, { date, name });
+    }
+  });
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function collectHolidays(from, to, policyHolidays) {
-  const companyDates = new Set((policyHolidays || []).map(dayKeyOf).filter(Boolean));
   const holidays = [];
   const seen = new Set();
-  companyDates.forEach((date) => {
+  policyHolidayEntries(policyHolidays).forEach(({ date, name }) => {
     if (date < from || date > to) return;
-    const named = NAMED_HOLIDAYS[date];
-    holidays.push({
-      date,
-      name: named?.name || 'Holiday',
-      kind: 'company',
-    });
+    holidays.push({ date, name, kind: 'company' });
     seen.add(date);
   });
   Object.entries(NAMED_HOLIDAYS).forEach(([date, meta]) => {
@@ -1064,6 +1150,70 @@ function collectHolidays(from, to, policyHolidays) {
   });
   holidays.sort((a, b) => a.date.localeCompare(b.date));
   return holidays;
+}
+
+function leaveTypeLabel(type) {
+  if (type === 'Sick') return 'Sick leave';
+  if (type === 'Custom') return 'Custom leave';
+  return 'Casual leave';
+}
+
+function toOrgObjectId(organizationId) {
+  return mongoose.Types.ObjectId.isValid(organizationId)
+    ? new mongoose.Types.ObjectId(organizationId)
+    : organizationId;
+}
+
+async function orgApproverEmails(orgId, excludeEmail) {
+  const orgObjectId = toOrgObjectId(orgId);
+  const members = await User.find({
+    $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+  })
+    .select('email role')
+    .lean();
+  const skip = String(excludeEmail || '').trim().toLowerCase();
+  const emails = new Set();
+  members.forEach((member) => {
+    if (!isPulseAdmin(member)) return;
+    const email = String(member.email || '').trim().toLowerCase();
+    if (!email || (skip && email === skip)) return;
+    emails.add(email);
+  });
+  return [...emails];
+}
+
+async function adjustLeaveBalance(staffId, leaveType, days, direction) {
+  const staff = await Staff.findById(staffId);
+  if (!staff || !days) return;
+  if (!staff.leaveBalance) staff.leaveBalance = { casual: PULSE_CASUAL_ANNUAL, sick: 12 };
+  const delta = direction === 'deduct' ? -days : days;
+  if (leaveType === 'Casual') {
+    staff.leaveBalance.casual = Math.max(0, (staff.leaveBalance.casual ?? PULSE_CASUAL_ANNUAL) + delta);
+  } else if (leaveType === 'Sick') {
+    staff.leaveBalance.sick = Math.max(0, (staff.leaveBalance.sick ?? 12) + delta);
+  }
+  await staff.save();
+}
+
+function serializeTeamLeave(row) {
+  return {
+    id: String(row._id),
+    type: row.type,
+    typeLabel: leaveTypeLabel(row.type),
+    startDate: dayKeyOf(row.startDate),
+    endDate: dayKeyOf(row.endDate),
+    status: row.status,
+    reason: row.reason || '',
+    days: leaveDurationDays(row.startDate, row.endDate),
+    adminNotes: row.adminNotes || '',
+    createdAt: row.createdAt,
+    staff: {
+      id: String(row.staff?._id || row.staff || ''),
+      name: row.staff?.fullName || firstName('', row.staff?.email),
+      email: row.staff?.email || '',
+      employeeId: row.staff?.employeeId || '',
+    },
+  };
 }
 
 function holidayMeta(date) {
@@ -1157,12 +1307,13 @@ router.get('/calendar', auth, async (req, res) => {
       const name = row.staff?.fullName || firstName('', row.staff?.email);
       const days = enumerateKeys(dayKeyOf(row.startDate), dayKeyOf(row.endDate))
         .filter((key) => key >= from && key <= to);
-      const type = row.type === 'Sick' ? 'Sick leave' : row.type === 'Custom' ? 'Leave' : 'Casual leave';
+      const type = leaveTypeLabel(row.type);
       return {
         id: String(row._id),
         name,
         initial: initialOf(name),
         type,
+        leaveType: row.type,
         startDate: dayKeyOf(row.startDate),
         endDate: dayKeyOf(row.endDate),
         days,
@@ -1252,6 +1403,7 @@ router.get('/dashboard', auth, async (req, res) => {
       yearLeaves,
       pendingLeaves,
       assignedTasks,
+      myFiles,
     ] = await Promise.all([
       PulseWorkDay.find({
         user: req.user._id,
@@ -1302,6 +1454,7 @@ router.get('/dashboard', auth, async (req, res) => {
             .limit(8)
             .lean()
         : Promise.resolve([]),
+      collectMyFiles(req.user).catch(() => []),
     ]);
 
     const holidaysRaw = collectHolidays(holidayWindow.from, holidayWindow.to, policy?.holidays);
@@ -1496,7 +1649,7 @@ router.get('/dashboard', auth, async (req, res) => {
         newHires: newHires.slice(0, 8),
         workAnniv: workAnniv.slice(0, 8),
         weddingAnniv: [],
-        files: [],
+        files: Array.isArray(myFiles) ? myFiles.slice(0, 40) : [],
         engagement: [],
         favorites: [
           dashRow('fav-overview', 'Overview', 'Check-in', { to: 'overview' }),
@@ -1627,23 +1780,29 @@ router.post('/leaves/apply', auth, async (req, res) => {
 
     // A mail failure must not lose a saved request, so report it instead of throwing.
     let notified = false;
-    if (notifyEmail) {
+    const employeeName = staff.fullName || [req.user.firstName, req.user.lastName].filter(Boolean).join(' ');
+    const employeeEmail = staff.email || req.user.email;
+    const mailPayload = {
+      employeeName,
+      employeeEmail,
+      leaveType: type,
+      fromDate: formatLeaveDate(leave.startDate),
+      toDate: formatLeaveDate(leave.endDate),
+      days,
+      reason: leave.reason,
+      reviewUrl: `${getProductionBaseUrl()}/bda-os`,
+      companyName: req.user.companyName || '',
+      attachments: fileName && fileData
+        ? [{ filename: fileName, content: fileData }]
+        : undefined,
+    };
+    const recipients = new Set(await orgApproverEmails(orgIdOf(req.user), employeeEmail));
+    if (notifyEmail) recipients.add(String(notifyEmail).trim().toLowerCase());
+    if (recipients.size) {
       try {
-        await sendLeaveRequestEmail({
-          to: notifyEmail,
-          employeeName: staff.fullName || [req.user.firstName, req.user.lastName].filter(Boolean).join(' '),
-          employeeEmail: staff.email || req.user.email,
-          leaveType: type,
-          fromDate: formatLeaveDate(leave.startDate),
-          toDate: formatLeaveDate(leave.endDate),
-          days,
-          reason: leave.reason,
-          reviewUrl: `${getProductionBaseUrl()}/bda-os`,
-          companyName: req.user.companyName || '',
-          attachments: fileName && fileData
-            ? [{ filename: fileName, content: fileData }]
-            : undefined,
-        });
+        await Promise.all(
+          [...recipients].map((to) => sendLeaveRequestEmail({ ...mailPayload, to })),
+        );
         notified = true;
       } catch {
         // Leave still saved; client sees notified=false.
@@ -1793,6 +1952,188 @@ router.post('/leaves/import', auth, async (req, res) => {
     res.status(201).json({ success: true, added, skipped });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to import leave requests' });
+  }
+});
+
+// GET /api/pulse-checkin/leaves/team — company leave board (pending for admins + on-leave list)
+router.get('/leaves/team', auth, async (req, res) => {
+  try {
+    const orgId = orgIdOf(req.user);
+    const admin = isPulseAdmin(req.user);
+    const from = dayKeyOf(req.query.from) || null;
+    const to = dayKeyOf(req.query.to) || null;
+    const query = { admin: orgId };
+    if (!admin) query.status = 'Approved';
+    if (from && to) {
+      query.startDate = { $lte: new Date(`${to}T23:59:59`) };
+      query.endDate = { $gte: new Date(`${from}T00:00:00`) };
+    }
+
+    const rows = await LeaveRequest.find(query)
+      .populate('staff', 'fullName email employeeId leaveBalance')
+      .sort({ createdAt: -1 })
+      .limit(admin ? 300 : 200)
+      .lean();
+
+    const mapped = rows.map(serializeTeamLeave);
+    const pending = admin ? mapped.filter((row) => row.status === 'Pending') : [];
+    const approved = mapped.filter((row) => row.status === 'Approved');
+    const onLeave = approved.filter((row) => {
+      if (!from || !to) return true;
+      return row.startDate <= to && row.endDate >= from;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        pending,
+        onLeave,
+        all: admin ? mapped : approved,
+        isAdmin: admin,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load team leave' });
+  }
+});
+
+// POST /api/pulse-checkin/leaves/:id/respond — admin/superadmin approve or reject
+router.post('/leaves/:id/respond', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    const status = String(req.body?.status || '').trim();
+    if (status !== 'Approved' && status !== 'Rejected') {
+      return res.status(400).json({ success: false, message: 'Status must be Approved or Rejected' });
+    }
+    const orgId = orgIdOf(req.user);
+    const leave = await LeaveRequest.findOne({ _id: req.params.id, admin: orgId });
+    if (!leave) {
+      return res.status(404).json({ success: false, message: 'Leave request not found' });
+    }
+
+    const prevStatus = leave.status;
+    leave.status = status;
+    leave.adminNotes = String(req.body?.adminNotes || '').trim().slice(0, 500);
+    await leave.save();
+
+    const days = leaveDurationDays(leave.startDate, leave.endDate);
+    if (status === 'Approved' && prevStatus !== 'Approved') {
+      await adjustLeaveBalance(leave.staff, leave.type, days, 'deduct');
+    } else if (status !== 'Approved' && prevStatus === 'Approved') {
+      await adjustLeaveBalance(leave.staff, leave.type, days, 'restore');
+    }
+
+    await logActivity(
+      req.user._id,
+      'PULSE_LEAVE_RESPOND',
+      `${req.user.email} marked leave ${leave._id} as ${status}`,
+      { leaveId: String(leave._id), status },
+    );
+
+    const populated = await LeaveRequest.findById(leave._id)
+      .populate('staff', 'fullName email employeeId')
+      .lean();
+
+    res.json({
+      success: true,
+      message: `Leave ${status.toLowerCase()}`,
+      data: serializeTeamLeave(populated),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to update leave request' });
+  }
+});
+
+// GET /api/pulse-checkin/holidays?year=2026
+router.get('/holidays', auth, async (req, res) => {
+  try {
+    const orgId = orgIdOf(req.user);
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const from = `${year}-01-01`;
+    const to = `${year}-12-31`;
+    const policy = await LeavePolicy.findOne({ user: orgId }).lean();
+    const holidays = policyHolidayEntries(policy?.holidays)
+      .filter((row) => row.date >= from && row.date <= to)
+      .map((row) => ({
+        id: row.date,
+        date: row.date,
+        name: row.name,
+        classification: 'Holiday',
+      }));
+    res.json({
+      success: true,
+      data: holidays,
+      year,
+      canEdit: isPulseAdmin(req.user),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load holidays' });
+  }
+});
+
+// PUT /api/pulse-checkin/holidays — admin/superadmin year holiday plan
+router.put('/holidays', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    const orgId = orgIdOf(req.user);
+    const year = Number(req.body?.year) || new Date().getFullYear();
+    const from = `${year}-01-01`;
+    const to = `${year}-12-31`;
+    const incoming = Array.isArray(req.body?.holidays) ? req.body.holidays : null;
+    if (!incoming) {
+      return res.status(400).json({ success: false, message: 'holidays array is required' });
+    }
+
+    const yearHolidays = [];
+    const seen = new Set();
+    incoming.forEach((row) => {
+      const date = dayKeyOf(row?.date || row);
+      if (!date || date < from || date > to || seen.has(date)) return;
+      const name = String(row?.name || '').trim() || NAMED_HOLIDAYS[date]?.name || 'Holiday';
+      yearHolidays.push({ date, name });
+      seen.add(date);
+    });
+    yearHolidays.sort((a, b) => a.date.localeCompare(b.date));
+
+    let policy = await LeavePolicy.findOne({ user: orgId });
+    if (!policy) {
+      policy = new LeavePolicy({
+        user: orgId,
+        casualLeave: { daysPerMonth: 1, daysPerYear: PULSE_CASUAL_ANNUAL, isPaid: true },
+        sickLeave: { daysPerMonth: 1, daysPerYear: 12, isPaid: true },
+        holidays: [],
+      });
+    }
+
+    const kept = policyHolidayEntries(policy.holidays).filter(
+      (row) => row.date < from || row.date > to,
+    );
+    policy.holidays = [...kept, ...yearHolidays];
+    await policy.save();
+
+    await logActivity(
+      req.user._id,
+      'PULSE_HOLIDAYS_UPDATE',
+      `${req.user.email} updated ${year} company holidays (${yearHolidays.length})`,
+      { year, count: yearHolidays.length },
+    );
+
+    res.json({
+      success: true,
+      data: yearHolidays.map((row) => ({
+        id: row.date,
+        date: row.date,
+        name: row.name,
+        classification: 'Holiday',
+      })),
+      year,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to save holidays' });
   }
 });
 

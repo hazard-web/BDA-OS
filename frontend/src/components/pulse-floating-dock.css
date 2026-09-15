@@ -55,6 +55,8 @@
   border-radius: 999px;
   background: rgba(20, 32, 25, 0.08);
   color: #3a4540;
+  transform-origin: 50% 80%;
+  will-change: transform;
 }
 
 .pulse-fd-hit.is-on .pulse-fd-well {

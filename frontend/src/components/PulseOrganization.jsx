@@ -1,9 +1,11 @@
 import { Card } from 'antd'
 import {
   AppstoreOutlined,
+  BankOutlined,
   CalendarOutlined,
   CarryOutOutlined,
   EnvironmentOutlined,
+  FolderOpenOutlined,
   MailOutlined,
   PhoneOutlined,
   RightOutlined,
@@ -14,6 +16,7 @@ import {
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
 import PulseInviteAdmin from './PulseInviteAdmin'
+import PulseCompanyFiles from './PulseCompanyFiles'
 import PulseLiveModule from './PulseLiveWorkspace'
 // Company setup form — parked with Getting Started on `pulse/company-later-services`
 // import PulseCompanyInfoForm from './PulseCompanyInfoForm'
@@ -45,10 +48,12 @@ export const ORG_TABS = [
 
 const SERVICES = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined, hint: 'Employees' },
-  { key: 'leave', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Apply and requests' },
+  { key: 'companyFiles', label: 'Company files', Icon: FolderOpenOutlined, hint: 'Upload and share' },
+  { key: 'leaveTeam', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Approvals and holidays' },
   { key: 'attendance', label: 'Attendance', Icon: CarryOutOutlined, hint: 'Org check-in' },
   { key: 'companyTime', label: 'Timesheet', Icon: ThunderboltOutlined, hint: 'Tasks and hours' },
   { key: 'companyPerformance', label: 'Performance', Icon: RiseOutlined, hint: 'Scores and bonuses' },
+  { key: 'companyPayroll', label: 'Payroll', Icon: BankOutlined, hint: 'Payslips' },
   { key: 'apps', label: 'App access', Icon: AppstoreOutlined, hint: 'Assigned apps' },
 ]
 
@@ -270,6 +275,30 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, live
         <OrgPeak />
         <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
           <PulseLiveModule kind="performance" scope="org" {...liveProps} />
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'files') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <div className="pulse-org-overview pulse-org-employee">
+            <PulseCompanyFiles />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'payroll') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <PulseLiveModule kind="payroll" scope="org" {...liveProps} />
         </div>
       </div>
     )
