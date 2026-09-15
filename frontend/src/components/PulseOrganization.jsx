@@ -48,7 +48,7 @@ export const ORG_TABS = [
 
 const SERVICES = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined, hint: 'Employees' },
-  { key: 'companyFiles', label: 'Company files', Icon: FolderOpenOutlined, hint: 'Upload and share' },
+  { key: 'companyFiles', label: 'Files', Icon: FolderOpenOutlined, hint: 'Company and employee' },
   { key: 'leaveTeam', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Approvals and holidays' },
   { key: 'attendance', label: 'Attendance', Icon: CarryOutOutlined, hint: 'Org check-in' },
   { key: 'companyTime', label: 'Timesheet', Icon: ThunderboltOutlined, hint: 'Tasks and hours' },

@@ -1,6 +1,7 @@
 const express = require('express')
 const mongoose = require('mongoose')
 const { auth } = require('./auth')
+const User = require('../models/User')
 const Candidate = require('../models/Candidate')
 const Staff = require('../models/Staff')
 const PulseCompanyFile = require('../models/PulseCompanyFile')
@@ -136,12 +137,11 @@ function dashFileRow(item) {
 
 async function collectMyFiles(user) {
   const orgId = orgIdOf(user)
-  const [companyDocs, staff, candidate] = await Promise.all([
+  const [companyDocs, employeeFiles] = await Promise.all([
     PulseCompanyFile.find({ organizationId: toOrgObjectId(orgId) })
       .sort({ createdAt: -1 })
       .lean(),
-    linkedStaff(user),
-    linkedCandidate(user),
+    collectEmployeeFiles(user),
   ])
 
   const files = companyDocs.map((doc) => dashFileRow({
@@ -158,6 +158,17 @@ async function collectMyFiles(user) {
     downloadName: doc.originalName || doc.fileName,
   }))
 
+  return [...files, ...employeeFiles]
+}
+
+async function collectEmployeeFiles(user, { openPathPrefix } = {}) {
+  const [staff, candidate] = await Promise.all([
+    linkedStaff(user),
+    linkedCandidate(user),
+  ])
+  const files = []
+  const prefix = openPathPrefix || '/pulse-files/open/onboarding'
+
   if (staff?.documents) {
     STAFF_DOC_LABELS.forEach(({ key, label }) => {
       const doc = staff.documents[key]
@@ -169,7 +180,7 @@ async function collectMyFiles(user) {
           originalName: doc.originalName || label,
           mimeType: '',
           size: 0,
-          hint: 'My Space',
+          hint: 'Employee',
         }),
         section: 'employee',
         url: doc.url,
@@ -180,19 +191,23 @@ async function collectMyFiles(user) {
 
   ;(staff?.additionalDocuments || []).forEach((doc) => {
     if (!doc?.url) return
-    files.push(dashFileRow({
-      id: `extra-${doc._id}`,
-      title: doc.documentType || doc.originalName || 'Document',
-      meta: fileMetaLine({
-        originalName: doc.originalName,
-        mimeType: '',
-        size: 0,
-        hint: 'Employee file',
+    files.push({
+      ...dashFileRow({
+        id: `extra-${doc._id}`,
+        title: doc.documentType || doc.originalName || 'Document',
+        meta: fileMetaLine({
+          originalName: doc.originalName,
+          mimeType: '',
+          size: 0,
+          hint: 'Employee file',
+        }),
+        section: 'employee',
+        url: doc.url,
+        downloadName: doc.originalName || doc.documentType || 'document',
       }),
-      section: 'employee',
-      url: doc.url,
-      downloadName: doc.originalName || doc.documentType || 'document',
-    }))
+      canDelete: true,
+      staffDocId: String(doc._id),
+    })
   })
 
   if (candidate) {
@@ -209,13 +224,24 @@ async function collectMyFiles(user) {
           hint: 'Onboarding',
         }),
         section: 'employee',
-        openPath: `/pulse-files/open/onboarding/${key}`,
+        openPath: `${prefix}/${key}`,
         downloadName: file.name || `${key}`,
       }))
     })
   }
 
   return files
+}
+
+async function assertOrgMember(orgId, userId) {
+  const member = await User.findById(userId)
+    .select('_id email firstName lastName displayName organizationId role')
+    .lean()
+  if (!member) return null
+  const org = String(orgId)
+  const memberOrg = String(member.organizationId || member._id)
+  if (memberOrg !== org && String(member._id) !== org) return null
+  return member
 }
 
 // GET /api/pulse-files/mine — company + personal/onboarding files for current user
@@ -225,6 +251,213 @@ router.get('/mine', auth, async (req, res) => {
     res.json({ success: true, data: files })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message || 'Failed to load files' })
+  }
+})
+
+// GET /api/pulse-files/admin/employees — org members for file picker
+router.get('/admin/employees', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const organizationId = orgIdOf(req.user)
+    const members = await User.find({
+      $or: [{ organizationId }, { _id: organizationId }],
+    })
+      .select('_id email firstName lastName displayName role')
+      .sort({ firstName: 1, email: 1 })
+      .lean()
+
+    res.json({
+      success: true,
+      data: members.map((m) => ({
+        id: String(m._id),
+        email: m.email,
+        name: personName(m),
+        role: m.role || 'member',
+      })),
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load employees' })
+  }
+})
+
+async function findOrCreateStaffForMember(member, orgId) {
+  const email = String(member.email || '').toLowerCase().trim()
+  if (!email) return null
+  let staff = await Staff.findOne({ email, user: orgId })
+  if (staff) return staff
+  staff = new Staff({
+    user: orgId,
+    email,
+    fullName: personName(member),
+    additionalDocuments: [],
+  })
+  await staff.save()
+  return staff
+}
+
+// GET /api/pulse-files/admin/employee/:userId — that employee's personal/onboarding files
+router.get('/admin/employee/:userId', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const orgId = orgIdOf(req.user)
+    const member = await assertOrgMember(orgId, req.params.userId)
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Employee not found' })
+    }
+    const files = await collectEmployeeFiles(member, {
+      openPathPrefix: `/pulse-files/admin/employee/${member._id}/onboarding`,
+    })
+    res.json({
+      success: true,
+      data: files,
+      employee: {
+        id: String(member._id),
+        email: member.email,
+        name: personName(member),
+      },
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load employee files' })
+  }
+})
+
+// POST /api/pulse-files/admin/employee/:userId — admin upload into that employee's My files
+router.post('/admin/employee/:userId', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const orgId = orgIdOf(req.user)
+    const member = await assertOrgMember(orgId, req.params.userId)
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Employee not found' })
+    }
+
+    const { data, originalName, title } = req.body || {}
+    if (!data) {
+      return res.status(400).json({ success: false, message: 'File data is required' })
+    }
+    const parsed = parseDataUrl(data)
+    if (!parsed) {
+      return res.status(400).json({ success: false, message: 'Invalid file format. Expected base64 data URL.' })
+    }
+    if (!ALLOWED_MIMES.includes(parsed.mimeType)) {
+      return res.status(400).json({ success: false, message: 'File type not allowed' })
+    }
+    const byteSize = Buffer.byteLength(parsed.base64, 'base64')
+    if (byteSize > 10 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'File must be under 10 MB' })
+    }
+
+    const staff = await findOrCreateStaffForMember(member, orgId)
+    if (!staff) {
+      return res.status(400).json({ success: false, message: 'Employee has no email — cannot attach files' })
+    }
+
+    let url = data
+    try {
+      url = await uploadBase64(data, `payroll_portal/employee_files/${orgId}/${staff._id}`, {
+        resourceType: cloudinaryResourceType(parsed.mimeType),
+      })
+    } catch (uploadErr) {
+      if (process.env.CLOUDINARY_CLOUD_NAME) {
+        return res.status(500).json({
+          success: false,
+          message: uploadErr.message || 'Cloudinary upload failed',
+        })
+      }
+      // Keep data URL when Cloudinary is not configured
+      url = data
+    }
+
+    const documentType = String(title || originalName || 'Document').trim() || 'Document'
+    const ext = (String(originalName || '').split('.').pop() || parsed.mimeType.split('/')[1] || 'bin')
+      .toLowerCase()
+      .slice(0, 8)
+    const fileName = `employee_${Date.now()}.${ext}`
+    if (!staff.additionalDocuments) staff.additionalDocuments = []
+    staff.additionalDocuments.push({
+      documentType,
+      fileName,
+      originalName: originalName || fileName,
+      url,
+      uploadedAt: new Date(),
+      notes: `Uploaded by ${personName(req.user)}`,
+    })
+    await staff.save()
+
+    const saved = staff.additionalDocuments[staff.additionalDocuments.length - 1]
+    await logActivity(
+      req.user._id,
+      'PULSE_EMPLOYEE_FILE_UPLOADED',
+      `Uploaded ${documentType} for ${staff.fullName || member.email}`,
+      { staffId: String(staff._id), userId: String(member._id) },
+    )
+
+    res.json({
+      success: true,
+      message: 'File uploaded to employee My files',
+      data: {
+        id: `extra-${saved._id}`,
+        title: documentType,
+        section: 'employee',
+        url,
+        canDelete: true,
+        staffDocId: String(saved._id),
+        meta: fileMetaLine({
+          originalName: originalName || fileName,
+          mimeType: parsed.mimeType,
+          size: byteSize,
+          hint: 'Employee file',
+        }),
+        downloadName: originalName || fileName,
+      },
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Upload failed' })
+  }
+})
+
+// DELETE /api/pulse-files/admin/employee/:userId/files/:docId
+router.delete('/admin/employee/:userId/files/:docId', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const orgId = orgIdOf(req.user)
+    const member = await assertOrgMember(orgId, req.params.userId)
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Employee not found' })
+    }
+    const staff = await linkedStaff(member)
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'No employee files found' })
+    }
+    const staffDoc = await Staff.findById(staff._id)
+    if (!staffDoc) {
+      return res.status(404).json({ success: false, message: 'No employee files found' })
+    }
+    const before = (staffDoc.additionalDocuments || []).length
+    staffDoc.additionalDocuments = (staffDoc.additionalDocuments || []).filter(
+      (doc) => String(doc._id) !== String(req.params.docId),
+    )
+    if (staffDoc.additionalDocuments.length === before) {
+      return res.status(404).json({ success: false, message: 'File not found' })
+    }
+    await staffDoc.save()
+    await logActivity(
+      req.user._id,
+      'PULSE_EMPLOYEE_FILE_DELETED',
+      `Deleted employee file for ${staffDoc.fullName || member.email}`,
+      { staffId: String(staffDoc._id), docId: String(req.params.docId) },
+    )
+    res.json({ success: true, message: 'File deleted' })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to delete file' })
   }
 })
 
@@ -406,6 +639,48 @@ router.get('/open/onboarding/:field', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Unknown document' })
     }
     const candidate = await linkedCandidate(req.user)
+    const file = candidate?.[field]
+    if (!hasOnboardingFile(file) || !file.data) {
+      return res.status(404).json({ success: false, message: 'File not found' })
+    }
+
+    let buffer
+    let mime = file.mime || 'application/octet-stream'
+    const parsed = parseDataUrl(file.data)
+    if (parsed) {
+      mime = parsed.mimeType || mime
+      buffer = Buffer.from(parsed.base64, 'base64')
+    } else if (/^[A-Za-z0-9+/=]+$/.test(String(file.data).slice(0, 80))) {
+      buffer = Buffer.from(file.data, 'base64')
+    } else {
+      return res.status(400).json({ success: false, message: 'Unsupported file encoding' })
+    }
+
+    const downloadName = file.name || `${field}`
+    res.setHeader('Content-Type', mime)
+    res.setHeader('Content-Disposition', `inline; filename="${downloadName.replace(/"/g, '')}"`)
+    res.setHeader('Content-Length', buffer.length)
+    res.send(buffer)
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to open file' })
+  }
+})
+
+// GET /api/pulse-files/admin/employee/:userId/onboarding/:field — admin stream for an employee
+router.get('/admin/employee/:userId/onboarding/:field', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const field = String(req.params.field || '')
+    if (!ONBOARDING_DOC_LABELS.some((row) => row.key === field)) {
+      return res.status(400).json({ success: false, message: 'Unknown document' })
+    }
+    const member = await assertOrgMember(orgIdOf(req.user), req.params.userId)
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Employee not found' })
+    }
+    const candidate = await linkedCandidate(member)
     const file = candidate?.[field]
     if (!hasOnboardingFile(file) || !file.data) {
       return res.status(404).json({ success: false, message: 'File not found' })

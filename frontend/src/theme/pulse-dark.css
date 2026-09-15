@@ -86,6 +86,21 @@
   color: #d6d3d1;
 }
 
+:root[data-theme='dark'] .pulse-route-nav {
+  --prn-fg: #f5f5f4;
+  --prn-fg-muted: rgba(168, 162, 158, 0.32);
+  --prn-hover: rgba(255, 255, 255, 0.12);
+  --prn-press: rgba(255, 255, 255, 0.18);
+  --prn-sep: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-theme='dark'] .pulse-route-nav.is-live {
+  background: rgba(0, 0, 0, 0.38);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 :root[data-theme='dark'] .pulse-appearance-btn {
   color: #d6d3d1;
   background: none !important;

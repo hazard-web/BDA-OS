@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { format, parse } from 'date-fns'
 import { App, Button, DatePicker, Empty } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { formatInr, monthKey } from '../utils/pulsePerformanceCalc'
@@ -15,11 +15,23 @@ function monthLabel(month) {
   }
 }
 
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', filename)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 export default function PulsePayroll() {
   const { message } = App.useApp()
   const [month, setMonth] = useState(() => monthKey())
   const [row, setRow] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -38,6 +50,26 @@ export default function PulsePayroll() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month])
+
+  const downloadPayslip = async () => {
+    if (!row) return
+    setDownloading(true)
+    try {
+      const res = await api.get('/pulse-payroll/me/download', {
+        params: { month: row.month || month },
+        responseType: 'blob',
+      })
+      const name = String(row.name || 'Employee').replace(/\s+/g, '_')
+      downloadBlob(
+        new Blob([res.data], { type: 'application/pdf' }),
+        `Payslip_${name}_${row.month || month}.pdf`,
+      )
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not download payslip')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div className="pulse-perf-page pulse-ts-page">
@@ -59,6 +91,17 @@ export default function PulsePayroll() {
                 }}
               />
               <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
+              {row ? (
+                <Button
+                  type="primary"
+                  className="pulse-perf-cta"
+                  icon={<DownloadOutlined />}
+                  loading={downloading}
+                  onClick={downloadPayslip}
+                >
+                  Download
+                </Button>
+              ) : null}
             </div>
           </header>
 

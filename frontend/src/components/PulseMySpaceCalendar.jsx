@@ -7,7 +7,6 @@ import dayjs from 'dayjs'
 import { format } from 'date-fns'
 import api from '../api'
 import {
-  NAMED_HOLIDAYS,
   SAMPLE_TEAM_LEAVE,
   holidayMap,
   hoursLabel,
@@ -194,12 +193,12 @@ function sampleDays(month) {
     const weekend = start.date(date).day() === 0 || start.date(date).day() === 6
     days[key] = {
       date: key,
-      hours: weekend || NAMED_HOLIDAYS[key] ? 0 : key === '2026-09-08' ? 8.4 : 0,
+      hours: weekend ? 0 : key === '2026-09-08' ? 8.4 : 0,
       present: key === '2026-09-08',
       absent: key === '2026-09-10',
       onLeave: false,
       weekend,
-      holiday: Boolean(NAMED_HOLIDAYS[key]),
+      holiday: false,
       sessions: key === '2026-09-08'
         ? [
             { in: '2026-09-08T09:12:00', out: '2026-09-08T13:40:00', hours: 4.5 },
@@ -211,10 +210,8 @@ function sampleDays(month) {
   return days
 }
 
-function sampleHolidays(month) {
-  return Object.entries(NAMED_HOLIDAYS)
-    .filter(([date]) => date.startsWith(month))
-    .map(([date, meta]) => ({ date, ...meta }))
+function sampleHolidays() {
+  return []
 }
 
 export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInAt, compact = false }) {
@@ -227,7 +224,7 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
   useEffect(() => {
     if (sample) {
       setBoard({
-        holidays: sampleHolidays(month),
+        holidays: sampleHolidays(),
         teamLeave: SAMPLE_TEAM_LEAVE.filter((row) => row.days.some((day) => day.startsWith(month))),
         days: sampleDays(month),
       })
@@ -248,7 +245,7 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
       .catch(() => {
         if (!live) return
         setBoard({
-          holidays: sampleHolidays(month),
+          holidays: sampleHolidays(),
           teamLeave: [],
           days: {},
         })

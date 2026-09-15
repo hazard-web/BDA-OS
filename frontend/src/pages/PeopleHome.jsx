@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   AppstoreOutlined,
@@ -189,7 +189,24 @@ function headerCheckInMode(checkedInAt, elapsed) {
   return 'idle'
 }
 
-function HeaderCheckInTimer({ elapsed, checkedInAt, onOpen }) {
+function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen }) {
+  const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
+
+  useEffect(() => {
+    setElapsed(Number(elapsedProp) || 0)
+  }, [elapsedProp, checkedInAt])
+
+  useEffect(() => {
+    if (!checkedInAt || !email) return undefined
+    const tick = () => {
+      const next = getElapsedSeconds(email)
+      setElapsed((prev) => (prev === next ? prev : next))
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [checkedInAt, email])
+
   const mode = headerCheckInMode(checkedInAt, elapsed)
   const stamp = formatElapsed(elapsed)
   const label =
@@ -324,6 +341,7 @@ function HeaderTeamPresence({ enabled }) {
 export default function PeopleHome() {
   const navigate = useNavigate()
   const location = useLocation()
+  const navigationType = useNavigationType()
   const { notification, message } = App.useApp()
   const { user, loading } = useAuth()
   const [start] = useState(() => readPulseLocation(window.location.pathname, window.location.search))
@@ -350,6 +368,12 @@ export default function PeopleHome() {
   const [appsOpen, setAppsOpen] = useState(false)
   const [assignedApps, setAssignedApps] = useState([])
   const appsBtnRef = useRef(null)
+  const routeHistRef = useRef({
+    entries: [toAppPath(String(start.path || location.pathname || '').replace(/\/+$/, '') || '/')],
+    index: 0,
+    lock: false,
+  })
+  const [routeNav, setRouteNav] = useState({ canBack: false, canForward: false })
   const { signingOut, signOutLogo, beginSignOut } = useAccountSignOut({
     onClosePanel: () => setAppsOpen(false),
   })
@@ -471,6 +495,62 @@ export default function PeopleHome() {
   }, [location.pathname])
 
   useEffect(() => {
+    const key = toAppPath(String(location.pathname || '').replace(/\/+$/, '') || '/')
+    const hist = routeHistRef.current
+    if (hist.lock) {
+      hist.lock = false
+    } else if (hist.entries[hist.index] !== key) {
+      if (navigationType === 'POP') {
+        if (hist.index > 0 && hist.entries[hist.index - 1] === key) hist.index -= 1
+        else if (hist.index < hist.entries.length - 1 && hist.entries[hist.index + 1] === key) hist.index += 1
+        else {
+          const found = hist.entries.lastIndexOf(key)
+          if (found >= 0) hist.index = found
+          else {
+            hist.entries = hist.entries.slice(0, hist.index + 1)
+            hist.entries.push(key)
+            hist.index = hist.entries.length - 1
+          }
+        }
+      } else if (navigationType === 'REPLACE') {
+        hist.entries[hist.index] = key
+      } else {
+        hist.entries = hist.entries.slice(0, hist.index + 1)
+        hist.entries.push(key)
+        hist.index = hist.entries.length - 1
+      }
+    }
+    setRouteNav({
+      canBack: hist.index > 0,
+      canForward: hist.index < hist.entries.length - 1,
+    })
+  }, [location.pathname, location.search, navigationType])
+
+  const goRouteBack = () => {
+    const hist = routeHistRef.current
+    if (hist.index <= 0) return
+    hist.lock = true
+    hist.index -= 1
+    setRouteNav({
+      canBack: hist.index > 0,
+      canForward: hist.index < hist.entries.length - 1,
+    })
+    navigate(hist.entries[hist.index])
+  }
+
+  const goRouteForward = () => {
+    const hist = routeHistRef.current
+    if (hist.index >= hist.entries.length - 1) return
+    hist.lock = true
+    hist.index += 1
+    setRouteNav({
+      canBack: hist.index > 0,
+      canForward: hist.index < hist.entries.length - 1,
+    })
+    navigate(hist.entries[hist.index])
+  }
+
+  useEffect(() => {
     if (loading || !user) return
     if (!isPulseAdmin && space === 'organization') {
       navigate(PULSE_HOME, { replace: true })
@@ -554,8 +634,9 @@ export default function PeopleHome() {
       setElapsed((prev) => (prev === next ? prev : next))
     }
     tick()
+    // Live clocks tick locally; parent only syncs work-week metrics occasionally
     if (!checkedInAt) return undefined
-    const id = window.setInterval(tick, 1000)
+    const id = window.setInterval(tick, 30_000)
     return () => window.clearInterval(id)
   }, [checkedInAt, user?.email])
 
@@ -695,11 +776,6 @@ export default function PeopleHome() {
     'Home'
 
   const selectRail = (key) => {
-    if (key === 'more') {
-      setSpace('myspace')
-      setMoreOpen((open) => !open)
-      return
-    }
     setMoreOpen(false)
     if (key === 'onboarding') {
       openWithLogo(
@@ -789,13 +865,11 @@ export default function PeopleHome() {
       const Icon = item.Icon
       const onboardingOn = item.key === 'onboarding' && space === 'organization' && sub === 'onboarding'
       const leaveHubOn = (module === 'leave' || module === 'attendance') && space === 'myspace' && !moreOpen
-      const active = item.key === 'more'
-        ? moreOpen
-        : onboardingOn
-          ? !moreOpen
-          : item.key === 'leave'
-            ? leaveHubOn
-            : module === item.key && space === 'myspace' && !moreOpen
+      const active = onboardingOn
+        ? !moreOpen
+        : item.key === 'leave'
+          ? leaveHubOn
+          : module === item.key && space === 'myspace' && !moreOpen
       return {
         key: item.key,
         title: item.label,
@@ -847,7 +921,7 @@ export default function PeopleHome() {
           </button>
         ) : showOrgFiles ? (
           <button type="button" className="pulse-space is-on">
-            Company files
+            Files
           </button>
         ) : showOrgApps ? (
           <button type="button" className="pulse-space is-on">
@@ -914,12 +988,45 @@ export default function PeopleHome() {
             )}
           </>
         )}
+        <span className="pulse-top-rule" aria-hidden="true" />
+        <div
+          className={`pulse-route-nav${routeNav.canBack || routeNav.canForward ? ' is-live' : ''}`}
+          role="group"
+          aria-label="Route navigation"
+        >
+          <button
+            type="button"
+            className="pulse-route-nav-btn"
+            aria-label="Go back"
+            title="Back"
+            disabled={!routeNav.canBack}
+            onClick={goRouteBack}
+          >
+            <svg className="pulse-route-nav-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M10.25 3.5 5.75 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <span className="pulse-route-nav-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="pulse-route-nav-btn"
+            aria-label="Go forward"
+            title="Forward"
+            disabled={!routeNav.canForward}
+            onClick={goRouteForward}
+          >
+            <svg className="pulse-route-nav-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M5.75 3.5 10.25 8l-4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
         <div className="pulse-top-tools">
           <HeaderAssignedApps apps={assignedApps.slice(0, HEADER_APP_CAP)} user={user} />
           <HeaderTeamPresence enabled={isPulseAdmin} />
           <HeaderCheckInTimer
             elapsed={elapsed}
             checkedInAt={checkedInAt}
+            email={user?.email}
             onOpen={() => {
               setMoreOpen(false)
               goShell({ space: 'myspace', module: 'home', sub: 'overview' })

@@ -2,10 +2,14 @@ const express = require('express')
 const mongoose = require('mongoose')
 const { auth } = require('./auth')
 const User = require('../models/User')
+const Staff = require('../models/Staff')
 const PulsePerformanceMonth = require('../models/PulsePerformanceMonth')
 const PulsePayrollPayslip = require('../models/PulsePayrollPayslip')
+const PulseWorkDay = require('../models/PulseWorkDay')
+const LeaveRequest = require('../models/LeaveRequest')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
 const { computeMonthlyCompensation, monthKey } = require('../utils/pulsePerformanceCalc')
+const { generatePulsePayslipPDF } = require('../utils/pulsePayslipPdf')
 
 const router = express.Router()
 
@@ -31,6 +35,32 @@ function assertMonth(value) {
   return month
 }
 
+function monthBounds(month) {
+  const [y, m] = String(month).split('-').map(Number)
+  const from = `${month}-01`
+  const last = new Date(y, m, 0).getDate()
+  const to = `${month}-${String(last).padStart(2, '0')}`
+  const fromDate = new Date(y, m - 1, 1)
+  const toDate = new Date(y, m - 1, last, 23, 59, 59, 999)
+  return { from, to, fromDate, toDate, payableDays: last }
+}
+
+function countLeaveDaysInMonth(leaves, from, to) {
+  let total = 0
+  const start = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T23:59:59`)
+  leaves.forEach((row) => {
+    const a = new Date(row.startDate)
+    const b = new Date(row.endDate || row.startDate)
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return
+    const fromMs = Math.max(a.getTime(), start.getTime())
+    const toMs = Math.min(b.getTime(), end.getTime())
+    if (toMs < fromMs) return
+    total += Math.floor((toMs - fromMs) / 86400000) + 1
+  })
+  return total
+}
+
 function serializePayslip(doc, user) {
   const plain = doc?.toObject ? doc.toObject() : doc || {}
   return {
@@ -54,6 +84,90 @@ function serializePayslip(doc, user) {
     status: plain.status || 'generated',
     generatedAt: plain.generatedAt || null,
     paidAt: plain.paidAt || null,
+  }
+}
+
+async function enrichPayslipForPdf(doc, employeeUser) {
+  const plain = doc?.toObject ? doc.toObject() : doc
+  const orgId = plain.organizationId || orgIdOf(employeeUser) || employeeUser?._id
+  const email = String(plain.email || employeeUser?.email || '').toLowerCase().trim()
+  const month = plain.month
+  const { from, to, fromDate, toDate, payableDays } = monthBounds(month)
+
+  const [org, staff, presentDays] = await Promise.all([
+    User.findById(orgId)
+      .select('companyName companyAddress companyPhone companyEmail companyWebsite companyCIN companyGST companyLogo')
+      .lean(),
+    email
+      ? Staff.findOne({ email, user: orgId })
+          .select(
+            'employeeId designation department panNumber pfNumber joiningDate bankDetails financials fullName',
+          )
+          .lean()
+      : null,
+    plain.user
+      ? PulseWorkDay.countDocuments({
+          user: plain.user,
+          date: { $gte: from, $lte: to },
+          $or: [
+            { 'sessions.0': { $exists: true } },
+            { totalActiveMs: { $gt: 0 } },
+            { status: { $in: ['active', 'stopped', 'closed'] } },
+          ],
+        })
+      : Promise.resolve(0),
+  ])
+
+  let leaveDays = 0
+  if (staff?._id) {
+    const leaves = await LeaveRequest.find({
+      staff: staff._id,
+      status: 'Approved',
+      startDate: { $lte: toDate },
+      endDate: { $gte: fromDate },
+    })
+      .select('startDate endDate')
+      .lean()
+    leaveDays = countLeaveDaysInMonth(leaves, from, to)
+  }
+
+  const bankAccount =
+    staff?.bankDetails?.accountNumber || staff?.financials?.accountNumber || ''
+  const bankName = staff?.bankDetails?.bankName || staff?.financials?.bankName || ''
+  const panNumber = staff?.panNumber || staff?.financials?.panNumber || ''
+  const pfNumber = staff?.pfNumber || ''
+
+  return {
+    ...plain,
+    employeeName: plain.employeeName || staff?.fullName || personName(employeeUser),
+    email: email || '',
+    employeeId: staff?.employeeId || employeeUser?.employeeId || '',
+    designation: staff?.designation || employeeUser?.designation || employeeUser?.jobTitle || '',
+    department: staff?.department || '',
+    dateOfJoining: staff?.joiningDate || null,
+    panNumber,
+    pfNumber,
+    uan: pfNumber || 'N.A.',
+    bankAccount,
+    bankName,
+    payableDays,
+    presentDays: presentDays || 0,
+    leaveDays,
+    lopDays: Math.max(0, payableDays - (presentDays || 0) - leaveDays),
+    pf: Number(plain.pf) || 0,
+    esi: Number(plain.esi) || 0,
+    tds: Number(plain.tds) || 0,
+    otherDeductions: Number(plain.otherDeductions) || 0,
+    employerPF: Number(plain.employerPF) || 0,
+    hra: Number(plain.hra) || 0,
+    companyName: org?.companyName || 'BDA Technologies Private Limited',
+    companyAddress: org?.companyAddress || '',
+    companyPhone: org?.companyPhone || '',
+    companyEmail: org?.companyEmail || '',
+    companyWebsite: org?.companyWebsite || '',
+    companyCIN: org?.companyCIN || '',
+    companyGST: org?.companyGST || '',
+    companyLogo: org?.companyLogo || '',
   }
 }
 
@@ -112,6 +226,26 @@ router.get('/me', auth, async (req, res) => {
     res.json({ success: true, data: serializePayslip(doc, req.user) })
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load payslip' })
+  }
+})
+
+// Employee: download PDF for a month (after payroll generate)
+router.get('/me/download', auth, async (req, res) => {
+  try {
+    const month = assertMonth(req.query.month)
+    const doc = await PulsePayrollPayslip.findOne({ user: req.user._id, month }).lean()
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Payslip not found for this month' })
+    }
+    const employee = await User.findById(req.user._id)
+      .select('firstName lastName displayName email avatarUrl role')
+      .lean()
+    const enriched = await enrichPayslipForPdf(doc, employee || req.user)
+    generatePulsePayslipPDF(enriched, res)
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to download payslip' })
+    }
   }
 })
 
@@ -193,6 +327,35 @@ router.get('/admin/month', auth, async (req, res) => {
     })
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load payroll' })
+  }
+})
+
+// Admin: download an employee payslip PDF
+router.get('/admin/:userId/download', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const month = assertMonth(req.query.month)
+    const organizationId = orgIdOf(req.user)
+    const orgObjectId = toOrgObjectId(organizationId)
+    const doc = await PulsePayrollPayslip.findOne({
+      user: req.params.userId,
+      month,
+      organizationId: orgObjectId,
+    }).lean()
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Payslip not found' })
+    }
+    const employee = await User.findById(doc.user)
+      .select('firstName lastName displayName email avatarUrl role')
+      .lean()
+    const enriched = await enrichPayslipForPdf(doc, employee)
+    generatePulsePayslipPDF(enriched, res)
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to download payslip' })
+    }
   }
 })
 

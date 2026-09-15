@@ -15,12 +15,15 @@ const DEFAULT_TIMEOUT_MS = 30000
 const SLOW_ENDPOINT_PATTERNS = [
   /\/payslips\/[^/]+\/download/,         // PDF payslip download (admin)
   /\/portal\/payslips\/[^/]+\/download/, // PDF payslip download (staff portal)
+  /\/pulse-payroll\/me\/download/,       // Pulse employee payslip PDF
+  /\/pulse-payroll\/admin\/[^/]+\/download/, // Pulse admin payslip PDF
   /\/payslips\/generate/,
   /\/staff\/[^/]+\/provision-portal/,    // SMTP onboarding email
   /\/staff\/[^/]+\/documents/,           // base64 document upload
   /\/candidates/,                        // candidate photo / offer letter uploads
   /\/portal\/me\/documents\//,           // base64 document upload
   /\/pulse-files\/company/,              // company file upload + publish
+  /\/pulse-files\/admin\/employee\//,    // admin employee file upload
   /\/portal\/login/,                     // bcrypt + Atlas cold-start can be slow
 ]
 

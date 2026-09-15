@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
 import { CloseOutlined, HolderOutlined, ReloadOutlined, SlidersOutlined } from '@ant-design/icons'
@@ -15,7 +15,7 @@ import {
   EMPTY_DASH,
   filterWidgetData,
 } from './PulseMySpaceDashboard'
-import { formatElapsed } from '../utils/pulseCheckIn'
+import { formatElapsed, getElapsedSeconds } from '../utils/pulseCheckIn'
 import { hiResAvatarUrl } from '../utils/hiResAvatar'
 import { isPulseFileRow } from '../utils/pulseOpenFile'
 import { DRAG_THRESHOLD, SWAP_LOCK_PX, crossedSwapMid, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
@@ -343,7 +343,24 @@ function ElapsedFace({ seconds, mode }) {
   )
 }
 
-function CheckinCard({ name, initial, avatarUrl, hour, checkedInAt, elapsed, checkBusy, onCheckIn }) {
+function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elapsed: elapsedProp, checkBusy, onCheckIn }) {
+  const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
+
+  useEffect(() => {
+    setElapsed(Number(elapsedProp) || 0)
+  }, [elapsedProp, checkedInAt])
+
+  useEffect(() => {
+    if (!checkedInAt || !email) return undefined
+    const tick = () => {
+      const next = getElapsedSeconds(email)
+      setElapsed((prev) => (prev === next ? prev : next))
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [checkedInAt, email])
+
   const view = checkInView(checkedInAt, elapsed)
   const period = periodForHour(hour)
   return (
@@ -399,7 +416,7 @@ function CheckinCard({ name, initial, avatarUrl, hour, checkedInAt, elapsed, che
 }
 
 /** Overview: greeting, week, check-in. Cards reorder like Dashboard. */
-export default function PulseOverviewHome({
+function PulseOverviewHome({
   name,
   initial,
   hour,
@@ -433,7 +450,7 @@ export default function PulseOverviewHome({
 
   useLayoutEffect(() => {
     setToolsHost(document.getElementById('pulse-dash-sub-tools'))
-  })
+  }, [])
 
   useEffect(() => {
     setPrefs((prev) => {
@@ -648,6 +665,7 @@ export default function PulseOverviewHome({
           name={name}
           initial={initial}
           avatarUrl={user?.avatarUrl}
+          email={user?.email}
           hour={hour}
           checkedInAt={checkedInAt}
           elapsed={elapsed}
@@ -795,3 +813,5 @@ export default function PulseOverviewHome({
     </div>
   )
 }
+
+export default memo(PulseOverviewHome)
