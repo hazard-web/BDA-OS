@@ -3,32 +3,52 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { isPulseAuxiliaryTab } from '../utils/pulseOpenPage'
 import {
+  cancelPulseUnloadPending,
+  consumePulseUnloadExit,
   forcePulseExit,
-  installPulseReloadGuards,
-  isPulseReloadExpected,
+  installPulseUnloadWatch,
+  markPulseUnloadPending,
   PULSE_SLEEP_EXIT_MS,
 } from '../utils/pulseForceExit'
 
 /**
- * Tab close → check out + sign out (must check in again after next login).
- * System sleep / screen lock → same when the page stays open.
- * Refresh is allowed without signing out.
- * Skips auxiliary tabs (timer, notes, opened module tabs).
+ * Tab close → check out + sign out on the *next* visit (reload must stay signed in).
+ * System sleep / screen lock → check out + sign out while the page is still open.
  */
 export default function PulseForceExitGuard() {
-  const { user, logout } = useAuth()
+  const { user, logout, loading } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const email = user?.email
   const liveExitRef = useRef(false)
+  const bootExitDone = useRef(false)
 
   useEffect(() => {
-    installPulseReloadGuards()
+    installPulseUnloadWatch()
   }, [])
+
+  // After a real tab close, sessionStorage is gone but localStorage still has the pending flag.
+  useEffect(() => {
+    if (loading || bootExitDone.current) return
+    bootExitDone.current = true
+    if (!consumePulseUnloadExit()) return
+    if (!localStorage.getItem('token') && !email) return
+    const ran = forcePulseExit({ reason: 'tab-close', email })
+    if (ran) {
+      try {
+        logout()
+      } catch {
+        /* ignore */
+      }
+      navigate('/login', { replace: true })
+    }
+  }, [loading, email, logout, navigate])
 
   useEffect(() => {
     if (!email) return undefined
     if (isPulseAuxiliaryTab(pathname)) return undefined
+
+    cancelPulseUnloadPending()
 
     const exitWhileAlive = (reason) => {
       if (liveExitRef.current) return
@@ -48,11 +68,10 @@ export default function PulseForceExitGuard() {
     }
 
     const onUnload = (event) => {
-      // bfcache freeze — leave session alone
       if (event?.persisted) return
-      // Real refresh (gesture / Navigation API) — not prior page load type
-      if (isPulseReloadExpected()) return
-      forcePulseExit({ reason: 'tab-close', email })
+      // Never clear the token here — reload and tab-close both fire this.
+      // Reload restores via sessionStorage continue flag; tab-close exits on next boot.
+      markPulseUnloadPending()
     }
 
     let hiddenAt = 0
@@ -61,6 +80,7 @@ export default function PulseForceExitGuard() {
         hiddenAt = Date.now()
         return
       }
+      cancelPulseUnloadPending()
       if (!hiddenAt) return
       const gap = Date.now() - hiddenAt
       hiddenAt = 0

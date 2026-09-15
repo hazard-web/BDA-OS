@@ -115,6 +115,12 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', token)
     api.invalidateCache?.('/auth/')
     clearPulseLogoutOrigin()
+    try {
+      localStorage.removeItem('pulsePendingForceExit')
+      sessionStorage.removeItem('pulseSessionContinue')
+    } catch {
+      /* ignore */
+    }
     setExitBusy(false)
     setUser(userData)
   }, [])
