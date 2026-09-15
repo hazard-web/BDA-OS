@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { format, parse } from 'date-fns'
 import { App, Button, DatePicker, Empty } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { formatInr, monthKey } from '../utils/pulsePerformanceCalc'
@@ -19,6 +19,17 @@ function personInitial(row) {
   return String(row.name || row.email || 'E').trim().charAt(0).toUpperCase() || 'E'
 }
 
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', filename)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 export default function PulsePayrollAdmin() {
   const { message } = App.useApp()
   const [month, setMonth] = useState(() => monthKey())
@@ -26,6 +37,7 @@ export default function PulsePayrollAdmin() {
   const [meta, setMeta] = useState({ locked: 0, generated: 0 })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [downloadingUser, setDownloadingUser] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -83,6 +95,25 @@ export default function PulsePayrollAdmin() {
       message.error(err?.response?.data?.message || 'Could not update')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const downloadPayslip = async (row) => {
+    setDownloadingUser(row.user)
+    try {
+      const res = await api.get(`/pulse-payroll/admin/${row.user}/download`, {
+        params: { month },
+        responseType: 'blob',
+      })
+      const name = String(row.name || 'Employee').replace(/\s+/g, '_')
+      downloadBlob(
+        new Blob([res.data], { type: 'application/pdf' }),
+        `Payslip_${name}_${month}.pdf`,
+      )
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not download payslip')
+    } finally {
+      setDownloadingUser(null)
     }
   }
 
@@ -167,11 +198,23 @@ export default function PulsePayrollAdmin() {
                 <Button size="small" loading={busy} onClick={() => generateOne(row.user)}>
                   Generate payslip
                 </Button>
-              ) : row.payslip?.status !== 'paid' ? (
-                <Button size="small" type="primary" className="pulse-perf-cta" loading={busy} onClick={() => markPaid(row.user)}>
-                  Mark paid
-                </Button>
-              ) : null}
+              ) : (
+                <>
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    loading={downloadingUser === row.user}
+                    onClick={() => downloadPayslip(row)}
+                  >
+                    Download
+                  </Button>
+                  {row.payslip?.status !== 'paid' ? (
+                    <Button size="small" type="primary" className="pulse-perf-cta" loading={busy} onClick={() => markPaid(row.user)}>
+                      Mark paid
+                    </Button>
+                  ) : null}
+                </>
+              )}
             </div>
           </article>
         ))}

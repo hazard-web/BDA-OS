@@ -154,12 +154,6 @@ function leaveImportTemplate(today = dayjs()) {
   }
 }
 
-const HOLIDAY_CLASS_OPTIONS = [
-  { value: 'all', label: 'All Holiday Classification' },
-  { value: 'Holiday', label: 'Holiday' },
-  { value: 'Restricted holiday', label: 'Restricted holiday' },
-]
-
 function rangeForPeriod(period, now = dayjs()) {
   if (period === 'yesterday') {
     const day = now.subtract(1, 'day')
@@ -227,32 +221,81 @@ const SAMPLE_REQUESTS = [
   },
 ]
 
-const INDIA_HOLIDAYS_2026 = [
-  { id: 'h1', name: "New Year's Day", date: '2026-01-01' },
-  { id: 'h2', name: 'Pongal', date: '2026-01-14' },
-  { id: 'h3', name: 'Vasant Panchami', date: '2026-01-23' },
-  { id: 'h4', name: 'Republic Day', date: '2026-01-26' },
-  { id: 'h5', name: 'Maha Shivaratri', date: '2026-02-15' },
-  { id: 'h6', name: 'Shivaji Jayanti', date: '2026-02-19' },
-  { id: 'h7', name: 'Holi', date: '2026-03-04' },
-  { id: 'h8', name: 'Ugadi', date: '2026-03-19' },
-  { id: 'h9', name: 'Eid al-Fitr', date: '2026-03-21' },
-  { id: 'h10', name: 'Rama Navami', date: '2026-03-26' },
-  { id: 'h11', name: 'Good Friday', date: '2026-04-03' },
-  { id: 'h12', name: 'Easter Day', date: '2026-04-05' },
-  { id: 'h13', name: 'Bakrid', date: '2026-05-28' },
-  { id: 'h14', name: 'Muharram', date: '2026-06-26' },
-  { id: 'h15', name: 'Rath Yatra', date: '2026-07-16' },
-  { id: 'h16', name: 'Independence Day', date: '2026-08-15' },
-  { id: 'h17', name: 'Onam', date: '2026-08-26' },
-  { id: 'h18', name: 'Raksha Bandhan', date: '2026-08-28' },
-  { id: 'h19', name: 'Janmashtami', date: '2026-09-04' },
-  { id: 'h20', name: 'Ganesh Chaturthi', date: '2026-09-14' },
-  { id: 'h21', name: 'Gandhi Jayanti', date: '2026-10-02' },
-  { id: 'h22', name: 'Dussehra', date: '2026-10-20' },
-  { id: 'h23', name: 'Diwali', date: '2026-10-29' },
-  { id: 'h24', name: 'Christmas', date: '2026-12-25' },
+/** Fixed national holidays (same date every year). */
+const INDIA_FIXED_HOLIDAYS = [
+  { name: "New Year's Day", month: 1, day: 1 },
+  { name: 'Republic Day', month: 1, day: 26 },
+  { name: 'Independence Day', month: 8, day: 15 },
+  { name: 'Gandhi Jayanti', month: 10, day: 2 },
+  { name: 'Christmas', month: 12, day: 25 },
 ]
+
+/** Festival / regional dates that shift by year (observed calendar). */
+const INDIA_FESTIVAL_BY_YEAR = {
+  2025: [
+    { name: 'Makar Sankranti', date: '2025-01-14' },
+    { name: 'Maha Shivaratri', date: '2025-02-26' },
+    { name: 'Holi', date: '2025-03-14' },
+    { name: 'Good Friday', date: '2025-04-18' },
+    { name: 'Eid al-Fitr', date: '2025-03-31' },
+    { name: 'Raksha Bandhan', date: '2025-08-09' },
+    { name: 'Janmashtami', date: '2025-08-16' },
+    { name: 'Ganesh Chaturthi', date: '2025-08-27' },
+    { name: 'Dussehra', date: '2025-10-02' },
+    { name: 'Diwali', date: '2025-10-20' },
+  ],
+  2026: [
+    { name: 'Pongal', date: '2026-01-14' },
+    { name: 'Vasant Panchami', date: '2026-01-23' },
+    { name: 'Maha Shivaratri', date: '2026-02-15' },
+    { name: 'Holi', date: '2026-03-04' },
+    { name: 'Ugadi', date: '2026-03-19' },
+    { name: 'Eid al-Fitr', date: '2026-03-21' },
+    { name: 'Good Friday', date: '2026-04-03' },
+    { name: 'Bakrid', date: '2026-05-28' },
+    { name: 'Onam', date: '2026-08-26' },
+    { name: 'Raksha Bandhan', date: '2026-08-28' },
+    { name: 'Janmashtami', date: '2026-09-04' },
+    { name: 'Ganesh Chaturthi', date: '2026-09-14' },
+    { name: 'Dussehra', date: '2026-10-20' },
+    { name: 'Diwali', date: '2026-10-29' },
+  ],
+  2027: [
+    { name: 'Makar Sankranti', date: '2027-01-14' },
+    { name: 'Maha Shivaratri', date: '2027-03-06' },
+    { name: 'Holi', date: '2027-03-22' },
+    { name: 'Good Friday', date: '2027-03-26' },
+    { name: 'Eid al-Fitr', date: '2027-03-10' },
+    { name: 'Raksha Bandhan', date: '2027-08-17' },
+    { name: 'Janmashtami', date: '2027-08-25' },
+    { name: 'Ganesh Chaturthi', date: '2027-09-04' },
+    { name: 'Dussehra', date: '2027-10-09' },
+    { name: 'Diwali', date: '2027-10-29' },
+  ],
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function indiaHolidaysForYear(year) {
+  const y = Number(year)
+  const byDate = new Map()
+  INDIA_FIXED_HOLIDAYS.forEach((row) => {
+    const date = `${y}-${pad2(row.month)}-${pad2(row.day)}`
+    byDate.set(date, { id: date, date, name: row.name })
+  })
+  ;(INDIA_FESTIVAL_BY_YEAR[y] || []).forEach((row) => {
+    byDate.set(row.date, { id: row.date, date: row.date, name: row.name })
+  })
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function holidayYearOptions(center = dayjs().year()) {
+  const years = []
+  for (let y = center - 2; y <= center + 3; y += 1) years.push(y)
+  return years.map((y) => ({ value: y, label: String(y) }))
+}
 
 function statusColor(status) {
   if (status === 'Approved') return 'green'
@@ -732,13 +775,14 @@ export default function PulseLeaveTracker({
   const [requestFilter, setRequestFilter] = useState('Leave')
   const [notifyEmails, setNotifyEmails] = useState(TEAM_NOTIFY_EMAILS)
   const [addOpen, setAddOpen] = useState(false)
-  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [planOpen, setPlanOpen] = useState(false)
+  const [galleryPick, setGalleryPick] = useState({})
   const [filterOpen, setFilterOpen] = useState(false)
   const [draftFilter, setDraftFilter] = useState(defaultFilter)
   const [appliedFilter, setAppliedFilter] = useState(defaultFilter)
   const [holidayYear, setHolidayYear] = useState(() => dayjs().year())
   const [myHolidays, setMyHolidays] = useState([])
-  const [galleryPick, setGalleryPick] = useState({})
+  const [planForm] = Form.useForm()
   const [teamWeek, setTeamWeek] = useState(() => dayjs())
   const [importOpen, setImportOpen] = useState(false)
   const [importTarget, setImportTarget] = useState('Leave')
@@ -879,7 +923,7 @@ export default function PulseLeaveTracker({
 
   const loadHolidays = useCallback(async () => {
     if (sample) {
-      setMyHolidays(INDIA_HOLIDAYS_2026.filter((row) => row.date.startsWith(String(holidayYear))))
+      setMyHolidays([])
       return
     }
     try {
@@ -983,18 +1027,7 @@ export default function PulseLeaveTracker({
 
   const holidayYearLabel = `01-Jan-${holidayYear} - 31-Dec-${holidayYear}`
 
-  const galleryRows = useMemo(() => {
-    const yearPrefix = String(holidayYear)
-    const fromIndia = INDIA_HOLIDAYS_2026.filter((row) => row.date.startsWith(yearPrefix))
-    if (fromIndia.length) return fromIndia
-    // Fallback named days for other years (Republic Day, Independence Day, etc.)
-    return [
-      { id: `${yearPrefix}-01-26`, name: 'Republic Day', date: `${yearPrefix}-01-26` },
-      { id: `${yearPrefix}-08-15`, name: 'Independence Day', date: `${yearPrefix}-08-15` },
-      { id: `${yearPrefix}-10-02`, name: 'Gandhi Jayanti', date: `${yearPrefix}-10-02` },
-      { id: `${yearPrefix}-12-25`, name: 'Christmas', date: `${yearPrefix}-12-25` },
-    ]
-  }, [holidayYear])
+  const indiaGalleryRows = useMemo(() => indiaHolidaysForYear(holidayYear), [holidayYear])
 
   const pagedRequests = useMemo(
     () => filteredRequests.slice((requestPage - 1) * requestPageSize, requestPage * requestPageSize),
@@ -1002,18 +1035,13 @@ export default function PulseLeaveTracker({
   )
 
   const visibleHolidays = useMemo(
-    () =>
-      myHolidays.filter((row) => {
-        if (!row.date.startsWith(String(holidayYear))) return false
-        const date = dayjs(row.date)
-        if (appliedFilter.from && date.isBefore(appliedFilter.from, 'day')) return false
-        if (appliedFilter.to && date.isAfter(appliedFilter.to, 'day')) return false
-        if (appliedFilter.holidayClass !== 'all' && (row.classification || 'Holiday') !== appliedFilter.holidayClass) {
-          return false
-        }
-        return true
-      }),
-    [myHolidays, holidayYear, appliedFilter],
+    () => myHolidays.filter((row) => row.date?.startsWith(String(holidayYear))),
+    [myHolidays, holidayYear],
+  )
+
+  const plannedDateSet = useMemo(
+    () => new Set(visibleHolidays.map((row) => row.date)),
+    [visibleHolidays],
   )
 
   const pagedHolidays = useMemo(
@@ -1518,10 +1546,16 @@ export default function PulseLeaveTracker({
     runImport()
   }
 
-  const addSelectedHolidays = async () => {
-    const picked = galleryRows.filter((row) => galleryPick[row.id])
+  const openPlanHolidays = () => {
+    planForm.resetFields()
+    setGalleryPick({})
+    setPlanOpen(true)
+  }
+
+  const addSelectedIndiaHolidays = async () => {
+    const picked = indiaGalleryRows.filter((row) => galleryPick[row.id] && !plannedDateSet.has(row.date))
     if (!picked.length) {
-      message.info({ content: 'Select at least one holiday', className: 'pulse-message' })
+      message.info({ content: 'Select at least one holiday from the India calendar', className: 'pulse-message' })
       return
     }
     const map = new Map(myHolidays.map((row) => [row.date || row.id, row]))
@@ -1532,8 +1566,32 @@ export default function PulseLeaveTracker({
     const ok = await persistHolidays(next)
     if (!ok) return
     setGalleryPick({})
-    setGalleryOpen(false)
-    message.success({ content: 'Holidays saved for the year', className: 'pulse-message' })
+    message.success({ content: `${picked.length} holiday${picked.length === 1 ? '' : 's'} added`, className: 'pulse-message' })
+  }
+
+  const addCustomHoliday = async () => {
+    try {
+      const values = await planForm.validateFields()
+      const date = values.date.format('YYYY-MM-DD')
+      const name = String(values.name || '').trim()
+      if (!name) {
+        message.info({ content: 'Enter a holiday name', className: 'pulse-message' })
+        return
+      }
+      if (myHolidays.some((row) => row.date === date)) {
+        message.warning({ content: 'A holiday already exists on that date', className: 'pulse-message' })
+        return
+      }
+      const map = new Map(myHolidays.map((row) => [row.date || row.id, row]))
+      map.set(date, { id: date, date, name, classification: 'Holiday' })
+      const next = [...map.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)))
+      const ok = await persistHolidays(next)
+      if (!ok) return
+      planForm.resetFields()
+      message.success({ content: 'Holiday added', className: 'pulse-message' })
+    } catch {
+      /* validation */
+    }
   }
 
   const removeHoliday = async (date) => {
@@ -1981,27 +2039,15 @@ export default function PulseLeaveTracker({
         </div>
         <div className="pulse-leave-toolbar-right">
           {isAdmin ? (
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'gallery', label: 'Holidays Gallery' },
-                ],
-                onClick: ({ key }) => {
-                  if (key === 'gallery') setGalleryOpen(true)
-                },
-              }}
+            <Button
+              type="primary"
+              className="pulse-leave-add-btn"
+              loading={holidaySaving}
+              onClick={openPlanHolidays}
             >
-              <Button type="primary" className="pulse-leave-add-btn" loading={holidaySaving}>
-                Plan holidays
-              </Button>
-            </Dropdown>
+              Plan holidays
+            </Button>
           ) : null}
-          <Button
-            icon={<FilterOutlined />}
-            aria-label="Filter"
-            className={filterActive ? 'is-on' : ''}
-            onClick={openFilter}
-          />
           <Dropdown
             trigger={['click']}
             placement="bottomRight"
@@ -2030,7 +2076,7 @@ export default function PulseLeaveTracker({
           <LeaveEmpty
             title="No company holidays planned for this year"
             actionLabel={isAdmin ? 'Plan holidays' : undefined}
-            onAction={isAdmin ? () => setGalleryOpen(true) : undefined}
+            onAction={isAdmin ? openPlanHolidays : undefined}
           />
         ) : (
           <Table
@@ -2201,42 +2247,118 @@ export default function PulseLeaveTracker({
         : null}
 
       <Modal
-        title="Holidays Gallery"
-        open={galleryOpen}
-        onCancel={() => setGalleryOpen(false)}
+        title="Plan holidays"
+        open={planOpen}
+        onCancel={() => setPlanOpen(false)}
         footer={(
           <div className="pulse-leave-gallery-foot">
-            <Button type="primary" onClick={addSelectedHolidays}>Add Selected Holidays</Button>
-            <Button onClick={() => setGalleryOpen(false)}>Close</Button>
+            <Button
+              type="primary"
+              className="pulse-leave-add-btn"
+              loading={holidaySaving}
+              onClick={addSelectedIndiaHolidays}
+            >
+              Add selected
+            </Button>
+            <Button onClick={() => setPlanOpen(false)}>Done</Button>
           </div>
         )}
-        width={760}
+        width={720}
         className="pulse-leave-gallery-modal"
+        destroyOnHidden
       >
         <div className="pulse-leave-gallery-head">
-          <Select value="India" className="pulse-leave-select" options={[{ value: 'India', label: 'India' }]} />
-          <div className="pulse-leave-period">
-            <Button type="text" icon={<LeftOutlined />} onClick={() => setHolidayYear((year) => year - 1)} />
-            <Button type="text" icon={<CalendarOutlined />} />
-            <Button type="text" icon={<RightOutlined />} onClick={() => setHolidayYear((year) => year + 1)} />
-            <span>{holidayYear}</span>
+          <span className="pulse-leave-plan-section-label">Year</span>
+          <Select
+            value={holidayYear}
+            onChange={(year) => {
+              setHolidayYear(year)
+              setGalleryPick({})
+              planForm.resetFields()
+            }}
+            options={holidayYearOptions()}
+            className="pulse-leave-select pulse-leave-year-filter"
+            classNames={{ popup: { root: 'pulse-leave-filter-dropdown' } }}
+          />
+        </div>
+
+        <div className="pulse-leave-plan-section">
+          <div className="pulse-leave-plan-section-title">India calendar</div>
+          <div className="pulse-leave-gallery-list">
+            {indiaGalleryRows.map((row) => {
+              const already = plannedDateSet.has(row.date)
+              return (
+                <label key={row.id} className={`pulse-leave-gallery-row${already ? ' is-planned' : ''}`}>
+                  <input
+                    type="checkbox"
+                    disabled={already || holidaySaving}
+                    checked={already || Boolean(galleryPick[row.id])}
+                    onChange={(event) => {
+                      if (already) return
+                      setGalleryPick((prev) => ({ ...prev, [row.id]: event.target.checked }))
+                    }}
+                  />
+                  <span className="pulse-leave-gallery-name">{row.name}</span>
+                  <span className="pulse-leave-gallery-date">{formatHolidayDate(row.date)}</span>
+                  <span className="pulse-leave-gallery-tag">{already ? 'Added' : 'Full Day'}</span>
+                </label>
+              )
+            })}
           </div>
         </div>
-        <div className="pulse-leave-gallery-list">
-          {galleryRows.map((row) => (
-            <label key={row.id} className="pulse-leave-gallery-row">
-              <input
-                type="checkbox"
-                checked={Boolean(galleryPick[row.id])}
-                onChange={(event) => {
-                  setGalleryPick((prev) => ({ ...prev, [row.id]: event.target.checked }))
-                }}
-              />
-              <span className="pulse-leave-gallery-name">{row.name}</span>
-              <span className="pulse-leave-gallery-date">{formatHolidayDate(row.date)}</span>
-              <Select value="Full Day" className="pulse-leave-select pulse-leave-select-sm" options={[{ value: 'Full Day', label: 'Full Day' }]} />
-            </label>
-          ))}
+
+        <div className="pulse-leave-plan-section">
+          <div className="pulse-leave-plan-section-title">Custom holiday</div>
+          <Form form={planForm} layout="vertical" className="pulse-leave-plan-form" requiredMark={false}>
+            <div className="pulse-leave-plan-custom-row">
+              <Form.Item
+                name="name"
+                label="Holiday name"
+                rules={[{ required: true, message: 'Enter a holiday name' }]}
+              >
+                <Input placeholder="e.g. Founders Day" maxLength={80} />
+              </Form.Item>
+              <Form.Item
+                name="date"
+                label="Date"
+                rules={[{ required: true, message: 'Pick a date' }]}
+              >
+                <DatePicker
+                  className="pulse-leave-plan-date"
+                  style={{ width: '100%' }}
+                  format="DD-MMM-YYYY"
+                  disabledDate={(current) => current && current.year() !== holidayYear}
+                />
+              </Form.Item>
+              <Button
+                type="primary"
+                className="pulse-leave-add-btn pulse-leave-plan-custom-add"
+                loading={holidaySaving}
+                onClick={addCustomHoliday}
+              >
+                Add
+              </Button>
+            </div>
+          </Form>
+        </div>
+
+        <div className="pulse-leave-plan-section">
+          <div className="pulse-leave-plan-section-title">Company holidays · {holidayYear}</div>
+          {visibleHolidays.length > 0 ? (
+            <div className="pulse-leave-gallery-list">
+              {visibleHolidays.map((row) => (
+                <div key={row.id || row.date} className="pulse-leave-gallery-row pulse-leave-plan-row">
+                  <span className="pulse-leave-gallery-name">{row.name}</span>
+                  <span className="pulse-leave-gallery-date">{formatHolidayDate(row.date)}</span>
+                  <Button type="link" danger disabled={holidaySaving} onClick={() => removeHoliday(row.date)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty description="No holidays planned for this year" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
         </div>
       </Modal>
 
@@ -2341,16 +2463,7 @@ export default function PulseLeaveTracker({
             className="pulse-leave-filter-date"
           />
         </label>
-        {mainTab === 'holidays' ? (
-          <label className="pulse-leave-filter-field">
-            <span>Holiday Classification</span>
-            <FilterSelect
-              value={draftFilter.holidayClass}
-              onChange={(holidayClass) => setDraftFilter((prev) => ({ ...prev, holidayClass }))}
-              options={HOLIDAY_CLASS_OPTIONS}
-            />
-          </label>
-        ) : (
+        {mainTab !== 'holidays' ? (
           <>
             <label className="pulse-leave-filter-field">
               <span>Type</span>
@@ -2376,7 +2489,7 @@ export default function PulseLeaveTracker({
               />
             </label>
           </>
-        )}
+        ) : null}
       </Drawer>
     </div>
   )

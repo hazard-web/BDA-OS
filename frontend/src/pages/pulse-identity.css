@@ -72,6 +72,36 @@
   box-shadow: none !important;
 }
 
+.pulse-shell.pulse-id .pulse-route-nav {
+  --prn-fg: #142019;
+  --prn-fg-muted: rgba(58, 74, 62, 0.32);
+  --prn-hover: rgba(20, 32, 25, 0.07);
+  --prn-press: rgba(196, 92, 38, 0.14);
+  --prn-sep: rgba(20, 32, 25, 0.14);
+  background: #f7f9f4;
+  border-color: rgba(20, 32, 25, 0.14);
+  box-shadow:
+    0 1px 2px rgba(20, 32, 25, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.55) inset;
+}
+
+.pulse-shell.pulse-id .pulse-route-nav.is-live {
+  background: #fff;
+  border-color: rgba(20, 32, 25, 0.18);
+  box-shadow:
+    0 2px 6px rgba(20, 32, 25, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+}
+
+.pulse-shell.pulse-id .pulse-route-nav-btn:not(:disabled):hover,
+.pulse-shell.pulse-id .pulse-route-nav-btn:not(:disabled):focus-visible {
+  color: #142019;
+}
+
+.pulse-shell.pulse-id .pulse-route-nav-btn:not(:disabled):active {
+  color: #c45c26;
+}
+
 .pulse-shell.pulse-id .pulse-appearance-btn {
   color: #3a4a3e;
   background: none !important;
@@ -628,6 +658,33 @@
   background: rgba(16, 22, 18, 0.62) !important;
   color: #e7eee6;
   border-bottom-color: rgba(231, 238, 230, 0.1);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-route-nav {
+  --prn-fg: rgba(231, 238, 230, 0.92);
+  --prn-fg-muted: rgba(231, 238, 230, 0.28);
+  --prn-hover: rgba(231, 238, 230, 0.12);
+  --prn-press: rgba(196, 92, 38, 0.22);
+  --prn-sep: rgba(231, 238, 230, 0.18);
+  background: rgba(8, 12, 10, 0.45);
+  border-color: rgba(231, 238, 230, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-route-nav.is-live {
+  background: rgba(8, 12, 10, 0.58);
+  border-color: rgba(231, 238, 230, 0.22);
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-route-nav-btn:not(:disabled):hover,
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-route-nav-btn:not(:disabled):focus-visible {
+  color: #e7eee6;
+}
+
+:root[data-theme='dark'] .pulse-shell.pulse-id .pulse-route-nav-btn:not(:disabled):active {
+  color: #e8a078;
 }
 
 :root[data-theme='dark'] .pulse-shell.pulse-id .pulse-head-timer {

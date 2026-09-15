@@ -1,8 +1,24 @@
 .pulse-files-page {
   width: min(920px, 100%);
   margin: 0 auto;
-  padding: 8px 4px 40px;
+  padding: 4px 4px 40px;
   box-sizing: border-box;
+}
+
+.pulse-files-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.pulse-files-toolbar-spacer {
+  flex: 1;
+}
+
+.pulse-files-refresh.ant-btn {
+  color: #5c6b60;
 }
 
 .pulse-files-head {
@@ -40,14 +56,21 @@
 
 .pulse-files-upload {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(20, 32, 25, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 1px 2px rgba(20, 32, 25, 0.04);
+}
+
+.pulse-files-upload-main {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
-  margin-bottom: 18px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
 }
 
 .pulse-files-title-input {
@@ -65,6 +88,15 @@
 .pulse-files-upload-btn.ant-btn-primary {
   background: #1a5f4a !important;
   border-color: #1a5f4a !important;
+  color: #fff !important;
+  font-weight: 650;
+}
+
+.pulse-files-upload-btn.ant-btn-primary:hover,
+.pulse-files-upload-btn.ant-btn-primary:focus {
+  background: #164f3e !important;
+  border-color: #164f3e !important;
+  color: #fff !important;
 }
 
 .pulse-files-hint {
@@ -75,41 +107,80 @@
 }
 
 .pulse-files-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid #e5e7eb;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(20, 32, 25, 0.06);
+  border: 1px solid rgba(20, 32, 25, 0.08);
 }
 
 .pulse-files-tab {
   appearance: none;
   border: 0;
   background: transparent;
-  padding: 8px 12px 10px;
+  padding: 7px 14px;
   font-size: 13px;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 650;
+  color: #5c6b60;
   cursor: pointer;
+  border-radius: 999px;
   position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .pulse-files-tab:hover {
-  color: #111827;
+  color: #142019;
 }
 
 .pulse-files-tab.is-on {
-  color: #111827;
+  color: #142019;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(20, 32, 25, 0.08);
 }
 
 .pulse-files-tab.is-on::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: #1a5f4a;
+  display: none;
+}
+
+.pulse-files-employee-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(20, 32, 25, 0.1);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.pulse-files-employee-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5c6b60;
+}
+
+.pulse-files-employee-select {
+  min-width: min(360px, 100%);
+  flex: 1 1 220px;
+}
+
+.pulse-files-employee-select.ant-select .ant-select-selector {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+}
+
+.pulse-files-employee-select.ant-select-focused .ant-select-selector,
+.pulse-files-employee-select.ant-select:hover .ant-select-selector {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 .pulse-files-loading {
@@ -130,12 +201,19 @@
 .pulse-files-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
+  gap: 4px;
+  padding: 0 4px 0 0;
+  border: 1px solid rgba(20, 32, 25, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 2px rgba(20, 32, 25, 0.03);
   overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pulse-files-row:hover {
+  border-color: rgba(20, 32, 25, 0.16);
+  box-shadow: 0 2px 8px rgba(20, 32, 25, 0.06);
 }
 
 .pulse-files-row-hit {
@@ -147,14 +225,14 @@
   gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 13px 14px;
   text-align: left;
   cursor: pointer;
   color: inherit;
 }
 
 .pulse-files-row-hit:hover {
-  background: #f9fafb;
+  background: rgba(20, 32, 25, 0.03);
 }
 
 .pulse-files-view-hint {
@@ -165,21 +243,21 @@
   font-size: 12px;
   font-weight: 650;
   color: #1a5f4a;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .pulse-files-delete {
-  margin-right: 6px;
+  margin-right: 4px;
 }
 
 .pulse-files-ico {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: #f3f4f6;
-  color: #374151;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #eef3f0;
+  color: #1a5f4a;
   flex: 0 0 auto;
 }
 
@@ -192,7 +270,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 650;
-  color: #111827;
+  color: #142019;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -212,4 +290,15 @@
   align-items: center;
   gap: 2px;
   flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .pulse-files-upload-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pulse-files-title-input {
+    width: 100%;
+  }
 }

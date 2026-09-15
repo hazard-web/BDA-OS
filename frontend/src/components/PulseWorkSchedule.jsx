@@ -165,17 +165,20 @@ export function usePulseWorkWeek({
     [records, workDays, checkedInToday, leaveDates, leaveByDate, holidays, todaySeconds, todayHours, useSample],
   )
 
-  return {
-    days,
-    range,
-    loading,
-    shift: GENERAL_SHIFT,
-    leaveBalances,
-    approvals,
-    announcements,
-    month,
-    profile,
-  }
+  return useMemo(
+    () => ({
+      days,
+      range,
+      loading,
+      shift: GENERAL_SHIFT,
+      leaveBalances,
+      approvals,
+      announcements,
+      month,
+      profile,
+    }),
+    [days, range, loading, leaveBalances, approvals, announcements, month, profile],
+  )
 }
 
 /** Weekly work schedule with shift bar, Weekend / Absent / leave, current day. */
