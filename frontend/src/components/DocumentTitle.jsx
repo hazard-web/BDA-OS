@@ -10,13 +10,13 @@ const TITLES = [
   ['/oauth/create-account', 'Create Account'],
   ['/oauth/callback', 'Signing in'],
   ['/coming-soon', 'Coming Soon'],
-  // Getting Started parked on `pulse/company-later-services`
-  // [`${APP_BASE}/settings/service/getting-started`, 'Getting Started'],
-  // [`${APP_BASE}/getting-started`, 'Getting Started'],
   [APP_NOTES, 'Notebook'],
   [`${APP_BASE}/onboarding`, 'Onboarding'],
   [`${APP_COMPANY}/attendance`, 'Attendance'],
   [`${APP_COMPANY}/time`, 'Timesheet'],
+  [`${APP_COMPANY}/performance`, 'Performance'],
+  [`${APP_COMPANY}/payroll`, 'Payroll'],
+  [`${APP_COMPANY}/people`, 'People'],
   [APP_COMPANY, 'Company'],
   [`${APP_BASE}/leave`, 'Leave'],
   [`${APP_BASE}/calendar`, 'Calendar'],
@@ -24,6 +24,7 @@ const TITLES = [
   [`${APP_BASE}/hours`, 'Timesheet'],
   [`${APP_BASE}/time`, 'Timesheet'],
   [`${APP_BASE}/performance`, 'Performance'],
+  [`${APP_BASE}/payroll`, 'Payroll'],
   [`${APP_BASE}/account`, 'Account'],
   [`${APP_BASE}/apps`, 'App access'],
   [PULSE_HOME, 'You'],
@@ -65,9 +66,6 @@ function titleFromSegment(segment) {
 function pageTitle(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/'
   if (path === '/') return 'BDA OS'
-
-  // Getting Started parked on `pulse/company-later-services`
-  // if (/^\/[^/]+\/settings\/service\/getting-started$/.test(path)) return 'Getting Started'
 
   const match = TITLES.find(([route]) => path === route || path.startsWith(`${route}/`))
   if (match) return match[1]
@@ -112,54 +110,53 @@ function setFavicon(href) {
 function baseTitleForPage(name) {
   if (name === 'Coming Soon') return 'Coming Soon | BDA OS'
   if (name === 'BDA OS') return 'BDA OS'
-  // if (name === 'Getting Started') return 'Getting Started | BDA OS'
   if (name === 'Accounts') return 'Accounts'
   return name
+}
+
+function titleWithTimer(base, email) {
+  if (!email || !base) return base
+  const live = Boolean(readCheckInAt(email))
+  const elapsed = getElapsedSeconds(email)
+  // Match header timer: live clock, or paused day total.
+  if (!live && !(elapsed > 0)) return base
+  return `${formatElapsed(elapsed)} · ${base}`
 }
 
 export default function DocumentTitle() {
   const { pathname } = useLocation()
   const { user } = useAuth()
   const baseTitleRef = useRef('BDA OS')
+  const email = user?.email || ''
 
   useLayoutEffect(() => {
     const name = pageTitle(pathname)
     baseTitleRef.current = baseTitleForPage(name)
-    const checkedInAt = readCheckInAt(user?.email)
-    if (checkedInAt && user?.email) {
-      document.title = `${formatElapsed(getElapsedSeconds(user.email))} · ${baseTitleRef.current}`
-    } else {
-      document.title = baseTitleRef.current
-    }
-
+    document.title = titleWithTimer(baseTitleRef.current, email)
     setFavicon(faviconForPath(pathname))
     rememberPulsePath(pathname)
-  }, [pathname, user?.email])
+  }, [pathname, email])
 
   useEffect(() => {
-    if (!user?.email) return undefined
+    if (!email) {
+      document.title = baseTitleRef.current
+      return undefined
+    }
 
     const apply = () => {
-      const checkedInAt = readCheckInAt(user.email)
-      if (!checkedInAt) {
-        document.title = baseTitleRef.current
-        return
-      }
-      document.title = `${formatElapsed(getElapsedSeconds(user.email))} · ${baseTitleRef.current}`
+      document.title = titleWithTimer(baseTitleRef.current, email)
     }
 
-    const onChange = () => apply()
     apply()
-    const id = window.setInterval(apply, 2000)
-    window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
-    window.addEventListener('storage', onChange)
+    const id = window.setInterval(apply, 1000)
+    window.addEventListener(PULSE_CHECKIN_EVENT, apply)
+    window.addEventListener('storage', apply)
     return () => {
       window.clearInterval(id)
-      window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
-      window.removeEventListener('storage', onChange)
-      document.title = baseTitleRef.current
+      window.removeEventListener(PULSE_CHECKIN_EVENT, apply)
+      window.removeEventListener('storage', apply)
     }
-  }, [user?.email])
+  }, [email, pathname])
 
   return null
 }

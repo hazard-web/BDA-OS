@@ -20,6 +20,7 @@ const SLOW_ENDPOINT_PATTERNS = [
   /\/staff\/[^/]+\/documents/,           // base64 document upload
   /\/candidates/,                        // candidate photo / offer letter uploads
   /\/portal\/me\/documents\//,           // base64 document upload
+  /\/pulse-files\/company/,              // company file upload + publish
   /\/portal\/login/,                     // bcrypt + Atlas cold-start can be slow
 ]
 

@@ -656,13 +656,18 @@ router.post('/forgot-password', async (req, res, next) => {
 
     const domainCheck = assertAllowedCompanyEmail(email);
     if (!domainCheck.ok) {
-      return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+      return res.status(400).json({
+        success: false,
+        message: domainCheck.message || 'Use your company email address.',
+      });
     }
 
     const user = await User.findOne({ email });
-    // Always respond success to prevent email enumeration
     if (!user) {
-      return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+      return res.status(404).json({
+        success: false,
+        message: 'No BDA OS account found for this email.',
+      });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -673,8 +678,7 @@ router.post('/forgot-password', async (req, res, next) => {
     // Always use centralized URL helper - never use request origin for reset links
     const resetLink = buildResetLink(resetToken);
 
-    // In dev (no NODE_ENV=production), always print the link to the terminal
-    // so devs can recover accounts even without a working SMTP setup.
+    // In dev, print the link to the terminal only (never return it to the browser).
     if (process.env.NODE_ENV !== 'production') {
       console.log('\n────────────────────────────────────────────────────');
       console.log('🔑 DEV MODE - Password Reset Link');
@@ -686,27 +690,18 @@ router.post('/forgot-password', async (req, res, next) => {
 
     try {
       const { sendPasswordResetEmail } = require('../utils/emailService');
-      // Pass pre-built URL as customLink (4th param) to override the built-in URL construction
       const previewUrl = await sendPasswordResetEmail(user, resetToken, '', resetLink);
-      // If SMTP is not configured and Ethereal is used, the function returns a previewUrl.
-      // Surface it so the frontend can show "View test email" link.
       if (previewUrl && process.env.NODE_ENV !== 'production') {
         console.log(`📭 Ethereal preview URL: ${previewUrl}`);
       }
       res.json({
         success: true,
-        message: 'If that email exists, a reset link has been sent.',
-        // Surface the link in non-production so the UI can offer a "Use this link" button
-        ...(process.env.NODE_ENV !== 'production' && { devResetLink: resetLink }),
-        // If using Ethereal, give a way to view the actual email
-        ...(previewUrl && process.env.NODE_ENV !== 'production' && { devEmailPreview: previewUrl }),
+        message: 'Reset link sent. Check your inbox.',
       });
     } catch (emailErr) {
-      console.error('📧 Password reset email failed (dev link above still works):', emailErr.message);
-      res.json({
-        success: true,
-        message: 'If that email exists, a reset link has been sent.',
-        ...(process.env.NODE_ENV !== 'production' && { devResetLink: resetLink }),
+      return res.status(502).json({
+        success: false,
+        message: 'Could not send the reset email. Please try again.',
       });
     }
   } catch (err) {

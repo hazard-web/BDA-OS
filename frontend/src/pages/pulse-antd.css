@@ -107,6 +107,173 @@ body:has(.pulse-shell),
   gap: 2px;
 }
 
+.pulse-head-presence {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin-right: 8px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(20, 32, 25, 0.06);
+  color: #14110e;
+  cursor: default;
+  outline: none;
+  box-shadow: none;
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.pulse-head-presence:hover,
+.pulse-head-presence:focus,
+.pulse-head-presence:focus-visible {
+  background: rgba(20, 32, 25, 0.1);
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.pulse-head-presence-live,
+.pulse-head-presence-idle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pulse-head-presence-live {
+  color: #1a5f4a;
+}
+
+.pulse-head-presence-live i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1a5f4a;
+  box-shadow: 0 0 0 3px rgba(26, 95, 74, 0.16);
+}
+
+.pulse-head-presence-live strong,
+.pulse-head-presence-idle strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pulse-head-presence-cap {
+  font-size: 11px;
+  font-weight: 550;
+  color: #6b7368;
+}
+
+.pulse-head-presence-live .pulse-head-presence-cap {
+  color: #3d7a64;
+}
+
+.pulse-head-presence-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(20, 32, 25, 0.16);
+}
+
+.pulse-head-presence-idle {
+  color: #5c635c;
+}
+
+.pulse-head-presence-pop.ant-popover {
+  z-index: 4100;
+}
+
+.pulse-head-presence-pop .ant-popover-container,
+.pulse-head-presence-pop .ant-popover-inner {
+  padding: 0 !important;
+  border-radius: 12px;
+  border: 1px solid #e6e1d8;
+  box-shadow: 0 12px 28px rgba(20, 32, 25, 0.12);
+  overflow: hidden;
+  background: #fff;
+}
+
+.pulse-head-presence-pop .ant-popover-inner-content {
+  padding: 0 !important;
+}
+
+.pulse-head-presence-panel {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr);
+  width: min(440px, 82vw);
+  background: #fff;
+}
+
+.pulse-head-presence-col {
+  padding: 12px 14px 14px;
+  min-height: 108px;
+  max-height: 280px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.pulse-head-presence-col + .pulse-head-presence-col {
+  border-left: 1px solid #eee9e0;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid #f0ebe3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7368;
+  line-height: 1.2;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-h em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: #1c1917;
+}
+
+.pulse-head-presence-pop .is-active .pulse-head-presence-h {
+  color: #1a5f4a;
+}
+
+.pulse-head-presence-pop .is-active .pulse-head-presence-h em {
+  color: #1a5f4a;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-col ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-col li {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c1917;
+  line-height: 1.35;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-empty {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8a8580;
+  line-height: 1.45;
+}
+
 .pulse-head-timer {
   position: relative;
   display: inline-flex;
@@ -922,6 +1089,23 @@ body:has(.pulse-shell),
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.pulse-leave-panel > .pulse-leave-card + .pulse-leave-card {
+  margin-top: 12px;
+}
+
+.pulse-leave-section-head {
+  padding: 12px 16px 4px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #1c1917;
+}
+
+.pulse-leave-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .pulse-leave-card-scroll {
@@ -6261,6 +6445,68 @@ button.pulse-ts-person.is-clickable:focus-visible {
   -webkit-backdrop-filter: var(--ov-glass-blur);
 }
 
+/* My Files — stronger frosted plate so titles/meta stay readable on the peak */
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files,
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files:hover {
+  background: rgba(252, 253, 252, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  box-shadow:
+    0 14px 36px rgba(8, 22, 16, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-card-title {
+  color: #0c1712;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-files-total {
+  color: #1f2e27;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-files-count {
+  background: rgba(26, 95, 74, 0.12);
+  color: #0f2a1f;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-file-tabs {
+  border-bottom: 1px solid rgba(16, 40, 32, 0.12);
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-file-tab {
+  color: #2a3b33;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-file-tab:hover {
+  color: #0c1712;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-file-tab.is-on {
+  color: #1a5f4a;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-row-title {
+  color: #0c1712;
+  font-weight: 700;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-row-meta {
+  color: #3a4d44;
+  font-weight: 600;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-file-ico {
+  color: #1a5f4a;
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-row:hover {
+  background: rgba(26, 95, 74, 0.07);
+}
+
+.pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-file-view {
+  opacity: 1;
+  color: #1a5f4a;
+}
+
 .pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card-head {
   min-height: 44px;
   padding: 12px 16px 8px 28px;
@@ -7565,6 +7811,20 @@ body.pulse-dash-dragging * {
   flex-shrink: 0;
   color: #3f5348;
   font-size: 14px;
+}
+
+.pulse-dash-file-view {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: #1a5f4a;
+  opacity: 0.72;
+}
+
+.pulse-dash-row.is-link:hover .pulse-dash-file-view,
+.pulse-dash-row-hit:focus-visible .pulse-dash-file-view {
+  opacity: 1;
 }
 
 .pulse-dash-empty.is-files {

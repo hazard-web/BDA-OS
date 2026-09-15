@@ -361,8 +361,17 @@ async function findExistingOAuthUser({ provider, providerId, email }) {
     oauthProviders: { $elemMatch: { provider, providerId } },
   });
 
-  if (!user && email) {
-    user = await User.findOne({ email: email.toLowerCase() });
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!user && normalized) {
+    // Any invited / added @bda.co.in member in Users can sign in with Google.
+    // Match primary email, company email, or additionalEmails.
+    user = await User.findOne({
+      $or: [
+        { email: normalized },
+        { companyEmail: normalized },
+        { 'additionalEmails.email': normalized },
+      ],
+    });
   }
   return user;
 }
@@ -771,9 +780,6 @@ async function handleOAuthCallback(req, res) {
       providerId: profile.providerId,
       email: profile.email,
     });
-    if (!existing && profile.email) {
-      existing = await User.findOne({ email: String(profile.email).toLowerCase() });
-    }
 
     async function finishWorkspaceImport(user) {
       if (!workspaceIntent) return redirectSuccess(res, issueToken(user));
@@ -785,33 +791,28 @@ async function handleOAuthCallback(req, res) {
       return redirectSuccess(res, issueToken(user), { next: '/account', section: 'connected-apps' });
     }
 
-    // Returning user → sign in directly
+    // Every existing member (@bda.co.in User row) may Google sign-in.
+    // First time: link oauthProviders. Later: sign in directly.
     if (existing) {
       const linkedByProvider = (existing.oauthProviders || []).some(
         (p) => p.provider === provider && p.providerId === profile.providerId,
       );
-      if (!linkedByProvider && !workspaceIntent) {
-        if (!profile.email) {
-          return fail('Google did not return an email. Cannot continue.');
-        }
-        const ticket = issueSignupTicket(profile);
-        return redirectSignup(res, ticket);
-      }
-      if (!linkedByProvider && workspaceIntent) {
+      if (!linkedByProvider) {
         await attachOAuthProvider(existing, {
           provider,
           providerId: profile.providerId,
-          emailVerified: true,
+          emailVerified: Boolean(profile.emailVerified),
           picture: profile.picture,
         });
-      }
-      if (profile.picture && !existing.avatarUrl) {
-        existing.avatarUrl = profile.picture;
-        await existing.save();
-      }
-      if (!existing.isVerified && profile.emailVerified) {
-        existing.isVerified = true;
-        await existing.save();
+      } else {
+        if (profile.picture && !existing.avatarUrl) {
+          existing.avatarUrl = profile.picture;
+          await existing.save();
+        }
+        if (!existing.isVerified && profile.emailVerified) {
+          existing.isVerified = true;
+          await existing.save();
+        }
       }
       return finishWorkspaceImport(existing);
     }
@@ -830,7 +831,7 @@ async function handleOAuthCallback(req, res) {
     if (userCount > 0) {
       return redirectError(
         res,
-        'BDA OS is invite-only. Ask your admin for an invite link, then sign in with email and password.',
+        `No BDA OS account for ${profile.email}. Ask your admin to invite this @${allowedEmailDomain()} address, then sign in with Google.`,
         provider,
       );
     }

@@ -38,9 +38,9 @@ const leavePolicySchema = new mongoose.Schema(
       type: [Number],
       default: [0, 6],
     },
-    // Optional list of company holidays (ISO date strings)
+    // Company holidays: ISO date strings or { date, name } objects
     holidays: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     // Auto-reset balances on the 1st of each year

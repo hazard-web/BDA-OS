@@ -17,10 +17,12 @@ import {
 } from './PulseMySpaceDashboard'
 import { formatElapsed } from '../utils/pulseCheckIn'
 import { hiResAvatarUrl } from '../utils/hiResAvatar'
+import { isPulseFileRow } from '../utils/pulseOpenFile'
 import { DRAG_THRESHOLD, SWAP_LOCK_PX, crossedSwapMid, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
+import PulseFileViewModal from './PulseFileViewModal'
 
-const STORAGE_KEY = 'pulseOverviewCards.v4'
-const LEGACY_STORAGE_KEYS = ['pulseOverviewCards.v2', 'pulseOverviewCards.v1']
+const STORAGE_KEY = 'pulseOverviewCards.v5'
+const LEGACY_STORAGE_KEYS = ['pulseOverviewCards.v4', 'pulseOverviewCards.v2', 'pulseOverviewCards.v1']
 
 const PINNED_TILES = [
   { id: 'today', label: 'Today' },
@@ -33,6 +35,7 @@ const CORE_TILES = [
 ]
 
 const DASH_TILES = [
+  { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No Files Found', showTotal: true, fileTabs: true, tone: 'slate' },
   { id: 'birthday', label: 'Birthday', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
   { id: 'workAnniv', label: 'Work anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
 ]
@@ -421,6 +424,8 @@ export default function PulseOverviewHome({
   const [intro, setIntro] = useState(true)
   const [toolsHost, setToolsHost] = useState(null)
   const [liveData, setLiveData] = useState(null)
+  const [fileTab, setFileTab] = useState('org')
+  const [viewFile, setViewFile] = useState(null)
   const cardRefs = useRef(new Map())
   const pinRef = useRef(null)
   const order = prefs.order
@@ -470,6 +475,10 @@ export default function PulseOverviewHome({
   }, [sample, liveData])
 
   const openDashRow = useCallback((item) => {
+    if (isPulseFileRow(item)) {
+      setViewFile(item)
+      return
+    }
     if (item?.to && typeof onOpen === 'function') {
       onOpen(item.to)
       return
@@ -666,6 +675,10 @@ export default function PulseOverviewHome({
           items={dashData[dash.dataKey] || []}
           empty={dash.empty}
           showAvatar={dash.showAvatar}
+          showTotal={dash.showTotal}
+          fileTabs={dash.fileTabs}
+          fileTab={dash.fileTabs ? fileTab : undefined}
+          onFileTabChange={dash.fileTabs ? setFileTab : undefined}
           scrollable
           tone={dash.tone}
           floating={floating}
@@ -774,6 +787,11 @@ export default function PulseOverviewHome({
             )
           : null}
       </div>
+      <PulseFileViewModal
+        open={Boolean(viewFile)}
+        file={viewFile}
+        onClose={() => setViewFile(null)}
+      />
     </div>
   )
 }

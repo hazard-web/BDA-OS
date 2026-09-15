@@ -4,7 +4,11 @@ const Staff = require('../models/Staff');
 
 const authCombined = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    // Header first; body token supports sendBeacon check-out on tab close (no custom headers).
+    const token =
+      req.header('Authorization')?.replace('Bearer ', '') ||
+      (req.body && (req.body.accessToken || req.body.token)) ||
+      '';
     if (!token) throw new Error('No token provided');
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');

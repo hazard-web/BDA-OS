@@ -1,20 +1,23 @@
 import { Card } from 'antd'
 import {
   AppstoreOutlined,
+  BankOutlined,
   CalendarOutlined,
   CarryOutOutlined,
   EnvironmentOutlined,
+  FolderOpenOutlined,
   MailOutlined,
   PhoneOutlined,
   RightOutlined,
+  RiseOutlined,
   RocketOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
 import PulseOnboarding from './PulseOnboarding'
 import PulseInviteAdmin from './PulseInviteAdmin'
+import PulseCompanyFiles from './PulseCompanyFiles'
 import PulseLiveModule from './PulseLiveWorkspace'
-import { openPulsePage } from '../utils/pulseOpenPage'
 // Company setup form — parked with Getting Started on `pulse/company-later-services`
 // import PulseCompanyInfoForm from './PulseCompanyInfoForm'
 // Later build — restore from branch `pulse/company-later-services`
@@ -45,9 +48,12 @@ export const ORG_TABS = [
 
 const SERVICES = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined, hint: 'Employees' },
-  { key: 'leave', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Apply and requests' },
+  { key: 'companyFiles', label: 'Company files', Icon: FolderOpenOutlined, hint: 'Upload and share' },
+  { key: 'leaveTeam', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Approvals and holidays' },
   { key: 'attendance', label: 'Attendance', Icon: CarryOutOutlined, hint: 'Org check-in' },
   { key: 'companyTime', label: 'Timesheet', Icon: ThunderboltOutlined, hint: 'Tasks and hours' },
+  { key: 'companyPerformance', label: 'Performance', Icon: RiseOutlined, hint: 'Scores and bonuses' },
+  { key: 'companyPayroll', label: 'Payroll', Icon: BankOutlined, hint: 'Payslips' },
   { key: 'apps', label: 'App access', Icon: AppstoreOutlined, hint: 'Assigned apps' },
 ]
 
@@ -55,7 +61,6 @@ const SERVICES = [
   Later modules — full grid is on branch `pulse/company-later-services`
   (PulseOrganization.jsx at that commit). Restore when we ship them.
 
-  { key: 'performance', label: 'Performance', Icon: RiseOutlined, color: '#21A05A' },
   { key: 'files', label: 'Files', Icon: FolderOpenOutlined, color: '#2B8AED' },
   { key: 'engagement', label: 'Employee Engagement', Icon: HeartOutlined, color: '#DB2777' },
   { key: 'letters', label: 'HR Letters', Icon: SolutionOutlined, color: '#E67E22' },
@@ -145,9 +150,7 @@ function OverviewPanel({ user, onOpenService }) {
   const openService = (key) => {
     if (typeof onOpenService === 'function') {
       onOpenService(key)
-      return
     }
-    openPulsePage(key)
   }
 
   return (
@@ -191,9 +194,9 @@ function PeoplePanel({ user }) {
 }
 
 /** Organization — org home aligned with Overview. */
-export default function PulseOrganization({ user, tab = 'overview', onSoon, liveProps }) {
+export default function PulseOrganization({ user, tab = 'overview', onSoon, liveProps, onOpenService }) {
   const openService = (key) => {
-    openPulsePage(key)
+    if (typeof onOpenService === 'function') onOpenService(key)
   }
 
   if (tab === 'overview') {
@@ -261,6 +264,41 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, live
         <OrgPeak />
         <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
           <PulseLiveModule kind="time" scope="org" {...liveProps} />
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'performance') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <PulseLiveModule kind="performance" scope="org" {...liveProps} />
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'files') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <div className="pulse-org-overview pulse-org-employee">
+            <PulseCompanyFiles />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'payroll') {
+    return (
+      <div className="pulse-strip-root">
+        <OrgPeak />
+        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
+          <PulseLiveModule kind="payroll" scope="org" {...liveProps} />
         </div>
       </div>
     )

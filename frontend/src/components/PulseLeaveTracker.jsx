@@ -17,7 +17,6 @@ import {
   Upload,
 } from 'antd'
 import {
-  AppstoreOutlined,
   ArrowLeftOutlined,
   CalendarOutlined,
   CloseOutlined,
@@ -32,7 +31,6 @@ import {
   PlusOutlined,
   RightOutlined,
   SearchOutlined,
-  UnorderedListOutlined,
   UpOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
@@ -712,6 +710,7 @@ function LeavePagination({ total, page, pageSize, onPage, onPageSize }) {
 
 export default function PulseLeaveTracker({
   sample = false,
+  isAdmin = false,
   casualBalance,
   mainTab = 'mydata',
   myTab = 'requests',
@@ -721,7 +720,12 @@ export default function PulseLeaveTracker({
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(!sample)
   const [submitting, setSubmitting] = useState(false)
+  const [respondingId, setRespondingId] = useState(null)
   const [requests, setRequests] = useState(sample ? SAMPLE_REQUESTS : [])
+  const [pendingLeaves, setPendingLeaves] = useState([])
+  const [teamOnLeave, setTeamOnLeave] = useState([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [holidaySaving, setHolidaySaving] = useState(false)
   const [casual, setCasual] = useState(
     sample ? SAMPLE_CASUAL : casualBalance || { used: 0, total: CASUAL_ANNUAL, remaining: CASUAL_ANNUAL },
   )
@@ -732,7 +736,7 @@ export default function PulseLeaveTracker({
   const [filterOpen, setFilterOpen] = useState(false)
   const [draftFilter, setDraftFilter] = useState(defaultFilter)
   const [appliedFilter, setAppliedFilter] = useState(defaultFilter)
-  const [holidayYear, setHolidayYear] = useState(2026)
+  const [holidayYear, setHolidayYear] = useState(() => dayjs().year())
   const [myHolidays, setMyHolidays] = useState([])
   const [galleryPick, setGalleryPick] = useState({})
   const [teamWeek, setTeamWeek] = useState(() => dayjs())
@@ -831,9 +835,116 @@ export default function PulseLeaveTracker({
     }
   }, [sample])
 
+  const teamRange = useMemo(() => {
+    const start = startOfWeek(teamWeek.toDate(), { weekStartsOn: 0 })
+    const end = endOfWeek(teamWeek.toDate(), { weekStartsOn: 0 })
+    return {
+      from: format(start, 'yyyy-MM-dd'),
+      to: format(end, 'yyyy-MM-dd'),
+    }
+  }, [teamWeek])
+
+  const loadTeam = useCallback(async () => {
+    if (sample) {
+      setPendingLeaves([])
+      setTeamOnLeave([
+        {
+          id: 's1',
+          type: 'Casual',
+          typeLabel: 'Casual leave',
+          startDate: '2026-09-16',
+          endDate: '2026-09-17',
+          status: 'Approved',
+          days: 2,
+          reason: 'Personal',
+          staff: { name: 'Shivam Bhardwaj', email: 'shivam@bda.co.in' },
+        },
+      ])
+      return
+    }
+    setTeamLoading(true)
+    try {
+      const res = await api.get('/pulse-checkin/leaves/team', {
+        params: { from: teamRange.from, to: teamRange.to },
+      })
+      setPendingLeaves(Array.isArray(res.data?.data?.pending) ? res.data.data.pending : [])
+      setTeamOnLeave(Array.isArray(res.data?.data?.onLeave) ? res.data.data.onLeave : [])
+    } catch {
+      setPendingLeaves([])
+      setTeamOnLeave([])
+    } finally {
+      setTeamLoading(false)
+    }
+  }, [sample, teamRange.from, teamRange.to])
+
+  const loadHolidays = useCallback(async () => {
+    if (sample) {
+      setMyHolidays(INDIA_HOLIDAYS_2026.filter((row) => row.date.startsWith(String(holidayYear))))
+      return
+    }
+    try {
+      const res = await api.get('/pulse-checkin/holidays', { params: { year: holidayYear } })
+      setMyHolidays(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setMyHolidays([])
+    }
+  }, [sample, holidayYear])
+
+  const persistHolidays = useCallback(async (nextRows) => {
+    if (sample) {
+      setMyHolidays(nextRows)
+      return true
+    }
+    setHolidaySaving(true)
+    try {
+      const res = await api.put('/pulse-checkin/holidays', {
+        year: holidayYear,
+        holidays: nextRows.map((row) => ({ date: row.date, name: row.name })),
+      })
+      setMyHolidays(Array.isArray(res.data?.data) ? res.data.data : nextRows)
+      return true
+    } catch (err) {
+      message.error({
+        content: err.response?.data?.message || err.message || 'Failed to save holidays',
+        className: 'pulse-message',
+      })
+      return false
+    } finally {
+      setHolidaySaving(false)
+    }
+  }, [sample, holidayYear, message])
+
+  const respondLeave = async (id, status) => {
+    if (sample) return
+    setRespondingId(id)
+    try {
+      await api.post(`/pulse-checkin/leaves/${id}/respond`, { status })
+      message.success({
+        content: status === 'Approved' ? 'Leave approved' : 'Leave rejected',
+        className: 'pulse-message',
+      })
+      await loadTeam()
+    } catch (err) {
+      message.error({
+        content: err.response?.data?.message || err.message || 'Failed to update leave',
+        className: 'pulse-message',
+      })
+    } finally {
+      setRespondingId(null)
+    }
+  }
+
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (mainTab === 'team') loadTeam()
+  }, [mainTab, loadTeam])
+
+  useEffect(() => {
+    if (mainTab === 'holidays') loadHolidays()
+  }, [mainTab, loadHolidays])
 
   useEffect(() => {
     if (!sample && casualBalance) setCasual(casualBalance)
@@ -872,10 +983,18 @@ export default function PulseLeaveTracker({
 
   const holidayYearLabel = `01-Jan-${holidayYear} - 31-Dec-${holidayYear}`
 
-  const galleryRows = useMemo(
-    () => INDIA_HOLIDAYS_2026.filter((row) => row.date.startsWith(String(holidayYear))),
-    [holidayYear],
-  )
+  const galleryRows = useMemo(() => {
+    const yearPrefix = String(holidayYear)
+    const fromIndia = INDIA_HOLIDAYS_2026.filter((row) => row.date.startsWith(yearPrefix))
+    if (fromIndia.length) return fromIndia
+    // Fallback named days for other years (Republic Day, Independence Day, etc.)
+    return [
+      { id: `${yearPrefix}-01-26`, name: 'Republic Day', date: `${yearPrefix}-01-26` },
+      { id: `${yearPrefix}-08-15`, name: 'Independence Day', date: `${yearPrefix}-08-15` },
+      { id: `${yearPrefix}-10-02`, name: 'Gandhi Jayanti', date: `${yearPrefix}-10-02` },
+      { id: `${yearPrefix}-12-25`, name: 'Christmas', date: `${yearPrefix}-12-25` },
+    ]
+  }, [holidayYear])
 
   const pagedRequests = useMemo(
     () => filteredRequests.slice((requestPage - 1) * requestPageSize, requestPage * requestPageSize),
@@ -961,19 +1080,95 @@ export default function PulseLeaveTracker({
     [],
   )
 
-  const holidayColumns = useMemo(
+  const pendingColumns = useMemo(
     () => [
-      { title: 'Holiday', dataIndex: 'name' },
       {
-        title: 'Date',
-        dataIndex: 'date',
-        width: 180,
-        render: (value) => formatHolidayDate(value),
+        title: 'Employee',
+        key: 'employee',
+        render: (_, row) => row.staff?.name || row.staff?.email || '—',
       },
       {
-        title: 'Type',
-        width: 120,
-        render: () => 'Full Day',
+        title: 'Leave type',
+        dataIndex: 'typeLabel',
+        width: 130,
+        render: (value, row) => <Tag>{value || row.type || 'Casual'}</Tag>,
+      },
+      {
+        title: 'From - To',
+        key: 'dates',
+        render: (_, row) => formatRangeLabel(row.startDate, row.endDate),
+      },
+      {
+        title: 'Days',
+        dataIndex: 'days',
+        width: 70,
+        align: 'center',
+      },
+      {
+        title: 'Reason',
+        dataIndex: 'reason',
+        ellipsis: true,
+      },
+      ...(isAdmin
+        ? [{
+            title: 'Action',
+            key: 'action',
+            width: 200,
+            render: (_, row) => (
+              <div className="pulse-leave-actions">
+                <Button
+                  type="primary"
+                  size="small"
+                  loading={respondingId === row.id}
+                  onClick={() => respondLeave(row.id, 'Approved')}
+                >
+                  Approve
+                </Button>
+                <Button
+                  size="small"
+                  danger
+                  loading={respondingId === row.id}
+                  onClick={() => respondLeave(row.id, 'Rejected')}
+                >
+                  Reject
+                </Button>
+              </div>
+            ),
+          }]
+        : []),
+    ],
+    [isAdmin, respondingId],
+  )
+
+  const onLeaveColumns = useMemo(
+    () => [
+      {
+        title: 'Employee',
+        key: 'employee',
+        render: (_, row) => row.staff?.name || row.staff?.email || '—',
+      },
+      {
+        title: 'Leave type',
+        dataIndex: 'typeLabel',
+        width: 130,
+        render: (value, row) => <Tag>{value || row.type || 'Casual'}</Tag>,
+      },
+      {
+        title: 'From - To',
+        key: 'dates',
+        render: (_, row) => formatRangeLabel(row.startDate, row.endDate),
+      },
+      {
+        title: 'Days',
+        dataIndex: 'days',
+        width: 70,
+        align: 'center',
+      },
+      {
+        title: 'Status',
+        dataIndex: 'status',
+        width: 110,
+        render: (value) => <Tag color={statusColor(value)}>{value}</Tag>,
       },
     ],
     [],
@@ -1323,21 +1518,61 @@ export default function PulseLeaveTracker({
     runImport()
   }
 
-  const addSelectedHolidays = () => {
+  const addSelectedHolidays = async () => {
     const picked = galleryRows.filter((row) => galleryPick[row.id])
     if (!picked.length) {
       message.info({ content: 'Select at least one holiday', className: 'pulse-message' })
       return
     }
-    setMyHolidays((prev) => {
-      const map = new Map(prev.map((row) => [row.id, row]))
-      picked.forEach((row) => map.set(row.id, row))
-      return [...map.values()].sort((a, b) => a.date.localeCompare(b.date))
+    const map = new Map(myHolidays.map((row) => [row.date || row.id, row]))
+    picked.forEach((row) => {
+      map.set(row.date, { id: row.date, date: row.date, name: row.name, classification: 'Holiday' })
     })
+    const next = [...map.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    const ok = await persistHolidays(next)
+    if (!ok) return
     setGalleryPick({})
     setGalleryOpen(false)
-    message.success({ content: 'Holidays added', className: 'pulse-message' })
+    message.success({ content: 'Holidays saved for the year', className: 'pulse-message' })
   }
+
+  const removeHoliday = async (date) => {
+    const next = myHolidays.filter((row) => row.date !== date)
+    const ok = await persistHolidays(next)
+    if (ok) message.success({ content: 'Holiday removed', className: 'pulse-message' })
+  }
+
+  const holidayColumns = useMemo(
+    () => [
+      { title: 'Holiday', dataIndex: 'name' },
+      {
+        title: 'Date',
+        dataIndex: 'date',
+        width: 180,
+        render: (value) => formatHolidayDate(value),
+      },
+      {
+        title: 'Type',
+        width: 120,
+        render: () => 'Full Day',
+      },
+      ...(isAdmin
+        ? [{
+            title: '',
+            key: 'actions',
+            width: 90,
+            render: (_, row) => (
+              <Button type="link" danger disabled={holidaySaving} onClick={() => removeHoliday(row.date)}>
+                Remove
+              </Button>
+            ),
+          }]
+        : []),
+    ],
+    // removeHoliday closes over latest holidays/year via persistHolidays
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isAdmin, holidaySaving, holidayYear, myHolidays],
+  )
 
   const verifyColumns = useMemo(
     () => [
@@ -1663,7 +1898,12 @@ export default function PulseLeaveTracker({
             aria-label="Previous week"
             onClick={() => setTeamWeek((value) => value.subtract(1, 'week'))}
           />
-          <Button type="text" icon={<CalendarOutlined />} aria-label="This week" />
+          <Button
+            type="text"
+            icon={<CalendarOutlined />}
+            aria-label="This week"
+            onClick={() => setTeamWeek(dayjs())}
+          />
           <Button
             type="text"
             icon={<RightOutlined />}
@@ -1681,13 +1921,45 @@ export default function PulseLeaveTracker({
           />
         </div>
       </div>
+
+      {isAdmin ? (
+        <LeaveCard>
+          <div className="pulse-leave-section-head">Pending approvals</div>
+          {pendingLeaves.length === 0 && !teamLoading ? (
+            <LeaveEmpty title="No pending leave requests" />
+          ) : (
+            <Table
+              size="middle"
+              rowKey="id"
+              loading={teamLoading}
+              pagination={false}
+              columns={pendingColumns}
+              dataSource={pendingLeaves}
+              className="pulse-leave-table"
+            />
+          )}
+        </LeaveCard>
+      ) : null}
+
       <LeaveCard>
-        <LeaveEmpty title="No team members on leave this week" />
+        <div className="pulse-leave-section-head">On leave this week</div>
+        {teamOnLeave.length === 0 && !teamLoading ? (
+          <LeaveEmpty title="No team members on leave this week" />
+        ) : (
+          <Table
+            size="middle"
+            rowKey="id"
+            loading={teamLoading}
+            pagination={false}
+            columns={onLeaveColumns}
+            dataSource={teamOnLeave}
+            className="pulse-leave-table"
+          />
+        )}
       </LeaveCard>
     </>
   )
 
-  // Holidays — parked on branch `pulse/company-later-services`. Restore the tab in PeopleHome.jsx to ship it.
   const renderHolidays = () => (
     <>
       <div className="pulse-leave-toolbar pulse-leave-toolbar-center">
@@ -1708,24 +1980,22 @@ export default function PulseLeaveTracker({
           <span>{holidayYearLabel}</span>
         </div>
         <div className="pulse-leave-toolbar-right">
-          <Button type="text" icon={<UnorderedListOutlined />} className="is-on" aria-label="List view" />
-          <Button type="text" icon={<AppstoreOutlined />} aria-label="Calendar view" />
-          <Select value="My Holidays" className="pulse-leave-select pulse-leave-select-sm" options={[{ value: 'My Holidays', label: 'My Holidays' }]} />
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'gallery', label: 'Holidays Gallery' },
-                { key: 'import', label: 'Import', disabled: true },
-              ],
-              onClick: ({ key }) => {
-                if (key === 'gallery') setGalleryOpen(true)
-              },
-            }}
-          >
-            <Button type="primary" className="pulse-leave-add-btn">
-              Add Holidays
-            </Button>
-          </Dropdown>
+          {isAdmin ? (
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'gallery', label: 'Holidays Gallery' },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'gallery') setGalleryOpen(true)
+                },
+              }}
+            >
+              <Button type="primary" className="pulse-leave-add-btn" loading={holidaySaving}>
+                Plan holidays
+              </Button>
+            </Dropdown>
+          ) : null}
           <Button
             icon={<FilterOutlined />}
             aria-label="Filter"
@@ -1757,11 +2027,15 @@ export default function PulseLeaveTracker({
         )}
       >
         {visibleHolidays.length === 0 ? (
-          <LeaveEmpty title="No holiday data to display currently" actionLabel="Add Holidays" onAction={() => setGalleryOpen(true)} />
+          <LeaveEmpty
+            title="No company holidays planned for this year"
+            actionLabel={isAdmin ? 'Plan holidays' : undefined}
+            onAction={isAdmin ? () => setGalleryOpen(true) : undefined}
+          />
         ) : (
           <Table
             size="middle"
-            rowKey="id"
+            rowKey={(row) => row.id || row.date}
             pagination={false}
             columns={holidayColumns}
             dataSource={pagedHolidays}
