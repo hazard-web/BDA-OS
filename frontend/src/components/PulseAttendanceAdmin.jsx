@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { App, Button, DatePicker, Empty, Modal, Select, Table, Tag } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { hoursLabel } from '../utils/pulseCalendar'
+import { hiResAvatarUrl } from '../utils/hiResAvatar'
 import PulsePlaceLabel from './PulsePlaceLabel'
 
 const DATE_FILTERS = [
@@ -82,6 +83,62 @@ function eventTag(type) {
   }
 }
 
+/** Account HTTPS photo, or onboarding/account data photo via authenticated blob. */
+function AttendanceAvatar({ row }) {
+  const initial = personInitial(row)
+  const httpsSrc = hiResAvatarUrl(row?.avatarUrl, 128)
+  const proxyId = String(row?.avatarUserId || '')
+  const [src, setSrc] = useState(httpsSrc || '')
+  const [broken, setBroken] = useState(false)
+
+  useEffect(() => {
+    setBroken(false)
+    if (httpsSrc) {
+      setSrc(httpsSrc)
+      return undefined
+    }
+    if (!proxyId) {
+      setSrc('')
+      return undefined
+    }
+    let alive = true
+    let objectUrl = ''
+    api
+      .get(`/pulse-checkin/admin/avatar/${proxyId}`, { responseType: 'blob', timeout: 20000 })
+      .then((res) => {
+        if (!alive) return
+        const type = String(res.data?.type || '')
+        if (type && !type.startsWith('image/')) {
+          setSrc('')
+          return
+        }
+        objectUrl = URL.createObjectURL(res.data)
+        setSrc(objectUrl)
+      })
+      .catch(() => {
+        if (alive) setSrc('')
+      })
+    return () => {
+      alive = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [httpsSrc, proxyId])
+
+  if (!src || broken) {
+    return <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{initial}</span>
+  }
+
+  return (
+    <img
+      className="pulse-ts-person-avatar"
+      src={src}
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+    />
+  )
+}
+
 export default function PulseAttendanceAdmin() {
   const { message } = App.useApp()
   const [days, setDays] = useState([])
@@ -151,7 +208,6 @@ export default function PulseAttendanceAdmin() {
     }
   }, [date, message])
 
-  // Live status: poll while viewing today so Active / Not active updates without refresh.
   useEffect(() => {
     if (!isToday) return undefined
     const id = window.setInterval(() => {
@@ -188,18 +244,56 @@ export default function PulseAttendanceAdmin() {
     [selected],
   )
   const selectedCheckOut = selected ? lastCheckOutAt(selected) : null
+  const atToday = dayjs(viewed).isSame(dayjs(), 'day')
+
+  const shiftDay = (delta) => {
+    const base = period === 'custom' && customDate ? customDate : dayjs()
+    const next = base.add(delta, 'day').startOf('day')
+    if (next.isAfter(dayjs(), 'day')) return
+    if (next.isSame(dayjs(), 'day')) {
+      setPeriod('today')
+      setCustomDate(dayjs())
+      return
+    }
+    setPeriod('custom')
+    setCustomDate(next)
+  }
 
   return (
     <div className="pulse-ts-admin pulse-org-att">
       <header className="pulse-ts-admin-head">
-        <div>
-          <p className="pov-kicker">{period === 'custom' ? 'Custom' : 'Today'}</p>
-          <h2>{format(viewed, 'EEEE d MMM')}</h2>
+        <div className="pulse-att-day-heading">
+          <p className="pov-kicker">{atToday ? 'Today' : 'Custom'}</p>
+          <div className="pulse-att-day-row">
+            <div className="pulse-att-day-nav" role="group" aria-label="Change day">
+              <button
+                type="button"
+                className="pulse-att-day-step"
+                onClick={() => shiftDay(-1)}
+                aria-label="Previous day"
+              >
+                <LeftOutlined />
+              </button>
+              <button
+                type="button"
+                className="pulse-att-day-step"
+                onClick={() => shiftDay(1)}
+                disabled={atToday}
+                aria-label="Next day"
+              >
+                <RightOutlined />
+              </button>
+            </div>
+            <h2>{format(viewed, 'EEEE d MMM')}</h2>
+          </div>
         </div>
         <div className="pulse-ts-admin-filter">
           <Select
             value={period}
-            onChange={setPeriod}
+            onChange={(next) => {
+              setPeriod(next)
+              if (next === 'today') setCustomDate(dayjs())
+            }}
             options={DATE_FILTERS}
             className="pulse-ts-admin-select"
             classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
@@ -214,7 +308,13 @@ export default function PulseAttendanceAdmin() {
               classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
               disabledDate={(value) => value && value.isAfter(dayjs(), 'day')}
               onChange={(next) => {
-                if (next) setCustomDate(next)
+                if (!next) return
+                if (next.isSame(dayjs(), 'day')) {
+                  setPeriod('today')
+                  setCustomDate(dayjs())
+                  return
+                }
+                setCustomDate(next)
               }}
             />
           ) : null}
@@ -252,7 +352,7 @@ export default function PulseAttendanceAdmin() {
               onClick={() => void openDetail(row)}
             >
               <header className="pulse-ts-person-head">
-                <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{personInitial(row)}</span>
+                <AttendanceAvatar row={row} />
                 <div>
                   <h3>{personName(row)}</h3>
                   <p>{row.email || 'No email'}</p>

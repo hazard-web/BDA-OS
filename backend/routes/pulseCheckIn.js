@@ -5,6 +5,7 @@ const { auth } = require('./auth');
 const PulseWorkDay = require('../models/PulseWorkDay');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
+const Candidate = require('../models/Candidate');
 const LeavePolicy = require('../models/LeavePolicy');
 const LeaveRequest = require('../models/LeaveRequest');
 const Announcement = require('../models/Announcement');
@@ -184,12 +185,64 @@ function serializeDay(doc) {
   };
 }
 
-/** HTTP(S) avatars only — data: URLs from Candidate backfill blow up Attendance payloads. */
+/** HTTP(S) avatars only — never embed data: URLs in list JSON (they stall Attendance). */
 function safeListAvatarUrl(value) {
   const url = String(value || '').trim();
   if (!url) return '';
   if (/^https?:\/\//i.test(url) && url.length <= 2048) return url;
   return '';
+}
+
+function hasEmbeddedAvatar(value) {
+  const raw = String(value || '').trim();
+  return raw.startsWith('data:image/') || (/^[A-Za-z0-9+/=\s]+$/.test(raw) && raw.length > 200);
+}
+
+function parseDataUrlImage(raw, fallbackMime = 'image/jpeg') {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  const match = value.match(/^data:([^;]+);base64,(.+)$/i);
+  if (match) {
+    try {
+      return { mime: match[1] || fallbackMime, buffer: Buffer.from(match[2], 'base64') };
+    } catch {
+      return null;
+    }
+  }
+  if (/^[A-Za-z0-9+/=\s]+$/.test(value) && value.length > 200) {
+    try {
+      return { mime: fallbackMime, buffer: Buffer.from(value.replace(/\s/g, ''), 'base64') };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Batch: emails that still have an onboarding Candidate photo (metadata only — no photo.data). */
+async function emailsWithOnboardingPhoto(organizationId, emails) {
+  const list = [...new Set((emails || []).map((e) => String(e || '').toLowerCase()).filter(Boolean))];
+  if (!list.length) return new Set();
+  const rows = await Candidate.find({
+    organizationId,
+    $and: [
+      { $or: [{ email: { $in: list } }, { officialEmail: { $in: list } }] },
+      {
+        $or: [
+          { 'photo.size': { $gt: 0 } },
+          { 'photo.mime': { $regex: /^image\//i } },
+        ],
+      },
+    ],
+  })
+    .select('email officialEmail')
+    .lean();
+  const out = new Set();
+  rows.forEach((row) => {
+    if (row.email) out.add(String(row.email).toLowerCase());
+    if (row.officialEmail) out.add(String(row.officialEmail).toLowerCase());
+  });
+  return out;
 }
 
 function slimLocation(loc) {
@@ -397,20 +450,29 @@ router.get('/admin/days', auth, async (req, res) => {
     const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
       ? new mongoose.Types.ObjectId(organizationId)
       : organizationId;
-    // Skip avatarUrl — Candidate data: URLs can be multi‑MB and stall Attendance cards.
     const members = await User.find({
       $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
     })
-      .select('_id firstName lastName displayName email')
+      .select('_id firstName lastName displayName email avatarUrl')
       .lean();
     const userIds = members.map((m) => m._id);
     if (!userIds.length) {
       return res.json({ success: true, data: [] });
     }
 
+    const needOnboarding = members
+      .filter((m) => !safeListAvatarUrl(m.avatarUrl) && !hasEmbeddedAvatar(m.avatarUrl))
+      .map((m) => m.email);
+    const onboardingEmails = await emailsWithOnboardingPhoto(orgObjectId, needOnboarding);
+
     const personById = new Map(
       members.map((person) => {
         const parts = [person.firstName, person.lastName].filter(Boolean);
+        const email = String(person.email || '').toLowerCase();
+        const httpsAvatar = safeListAvatarUrl(person.avatarUrl);
+        const useProxy =
+          !httpsAvatar
+          && (hasEmbeddedAvatar(person.avatarUrl) || onboardingEmails.has(email));
         return [
           String(person._id),
           {
@@ -418,12 +480,15 @@ router.get('/admin/days', auth, async (req, res) => {
               ? parts.join(' ')
               : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
             email: person.email || '',
-            avatarUrl: '',
+            // HTTPS account photo inline; data:/onboarding photos via /admin/avatar/:id (keeps list small).
+            avatarUrl: httpsAvatar,
+            avatarUserId: useProxy ? String(person._id) : '',
           },
         ];
       }),
     );
-    const personOf = (id) => personById.get(String(id)) || { name: 'Employee', email: '', avatarUrl: '' };
+    const personOf = (id) =>
+      personById.get(String(id)) || { name: 'Employee', email: '', avatarUrl: '', avatarUserId: '' };
 
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 60));
     const dayKey = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
@@ -476,6 +541,66 @@ router.get('/admin/days', auth, async (req, res) => {
   }
 });
 
+// GET /api/pulse-checkin/admin/avatar/:userId — BDA account photo, else onboarding photo
+router.get('/admin/avatar/:userId', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    const userId = String(req.params.userId || '').trim();
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user' });
+    }
+
+    const organizationId = orgIdOf(req.user);
+    const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
+      ? new mongoose.Types.ObjectId(organizationId)
+      : organizationId;
+    const member = await User.findOne({
+      _id: userId,
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+    })
+      .select('_id email avatarUrl')
+      .lean();
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const httpsAvatar = safeListAvatarUrl(member.avatarUrl);
+    if (httpsAvatar) {
+      return res.redirect(302, httpsAvatar);
+    }
+
+    const fromAccount = parseDataUrlImage(member.avatarUrl);
+    if (fromAccount?.buffer?.length) {
+      res.set('Cache-Control', 'private, max-age=300');
+      res.type(fromAccount.mime || 'image/jpeg');
+      return res.send(fromAccount.buffer);
+    }
+
+    const email = String(member.email || '').toLowerCase();
+    if (email) {
+      const candidate = await Candidate.findOne({
+        organizationId: orgObjectId,
+        $or: [{ email }, { officialEmail: email }],
+        'photo.data': { $exists: true, $nin: [null, ''] },
+      })
+        .select('photo')
+        .lean();
+      const fromOnboarding = parseDataUrlImage(candidate?.photo?.data, candidate?.photo?.mime || 'image/jpeg');
+      if (fromOnboarding?.buffer?.length) {
+        res.set('Cache-Control', 'private, max-age=300');
+        res.type(fromOnboarding.mime || 'image/jpeg');
+        return res.send(fromOnboarding.buffer);
+      }
+    }
+
+    return res.status(404).json({ success: false, message: 'No profile photo' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load avatar' });
+  }
+});
+
 // GET /api/pulse-checkin/admin/days/detail — full event log for one employee (modal)
 router.get('/admin/days/detail', auth, async (req, res) => {
   try {
@@ -496,7 +621,7 @@ router.get('/admin/days/detail', auth, async (req, res) => {
       _id: userId,
       $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
     })
-      .select('_id firstName lastName displayName email')
+      .select('_id firstName lastName displayName email avatarUrl')
       .lean();
     if (!member) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
@@ -511,6 +636,19 @@ router.get('/admin/days/detail', auth, async (req, res) => {
       ? parts.join(' ')
       : (member.displayName || String(member.email || '').split('@')[0] || 'Employee');
 
+    const httpsAvatar = safeListAvatarUrl(member.avatarUrl);
+    let avatarUserId = '';
+    if (!httpsAvatar) {
+      if (hasEmbeddedAvatar(member.avatarUrl)) {
+        avatarUserId = String(member._id);
+      } else {
+        const onboarding = await emailsWithOnboardingPhoto(orgObjectId, [member.email]);
+        if (onboarding.has(String(member.email || '').toLowerCase())) {
+          avatarUserId = String(member._id);
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -518,7 +656,8 @@ router.get('/admin/days/detail', auth, async (req, res) => {
         user: member._id,
         name,
         email: member.email || '',
-        avatarUrl: '',
+        avatarUrl: httpsAvatar,
+        avatarUserId,
       },
     });
   } catch (err) {
@@ -1140,25 +1279,6 @@ router.get('/overview', auth, async (req, res) => {
   }
 });
 
-const NAMED_HOLIDAYS = {
-  '2026-01-01': { name: "New Year's Day", kind: 'restricted' },
-  '2026-01-14': { name: 'Pongal', kind: 'restricted' },
-  '2026-01-26': { name: 'Republic Day', kind: 'company' },
-  '2026-03-04': { name: 'Holi', kind: 'restricted' },
-  '2026-03-21': { name: 'Eid al-Fitr', kind: 'restricted' },
-  '2026-04-03': { name: 'Good Friday', kind: 'restricted' },
-  '2026-08-15': { name: 'Independence Day', kind: 'company' },
-  '2026-08-26': { name: 'Onam', kind: 'restricted' },
-  '2026-09-04': { name: 'Janmashtami', kind: 'restricted' },
-  '2026-09-14': { name: 'Ganesh Chaturthi', kind: 'restricted' },
-  '2026-10-02': { name: 'Gandhi Jayanti', kind: 'company' },
-  '2026-10-20': { name: 'Dussehra', kind: 'restricted' },
-  '2026-10-29': { name: 'Diwali', kind: 'restricted' },
-  '2026-12-25': { name: 'Christmas', kind: 'restricted' },
-  '2027-01-26': { name: 'Republic Day', kind: 'company' },
-  '2027-03-03': { name: 'Holi', kind: 'restricted' },
-};
-
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEK_HOUR_TARGET = 40;
 
@@ -1186,14 +1306,14 @@ function policyHolidayEntries(policyHolidays) {
       if (!date) return;
       byDate.set(date, {
         date,
-        name: NAMED_HOLIDAYS[date]?.name || 'Holiday',
+        name: 'Holiday',
       });
       return;
     }
     if (entry && typeof entry === 'object') {
       const date = dayKeyOf(entry.date || entry.day);
       if (!date) return;
-      const name = String(entry.name || '').trim() || NAMED_HOLIDAYS[date]?.name || 'Holiday';
+      const name = String(entry.name || '').trim() || 'Holiday';
       byDate.set(date, { date, name });
     }
   });
@@ -1202,16 +1322,9 @@ function policyHolidayEntries(policyHolidays) {
 
 function collectHolidays(from, to, policyHolidays) {
   const holidays = [];
-  const seen = new Set();
   policyHolidayEntries(policyHolidays).forEach(({ date, name }) => {
     if (date < from || date > to) return;
     holidays.push({ date, name, kind: 'company' });
-    seen.add(date);
-  });
-  Object.entries(NAMED_HOLIDAYS).forEach(([date, meta]) => {
-    if (date < from || date > to || seen.has(date)) return;
-    holidays.push({ date, name: meta.name, kind: meta.kind });
-    seen.add(date);
   });
   holidays.sort((a, b) => a.date.localeCompare(b.date));
   return holidays;
@@ -2158,7 +2271,7 @@ router.put('/holidays', auth, async (req, res) => {
     incoming.forEach((row) => {
       const date = dayKeyOf(row?.date || row);
       if (!date || date < from || date > to || seen.has(date)) return;
-      const name = String(row?.name || '').trim() || NAMED_HOLIDAYS[date]?.name || 'Holiday';
+      const name = String(row?.name || '').trim() || 'Holiday';
       yearHolidays.push({ date, name });
       seen.add(date);
     });

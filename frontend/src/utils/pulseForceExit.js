@@ -139,7 +139,40 @@ function postCheckOutKeepalive({ token, email, activeMs }) {
 }
 
 /**
- * Check out (keepalive) + clear session. Safe during sleep/lock or after tab-close boot.
+ * Check out (keepalive) only — keeps the session signed in.
+ * Used for sleep / screen-lock so people are not bounced to login after a break.
+ * @returns {boolean} true if a check-out was attempted
+ */
+export function forcePulseCheckOutOnly({ email: emailHint } = {}) {
+  if (typeof window === 'undefined') return false
+
+  const token = localStorage.getItem('token')
+  if (!token) return false
+
+  const email =
+    String(emailHint || '').toLowerCase()
+    || emailFromToken(token)
+    || readCheckInActiveEmail()
+    || null
+
+  const wasCheckedIn = Boolean(email && readCheckInAt(email))
+  if (!wasCheckedIn || !email) return false
+
+  const activeMs = Math.max(0, getElapsedSeconds(email) * 1000)
+  postCheckOutKeepalive({ token, email, activeMs })
+
+  try {
+    endCheckInOnLogout(email)
+    closeCheckInPip()
+  } catch {
+    /* ignore */
+  }
+
+  return true
+}
+
+/**
+ * Check out (keepalive) + clear session. Safe during tab-close boot.
  * @returns {boolean} true if exit ran
  */
 export function forcePulseExit({ reason = 'exit', email: emailHint } = {}) {

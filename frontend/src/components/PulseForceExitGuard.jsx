@@ -5,6 +5,7 @@ import { isPulseAuxiliaryTab } from '../utils/pulseOpenPage'
 import {
   cancelPulseUnloadPending,
   consumePulseUnloadExit,
+  forcePulseCheckOutOnly,
   forcePulseExit,
   installPulseUnloadWatch,
   markPulseUnloadPending,
@@ -13,7 +14,7 @@ import {
 
 /**
  * Tab close → check out + sign out on the *next* visit (reload must stay signed in).
- * System sleep / screen lock → check out + sign out while the page is still open.
+ * System sleep / screen lock → check out only (session stays signed in).
  */
 export default function PulseForceExitGuard() {
   const { user, logout, loading } = useAuth()
@@ -50,18 +51,10 @@ export default function PulseForceExitGuard() {
 
     cancelPulseUnloadPending()
 
-    const exitWhileAlive = (reason) => {
+    const checkOutOnly = () => {
       if (liveExitRef.current) return
       liveExitRef.current = true
-      const ran = forcePulseExit({ reason, email })
-      if (ran) {
-        try {
-          logout()
-        } catch {
-          /* ignore */
-        }
-        navigate('/login', { replace: true })
-      }
+      forcePulseCheckOutOnly({ email })
       window.setTimeout(() => {
         liveExitRef.current = false
       }, 2000)
@@ -84,10 +77,11 @@ export default function PulseForceExitGuard() {
       if (!hiddenAt) return
       const gap = Date.now() - hiddenAt
       hiddenAt = 0
-      if (gap >= PULSE_SLEEP_EXIT_MS) exitWhileAlive('sleep')
+      // Away / sleep long enough → stop the timer only (do not sign out)
+      if (gap >= PULSE_SLEEP_EXIT_MS) checkOutOnly()
     }
 
-    const onFreeze = () => exitWhileAlive('sleep')
+    const onFreeze = () => checkOutOnly()
 
     let idleAbort
     const startIdle = async () => {
@@ -99,7 +93,7 @@ export default function PulseForceExitGuard() {
         idleAbort = new AbortController()
         const detector = new window.IdleDetector()
         detector.addEventListener('change', () => {
-          if (detector.screenState === 'locked') exitWhileAlive('screen-lock')
+          if (detector.screenState === 'locked') checkOutOnly()
         })
         await detector.start({ threshold: 60_000, signal: idleAbort.signal })
       } catch {
@@ -120,7 +114,7 @@ export default function PulseForceExitGuard() {
       document.removeEventListener('visibilitychange', onVisibility)
       document.removeEventListener('freeze', onFreeze)
     }
-  }, [email, logout, navigate, pathname])
+  }, [email, pathname])
 
   return null
 }
