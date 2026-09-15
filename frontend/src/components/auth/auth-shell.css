@@ -13,7 +13,7 @@ html:has(.auth-page) {
 html:has(.auth-page),
 body:has(.auth-page),
 #root:has(.auth-page) {
-  background-color: #4e7db8 !important;
+  background-color: #fff !important;
 }
 
 .auth-page {
@@ -49,27 +49,7 @@ body:has(.auth-page),
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
-  background-color: #4e7db8;
-}
-
-.auth-bg-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 68%;
-  transform-origin: center 70%;
-  animation: auth-peak-drift 56s ease-in-out infinite;
-}
-
-.auth-bg-shade {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(247, 250, 255, 0.32) 0%, rgba(247, 250, 255, 0.08) 34%, transparent 58%),
-    linear-gradient(180deg, transparent 62%, rgba(28, 22, 16, 0.22) 100%);
+  background: #fff url('/auth-bg.svg') center / cover no-repeat;
 }
 
 .auth-board {
@@ -723,8 +703,7 @@ form > .auth-input {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgba(255, 252, 247, 0.92);
-  text-shadow: 0 1px 10px rgba(20, 16, 12, 0.45);
+  color: #6b7280;
   pointer-events: none;
 }
 
@@ -757,7 +736,7 @@ form > .auth-input {
   z-index: 1;
   background:
     linear-gradient(180deg, rgba(247, 250, 255, 0.22) 0%, rgba(247, 250, 255, 0.04) 28%, transparent 48%),
-    linear-gradient(180deg, transparent 46%, rgba(28, 22, 16, 0.42) 100%);
+    linear-gradient(180deg, transparent 62%, rgba(28, 22, 16, 0.22) 100%);
 }
 
 .auth-promo-sheen {
@@ -1077,17 +1056,12 @@ form > .auth-input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-bg-photo,
   .auth-promo-photo,
   .auth-promo-sheen,
   .auth-promo-stars,
   .auth-promo .ms-cloud,
   .auth-promo .ms-sky-sun,
-  .auth-promo .ms-sky-moon,
-  .auth-promo-when,
-  .auth-promo-copy,
-  .auth-promo-rule,
-  .auth-promo-beat.is-live i {
+  .auth-promo .ms-sky-moon {
     animation: none;
   }
 
@@ -1097,13 +1071,6 @@ form > .auth-input {
 
   .auth-promo .ms-cloud {
     transform: translateX(40%);
-  }
-
-  .auth-promo-copy,
-  .auth-promo-when,
-  .auth-promo-rule {
-    opacity: 1;
-    transform: none;
   }
 }
 
