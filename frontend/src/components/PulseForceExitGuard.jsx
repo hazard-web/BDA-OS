@@ -9,12 +9,12 @@ import {
   forcePulseExit,
   installPulseUnloadWatch,
   markPulseUnloadPending,
-  PULSE_SLEEP_EXIT_MS,
 } from '../utils/pulseForceExit'
 
 /**
  * Tab close → check out + sign out on the *next* visit (reload must stay signed in).
  * System sleep / screen lock → check out only (session stays signed in).
+ * Other tab / minimize → stay checked in.
  */
 export default function PulseForceExitGuard() {
   const { user, logout, loading } = useAuth()
@@ -67,18 +67,9 @@ export default function PulseForceExitGuard() {
       markPulseUnloadPending()
     }
 
-    let hiddenAt = 0
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        hiddenAt = Date.now()
-        return
-      }
-      cancelPulseUnloadPending()
-      if (!hiddenAt) return
-      const gap = Date.now() - hiddenAt
-      hiddenAt = 0
-      // Away / sleep long enough → stop the timer only (do not sign out)
-      if (gap >= PULSE_SLEEP_EXIT_MS) checkOutOnly()
+      // Other tab / minimize: stay checked in. Only clear unload pending on return.
+      if (document.visibilityState === 'visible') cancelPulseUnloadPending()
     }
 
     const onFreeze = () => checkOutOnly()
