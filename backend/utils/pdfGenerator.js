@@ -4,12 +4,12 @@ const fs = require('fs');
 
 // ─── Color Palette (matches reference image exactly) ──────────────────────────
 const C = {
-  green:       '#58833b',   // BDA Forest Green - net salary bar, table headers
+  green:       '#58833b',   // BDA Forest Green — net salary bar, table headers
   greenDark:   '#4f5626',   // slightly darker green
   greenMid:    '#58833b',   // mid green
   greenAccent: '#7d8538',   // lighter green accent
-  greenLight:  '#e5ebdd',   // sage - employee section bg
-  greenPale:   '#eef0e8',   // pale sage - employee details bg
+  greenLight:  '#e5ebdd',   // sage — employee section bg
+  greenPale:   '#eef0e8',   // pale sage — employee details bg
   rowAlt:      '#f3f5ef',   // alternating row color
   white:       '#ffffff',
   border:      '#d4d9c8',   // thin green-grey border
@@ -61,7 +61,7 @@ function numberToWords(num) {
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return '-';
+  if (!dateStr) return '—';
   try {
     const d = new Date(dateStr);
     if (isNaN(d)) return dateStr;
@@ -115,9 +115,9 @@ function drawBdaLogo(doc, x, y, size) {
 
 function drawLocationPin(doc, x, y, size) {
   const s = size;
-  // Pin teardrop - circle top
+  // Pin teardrop — circle top
   doc.circle(x, y - s * 0.15, s * 0.35).fill(C.green);
-  // Tail of pin (triangle) - use path with absolute coords
+  // Tail of pin (triangle) — use path with absolute coords
   doc.moveTo(x - s * 0.22, y - s * 0.0)
      .lineTo(x + s * 0.22, y - s * 0.0)
      .lineTo(x, y + s * 0.35)
@@ -234,11 +234,11 @@ function drawPayslip(doc, payslip) {
     doc.font(fR).fontSize(7).fillColor(C.textMuted)
        .text(String(label), lx, y, { width: labelWidth });
     doc.font(fB).fontSize(7.5).fillColor(C.textDark)
-       .text(String(value || '-'), vx, y, { width: maxVw });
+       .text(String(value || '—'), vx, y, { width: maxVw });
   };
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 1: HEADER - Logo + Company Name + CIN/GST + Address + Contact
+  // SECTION 1: HEADER — Logo + Company Name + CIN/GST + Address + Contact
   // ══════════════════════════════════════════════════════════════════════════════
   const headerTop = 10;
 
@@ -261,11 +261,11 @@ function drawPayslip(doc, payslip) {
     drawBdaLogo(doc, logoX, logoY, logoSz);
   }
 
-  // Company name and info - right of logo, taking most of the width
+  // Company name and info — right of logo, taking most of the width
   const compX = logoX + logoSz + 14;
   const compW = CW * 0.65;
 
-  // Company name - large bold dark green
+  // Company name — large bold dark green
   doc.font(fB).fontSize(12).fillColor(C.green)
      .text(payslip.companyName || 'BDA Technologies Private Limited', compX, logoY + 3, { width: compW });
 
@@ -308,7 +308,7 @@ function drawPayslip(doc, payslip) {
        .text(companyWebsite, ctX + 9, ctY, { width: ctW - 9 });
   }
 
-  // Thin grey separator under header - positioned below the tallest element
+  // Thin grey separator under header — positioned below the tallest element
   let y = logoY + logoSz + 8;
   hr(y, C.border, 0.5);
 
@@ -320,7 +320,7 @@ function drawPayslip(doc, payslip) {
      .text('Pay Date: ', M, y, { continued: true })
      .font(fB).fillColor(C.textDark).text(formatDate(payslip.payDate));
 
-  // Right side: "Payslip for the month of" + month/year - measure the prefix and right-align
+  // Right side: "Payslip for the month of" + month/year — measure the prefix and right-align
   const rightLabel = 'Payslip for the month of ';
   doc.font(fR).fontSize(8.5);
   const labelW = doc.widthOfString(rightLabel);
@@ -375,10 +375,10 @@ function drawPayslip(doc, payslip) {
 
   // Right column
   const col2Rows = [
-    ['PF Number', payslip.pfNumber || '-'],
-    ['PAN Number', payslip.panNumber || '-'],
-    ['Bank Account', payslip.bankAccount ? `**** ${String(payslip.bankAccount).slice(-4)}` : '-'],
-    ['Bank Name', payslip.bankName || '-'],
+    ['PF Number', payslip.pfNumber || '—'],
+    ['PAN Number', payslip.panNumber || '—'],
+    ['Bank Account', payslip.bankAccount ? `**** ${String(payslip.bankAccount).slice(-4)}` : '—'],
+    ['Bank Name', payslip.bankName || '—'],
   ];
 
   empInnerY = y + 10;
@@ -473,7 +473,7 @@ function drawPayslip(doc, payslip) {
   // Ensure at least 5 rows for clean layout
   const maxRows = Math.max(earningsRows.length, deductionRows.length, 5);
 
-  // Table header - dark green background, white text
+  // Table header — dark green background, white text
   doc.rect(tL, y, tW, 18).fill(C.green);
   doc.rect(tR, y, tW, 18).fill(C.green);
   doc.font(fB).fontSize(7).fillColor(C.white)
@@ -484,7 +484,7 @@ function drawPayslip(doc, payslip) {
 
   y += 18;
 
-  // Table rows - alternating white / light grey-green
+  // Table rows — alternating white / light grey-green
   for (let i = 0; i < maxRows; i++) {
     const bg = i % 2 === 0 ? C.white : C.rowAlt;
     doc.rect(tL, y, tW, ROW_H).fill(bg);
@@ -512,7 +512,7 @@ function drawPayslip(doc, payslip) {
     y += ROW_H;
   }
 
-  // Totals footer row - slightly darker grey-green background
+  // Totals footer row — slightly darker grey-green background
   doc.rect(tL, y, tW, 18).fill(C.totalRow);
   doc.rect(tR, y, tW, 18).fill(C.totalRow);
   doc.moveTo(tL, y + 18).lineTo(tL + tW, y + 18).strokeColor(C.border).lineWidth(0.5).stroke();
@@ -598,11 +598,10 @@ function generatePayslipPDF(payslip, res) {
   try {
     drawPayslip(doc, payslip);
   } catch (err) {
-    console.error('CRITICAL: PDF drawing error:', err);
     if (!res.headersSent) {
       res.status(500).json({ error: 'PDF generation failed', details: err.message });
     } else {
-      doc.end();
+      try { doc.end(); } catch { /* ignore */ }
     }
   }
 }

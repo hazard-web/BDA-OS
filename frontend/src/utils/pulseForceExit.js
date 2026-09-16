@@ -9,9 +9,6 @@ import { broadcastPulseLogout } from './pulseAuthSync'
 import { closeCheckInPip } from './pulseCheckInPip'
 import { peekPulseLocation } from './pulseLocation'
 
-/** Hidden this long without freeze/IdleDetector → treat as sleep and force exit. */
-export const PULSE_SLEEP_EXIT_MS = 180_000
-
 /** Set on pagehide; cleared if the same tab comes back (reload). */
 const EXIT_FLAG = 'pulsePendingForceExit'
 /** Survives reload in the same tab; cleared when the tab is closed. */
