@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import gsap from 'gsap'
 import { periodForHour } from './PulseGreetingBanner'
 import { markWelcomeCurtainSeen, pickWelcomeLine } from '../utils/pulseWelcomeCurtain'
 import '../pages/pulse-welcome-curtain.css'
-
-const HOLD_MS = 8000
-const PEEK_MS = 560
-const PULL_MS = 2000
 
 function firstName(name) {
   const value = String(name || '').trim()
@@ -51,12 +48,14 @@ function WelcomeKid({ grabbing = false }) {
   )
 }
 
-/** Welcome, then kid pulls one velvet sheet from left to right. */
+/** Welcome curtain — GSAP timeline for hold → peek → left-to-right roll. */
 export default function PulseWelcomeCurtain({ name, email, hour = new Date().getHours(), onDone }) {
-  const [phase, setPhase] = useState('hold')
+  const rootRef = useRef(null)
+  const tlRef = useRef(null)
   const finished = useRef(false)
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
+
   const period = periodForHour(hour)
   const line = useMemo(
     () => pickWelcomeLine(email, period, new Date().getDay()),
@@ -71,75 +70,220 @@ export default function PulseWelcomeCurtain({ name, email, hour = new Date().get
     onDoneRef.current?.()
   }
 
-  const beginOpen = () => {
-    if (finished.current) return
-    setPhase((prev) => {
-      if (prev === 'hold') return 'peek'
-      if (prev === 'peek') return 'pull'
-      return prev
-    })
-    if (phase === 'pull') finish()
+  const advance = () => {
+    const tl = tlRef.current
+    if (!tl || finished.current) return
+    const t = tl.time()
+    const peekAt = tl.labels.peek ?? 0
+    const pullAt = tl.labels.pull ?? 0
+    if (t < peekAt) {
+      tl.tweenTo(peekAt, { duration: 0.2 })
+      return
+    }
+    if (t < pullAt) {
+      tl.tweenTo(pullAt, { duration: 0.15 })
+      return
+    }
+    finish()
   }
 
   useEffect(() => {
+    const root = rootRef.current
+    if (!root) return undefined
+
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (phase === 'hold') {
-      const timer = window.setTimeout(() => setPhase('peek'), reduce ? 1200 : HOLD_MS)
-      return () => window.clearTimeout(timer)
+    const hold = reduce ? 1 : 7
+    const peekDur = reduce ? 0.2 : 0.55
+    const pullDur = reduce ? 0.35 : 1.85
+
+    const drape = root.querySelector('.pwc-drape')
+    const fabric = root.querySelector('.pwc-drape-fabric')
+    const photo = root.querySelector('.pwc-drape-photo')
+    const roll = root.querySelector('.pwc-roll')
+    const gather = root.querySelector('.pwc-gather')
+    const edge = root.querySelector('.pwc-edge')
+    const stage = root.querySelector('.pwc-stage')
+    const stageBits = root.querySelectorAll('.pwc-stage-item')
+    const kid = root.querySelector('.pwc-kid')
+    const mascot = root.querySelector('.pwc-kid .pwc-mascot')
+    const arms = root.querySelector('.pwc-kid .pwc-arms')
+    const hint = root.querySelector('.pwc-hint')
+
+    gsap.set(kid, { autoAlpha: 0, xPercent: -40, y: '8vh', scale: 0.86, left: 0 })
+    gsap.set(roll, { autoAlpha: 0, scaleX: 0.45 })
+    gsap.set([gather, edge], { autoAlpha: 0 })
+    gsap.set(drape, { xPercent: 0, forceClearProps: false })
+    gsap.set(fabric, { scaleX: 1, transformOrigin: 'left center' })
+    gsap.set(stageBits, { autoAlpha: 0, y: 14 })
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        defaults: { ease: 'power2.out' },
+        onComplete: finish,
+      })
+      tlRef.current = tl
+
+      // Enter
+      tl.to(stageBits, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.55,
+        stagger: 0.09,
+        ease: 'power3.out',
+      }, 0)
+
+      if (photo && !reduce) {
+        tl.fromTo(photo, { scale: 1.04 }, {
+          scale: 1.08,
+          duration: hold + peekDur + 0.4,
+          ease: 'none',
+        }, 0)
+      }
+
+      if (hint && !reduce) {
+        tl.to(hint, {
+          opacity: 0.75,
+          duration: 1.2,
+          yoyo: true,
+          repeat: Math.max(1, Math.floor(hold / 1.2) - 1),
+          ease: 'sine.inOut',
+        }, 1.1)
+      }
+
+      // Hold beat
+      tl.to({}, { duration: hold })
+
+      // Peek
+      tl.addLabel('peek')
+      tl.call(() => {
+        root.classList.add('is-peek')
+        root.classList.remove('is-hold')
+      })
+      tl.to(stage, { autoAlpha: 0, y: -10, duration: 0.35, ease: 'power2.in' }, 'peek')
+      tl.to(kid, {
+        autoAlpha: 1,
+        xPercent: 0,
+        y: '2vh',
+        scale: 1,
+        duration: peekDur,
+        ease: 'back.out(1.4)',
+      }, 'peek')
+      tl.to(drape, { xPercent: 3.2, duration: peekDur, ease: 'power2.out' }, 'peek')
+      tl.to(roll, { autoAlpha: 1, scaleX: 1, duration: peekDur * 0.85, ease: 'back.out(1.6)' }, 'peek')
+      tl.to([gather, edge], { autoAlpha: 1, duration: 0.3 }, 'peek+=0.1')
+
+      // Pull — left → right over My Space (transparent shell)
+      tl.addLabel('pull')
+      tl.call(() => {
+        root.classList.add('is-pull')
+        root.classList.remove('is-peek')
+        root.style.backgroundColor = 'transparent'
+      })
+
+      tl.to(drape, {
+        xPercent: 110,
+        duration: pullDur,
+        ease: 'power3.inOut',
+      }, 'pull')
+      tl.to(fabric, {
+        scaleX: 0.9,
+        duration: pullDur,
+        ease: 'power3.inOut',
+      }, 'pull')
+      tl.to(gather, {
+        width: 200,
+        duration: pullDur * 0.45,
+        ease: 'power2.out',
+      }, 'pull')
+      tl.to(kid, {
+        left: '100%',
+        x: 16,
+        duration: pullDur,
+        ease: 'power3.inOut',
+      }, 'pull')
+
+      if (mascot && !reduce) {
+        tl.to(mascot, {
+          rotation: 7,
+          y: -6,
+          duration: 0.34,
+          yoyo: true,
+          repeat: Math.floor(pullDur / 0.34) - 1,
+          ease: 'sine.inOut',
+          transformOrigin: '70% 80%',
+        }, 'pull')
+      }
+      if (arms && !reduce) {
+        tl.to(arms, {
+          rotation: 10,
+          duration: 0.34,
+          yoyo: true,
+          repeat: Math.floor(pullDur / 0.34) - 1,
+          ease: 'sine.inOut',
+          transformOrigin: '80px 108px',
+        }, 'pull')
+      }
+
+      tl.to(root, { autoAlpha: 0, duration: 0.2, ease: 'power1.in' })
+    }, root)
+
+    return () => {
+      tlRef.current = null
+      ctx.revert()
     }
-    if (phase === 'peek') {
-      const timer = window.setTimeout(() => setPhase('pull'), reduce ? 200 : PEEK_MS)
-      return () => window.clearTimeout(timer)
-    }
-    if (phase === 'pull') {
-      const timer = window.setTimeout(finish, reduce ? 400 : PULL_MS)
-      return () => window.clearTimeout(timer)
-    }
-    return undefined
-  }, [phase, email])
+  }, [email])
 
   useEffect(() => {
     const onKey = (event) => {
       if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
-        beginOpen()
+        advance()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase])
+  }, [])
 
   return createPortal(
     (
       <div
-        className={`pwc is-${phase} is-${period}`}
-        role={phase === 'hold' ? 'dialog' : 'presentation'}
-        aria-modal={phase === 'hold' ? 'true' : undefined}
-        aria-labelledby={phase === 'hold' ? 'pwc-title' : undefined}
-        aria-describedby={phase === 'hold' ? 'pwc-line' : undefined}
-        onClick={beginOpen}
+        ref={rootRef}
+        className={`pwc is-hold is-${period}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pwc-title"
+        aria-describedby="pwc-line"
+        onClick={advance}
       >
         <div className="pwc-drape" aria-hidden="true">
-          <div className="pwc-drape-photo" />
-          <div className="pwc-pleats" />
+          <div className="pwc-drape-fabric">
+            <div className="pwc-drape-photo" />
+            <div className="pwc-pleats" />
+            <div className="pwc-gather" />
+            <div className="pwc-sheen" />
+          </div>
+          <div className="pwc-roll">
+            <span className="pwc-roll-core" />
+            <span className="pwc-roll-shine" />
+          </div>
+          <div className="pwc-edge" />
         </div>
 
-        {phase !== 'hold' ? (
-          <div className="pwc-kid">
-            <WelcomeKid grabbing />
-          </div>
-        ) : null}
+        <div className="pwc-kid" aria-hidden="true">
+          <WelcomeKid grabbing />
+        </div>
 
-        {phase === 'hold' ? (
-          <div className="pwc-stage">
+        <div className="pwc-stage">
+          <div className="pwc-stage-item pwc-stage-mascot">
             <WelcomeKid />
-            <p className="pwc-kicker">Welcome back</p>
-            <h1 id="pwc-title">{hello}</h1>
-            <p id="pwc-line" className="pwc-line">
-              <span className="pwc-highlight">{line}</span>
-            </p>
           </div>
-        ) : null}
+          <p className="pwc-kicker pwc-stage-item">Welcome back</p>
+          <h1 id="pwc-title" className="pwc-stage-item">{hello}</h1>
+          <p id="pwc-line" className="pwc-line pwc-stage-item">
+            <span className="pwc-highlight">{line}</span>
+          </p>
+          <p className="pwc-hint pwc-stage-item">Tap anywhere to continue</p>
+        </div>
       </div>
     ),
     document.body,

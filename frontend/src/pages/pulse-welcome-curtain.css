@@ -6,27 +6,32 @@
   font-family: Figtree, system-ui, sans-serif;
   color: #f4f1ea;
   cursor: pointer;
+  /* Transparent during pull so My Space shows through — no green slab */
   background: transparent;
   outline: none;
-  box-shadow: none;
-  filter: none;
+}
+
+.pwc.is-hold {
+  background: #16382c;
 }
 
 .pwc-drape {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  z-index: 1;
   width: 100%;
-  overflow: hidden;
-  will-change: width;
-  box-shadow: none;
-  filter: none;
-  transition: width 2s cubic-bezier(0.45, 0.04, 0.18, 1);
+  height: 100%;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
-.pwc.is-pull .pwc-drape {
-  width: 0;
+.pwc-drape-fabric {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: left center;
+  box-shadow: -16px 0 32px rgba(0, 0, 0, 0.28);
+  will-change: transform;
 }
 
 .pwc-drape-photo {
@@ -37,6 +42,8 @@
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  transform: translateZ(0) scale(1.04);
+  will-change: transform;
 }
 
 .pwc-pleats {
@@ -45,10 +52,89 @@
   pointer-events: none;
   background: repeating-linear-gradient(
     90deg,
-    rgba(8, 22, 16, 0.22) 0,
-    rgba(26, 95, 74, 0.04) 4%,
-    rgba(8, 22, 16, 0.2) 8%
+    rgba(8, 22, 16, 0.26) 0,
+    rgba(26, 95, 74, 0.05) 3.5%,
+    rgba(8, 22, 16, 0.2) 7%
   );
+  opacity: 0.8;
+}
+
+.pwc-gather {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(22vw, 160px);
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(6, 18, 12, 0.45) 0 5px,
+    rgba(26, 95, 74, 0.1) 5px 9px,
+    rgba(8, 22, 16, 0.3) 9px 13px
+  );
+  mask-image: linear-gradient(90deg, #000 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 100%);
+}
+
+.pwc-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 248, 238, 0.08) 50%,
+    transparent 60%
+  );
+  opacity: 0.4;
+}
+
+.pwc-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  width: 28px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent);
+}
+
+.pwc-roll {
+  position: absolute;
+  top: -2%;
+  bottom: -2%;
+  left: -4px;
+  width: 22px;
+  z-index: 4;
+  transform-origin: center;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.pwc-roll-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #0a1a14 0%,
+    #143528 28%,
+    #1f4f3c 50%,
+    #143528 72%,
+    #08140f 100%
+  );
+  box-shadow:
+    6px 0 14px rgba(0, 0, 0, 0.35),
+    inset 2px 0 4px rgba(255, 248, 238, 0.08),
+    inset -2px 0 5px rgba(0, 0, 0, 0.45);
+}
+
+.pwc-roll-shine {
+  position: absolute;
+  inset: 8% 30% 8% 24%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 248, 238, 0.22), transparent 60%);
+  opacity: 0.7;
 }
 
 .pwc-kid {
@@ -56,9 +142,9 @@
   left: 0;
   bottom: 10vh;
   z-index: 6;
-  width: min(210px, 32vw);
+  width: min(200px, 30vw);
   pointer-events: none;
-  filter: none;
+  will-change: left, transform;
 }
 
 .pwc-kid .pwc-mascot {
@@ -67,22 +153,9 @@
   display: block;
 }
 
-.pwc.is-peek .pwc-kid {
-  animation: pwc-kid-peek 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.pwc.is-pull .pwc-kid {
-  animation: pwc-kid-drag 2s cubic-bezier(0.45, 0.04, 0.18, 1) forwards;
-}
-
-.pwc.is-pull .pwc-kid .pwc-mascot {
-  animation: pwc-tug 0.38s ease-in-out infinite;
-  transform-origin: 70% 80%;
-}
-
-.pwc.is-pull .pwc-arms {
-  animation: pwc-yank 0.38s ease-in-out infinite;
-  transform-origin: 80px 108px;
+.pwc.is-peek,
+.pwc.is-pull {
+  pointer-events: none;
 }
 
 .pwc-stage {
@@ -96,22 +169,13 @@
   gap: 8px;
   padding: 24px;
   text-align: center;
-  background: none;
-  filter: none;
-  animation: pwc-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.pwc.is-peek,
-.pwc.is-pull {
-  pointer-events: none;
-}
-
-.pwc-stage .pwc-mascot {
+.pwc-stage-mascot .pwc-mascot {
   width: 118px;
   height: 130px;
   margin-bottom: 4px;
-  animation: pwc-bounce 1.5s ease-in-out infinite;
-  transform-origin: 50% 90%;
+  display: block;
 }
 
 .pwc-kicker {
@@ -121,31 +185,22 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgba(244, 241, 234, 0.72);
-  text-shadow: none;
-  filter: none;
 }
 
 .pwc h1 {
   margin: 0;
   font-family: Fraunces, Georgia, serif;
-  font-optical-sizing: auto;
   font-style: italic;
   font-weight: 650;
   font-size: clamp(40px, 7vw, 72px);
   letter-spacing: -0.04em;
   line-height: 1;
   color: #fff8ee;
-  text-shadow: none;
-  filter: none;
-  -webkit-text-stroke: 0;
 }
 
 .pwc-line {
   margin: 18px 0 0;
   max-width: 32rem;
-  filter: none;
-  text-shadow: none;
-  box-shadow: none;
 }
 
 .pwc-highlight {
@@ -156,62 +211,24 @@
   color: #fff8ee;
   font-size: clamp(15px, 1.9vw, 18px);
   font-weight: 650;
-  letter-spacing: 0;
   line-height: 1.5;
-  box-shadow: none;
-  text-shadow: none;
-  filter: none;
 }
 
-@keyframes pwc-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes pwc-bounce {
-  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
-  50% { transform: translateY(-6px) rotate(1.2deg); }
-}
-
-@keyframes pwc-kid-peek {
-  from { transform: translate3d(-48%, 8vh, 0) scale(0.84); opacity: 0; }
-  62% { transform: translate3d(4px, 2vh, 0) scale(1.06); opacity: 1; }
-  to { transform: translate3d(0, 2vh, 0) scale(1); opacity: 1; }
-}
-
-@keyframes pwc-kid-drag {
-  from { left: 0; transform: translate3d(0, 2vh, 0); }
-  to { left: 100%; transform: translate3d(12px, 2vh, 0); }
-}
-
-@keyframes pwc-tug {
-  0%, 100% { transform: rotate(-8deg) translateY(0); }
-  50% { transform: rotate(6deg) translateY(-7px); }
-}
-
-@keyframes pwc-yank {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(10deg); }
+.pwc-hint {
+  margin: 28px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 241, 234, 0.48);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pwc-drape,
-  .pwc.is-peek .pwc-kid,
-  .pwc.is-pull .pwc-kid,
-  .pwc.is-pull .pwc-kid .pwc-mascot,
-  .pwc.is-pull .pwc-arms,
-  .pwc-stage .pwc-mascot {
-    animation: none;
-    transition: none;
-  }
-
-  .pwc.is-pull .pwc-drape {
-    width: 0;
+  .pwc-drape-fabric,
+  .pwc-drape-photo,
+  .pwc-kid,
+  .pwc-roll {
+    will-change: auto;
   }
 }

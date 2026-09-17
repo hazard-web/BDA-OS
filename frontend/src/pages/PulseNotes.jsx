@@ -67,6 +67,7 @@ import {
   splitNote,
 } from '../utils/pulseNotes'
 import { APP_BASE, PULSE_HOME, hasPulseAccount } from '../utils/pulseEntry'
+import { markPulseAuxiliaryTab } from '../utils/pulseOpenPage'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
 import { AuthLogoLoader, useAccountSignOut } from '../components/auth/AuthLogoLoader'
 import './pulse-antd.css'
@@ -222,6 +223,10 @@ export default function PulseNotes() {
     setNotes(loadAllPulseNotes(email))
     setTrash(loadAllPulseNotes(email, { trash: true }))
   }, [email])
+
+  useEffect(() => {
+    markPulseAuxiliaryTab()
+  }, [])
 
   useEffect(() => {
     if (loading || !user) return

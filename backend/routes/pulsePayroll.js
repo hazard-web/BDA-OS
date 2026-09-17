@@ -160,13 +160,14 @@ async function enrichPayslipForPdf(doc, employeeUser) {
     otherDeductions: Number(plain.otherDeductions) || 0,
     employerPF: Number(plain.employerPF) || 0,
     hra: Number(plain.hra) || 0,
-    companyName: org?.companyName || 'BDA Technologies Private Limited',
-    companyAddress: org?.companyAddress || '',
+    companyName: 'BDA Technologies Private Limited',
+    companyAddress: org?.companyAddress
+      || 'Flat No. 207, Plot No. 31A, Unione Residency, Akbarpur, Behrampur, Ghaziabad, Uttar Pradesh, India, 201009',
     companyPhone: org?.companyPhone || '',
-    companyEmail: org?.companyEmail || '',
-    companyWebsite: org?.companyWebsite || '',
-    companyCIN: org?.companyCIN || '',
-    companyGST: org?.companyGST || '',
+    companyEmail: 'hr@bdatechnologies.com',
+    companyWebsite: 'www.bdatechnologies.com',
+    companyCIN: org?.companyCIN || 'U74999UP2017PTC096671',
+    companyGST: org?.companyGST || '09AAHCB4248F1ZO',
     companyLogo: org?.companyLogo || '',
   }
 }

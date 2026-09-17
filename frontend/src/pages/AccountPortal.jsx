@@ -48,6 +48,7 @@ import { AuthLogoLoader, useAccountSignOut, useAuthRedirect } from '../component
 import AccountsLogo from '../components/AccountsLogo'
 import AppsFlyout from '../components/AppsFlyout'
 import LinkedAppsPanel from '../components/LinkedAppsPanel'
+import PulseUserAvatar from '../components/PulseUserAvatar'
 import './account-portal.css'
 
 const { Header, Content } = AntLayout
@@ -593,9 +594,15 @@ export default function AccountPortal({ embedded = false }) {
     setSection(key)
   }
 
-  const avatar = user.avatarUrl
-    ? <Avatar src={user.avatarUrl} referrerPolicy="no-referrer" size={28} />
-    : <Avatar size={28} style={{ background: '#1A5F4A' }}>{initials || 'P'}</Avatar>
+  const avatar = (
+    <PulseUserAvatar
+      src={user.avatarUrl}
+      size={28}
+      style={user.avatarUrl ? undefined : { background: '#1A5F4A' }}
+    >
+      {initials || 'P'}
+    </PulseUserAvatar>
+  )
 
   return (
     <AntLayout className={`acc-shell${embedded ? ' is-embedded' : ''}`}>
@@ -640,11 +647,14 @@ export default function AccountPortal({ embedded = false }) {
         onClose={() => { if (!signingOut && !signOutLogo) setProfileOpen(false) }}
       >
         <Flex vertical align="center" gap={8} style={{ marginBottom: 24 }}>
-          {user.avatarUrl ? (
-            <Avatar src={user.avatarUrl} size={88} referrerPolicy="no-referrer" />
-          ) : (
-            <Avatar size={88} style={{ background: '#1A5F4A', fontSize: 32 }}>{initials || 'P'}</Avatar>
-          )}
+          <PulseUserAvatar
+            src={user.avatarUrl}
+            size={88}
+            px={256}
+            style={user.avatarUrl ? undefined : { background: '#1A5F4A', fontSize: 32 }}
+          >
+            {initials || 'P'}
+          </PulseUserAvatar>
           <Typography.Title level={4} style={{ margin: 0 }}>{fullName}</Typography.Title>
           <Typography.Text type="secondary">{user.email}</Typography.Text>
           <Typography.Text type="secondary">
@@ -686,11 +696,14 @@ export default function AccountPortal({ embedded = false }) {
                 <Card id="acc-personal" className="acc-card acc-profile-card" bordered={false}>
                   <Flex className="acc-profile-head" justify="space-between" align="flex-start" gap={16} wrap="wrap">
                     <Flex gap={16} align="center" className="acc-identity">
-                      {user.avatarUrl ? (
-                        <Avatar src={user.avatarUrl} size={72} referrerPolicy="no-referrer" />
-                      ) : (
-                        <Avatar size={72} style={{ background: '#1A5F4A', fontSize: 26 }}>{initials || 'P'}</Avatar>
-                      )}
+                      <PulseUserAvatar
+                        src={user.avatarUrl}
+                        size={72}
+                        px={192}
+                        style={user.avatarUrl ? undefined : { background: '#1A5F4A', fontSize: 26 }}
+                      >
+                        {initials || 'P'}
+                      </PulseUserAvatar>
                       <div>
                         <Typography.Title level={3} className="acc-user-name">{fullName}</Typography.Title>
                         <Typography.Text type="secondary">{user.email}</Typography.Text>

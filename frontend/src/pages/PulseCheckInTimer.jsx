@@ -6,6 +6,7 @@ import {
   readCheckInAt,
   readCheckInActiveEmail,
 } from '../utils/pulseCheckIn'
+import { markPulseAuxiliaryTab } from '../utils/pulseOpenPage'
 import './pulse-checkin-timer.css'
 
 /** Standalone popup timer window. */
@@ -16,6 +17,7 @@ export default function PulseCheckInTimer() {
 
   useEffect(() => {
     document.title = 'BDA OS · Working'
+    markPulseAuxiliaryTab()
   }, [])
 
   useEffect(() => {

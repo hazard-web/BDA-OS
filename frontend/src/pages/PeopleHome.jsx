@@ -65,6 +65,7 @@ import {
 } from '../utils/pulseCheckIn'
 import { closeCheckInPip } from '../utils/pulseCheckInPip'
 import { prefetchPulseLocation } from '../utils/pulseLocation'
+import PulseUserAvatar from '../components/PulseUserAvatar'
 import './pulse-myspace.css'
 import './pulse-antd.css'
 import './pulse-overview-portal.css'
@@ -235,12 +236,53 @@ function presenceName(row) {
   return row?.name || String(row?.email || '').split('@')[0] || 'Employee'
 }
 
-function HeaderTeamPresence({ enabled }) {
+function presenceRowKey(row) {
+  return String(row?.email || row?.id || '').toLowerCase()
+}
+
+/** Instant header counts while the check-in API sync (~1.4s) is still in flight. */
+function applySelfPresence(board, selfEmail, status) {
+  const email = String(selfEmail || '').toLowerCase()
+  if (!email || (status !== 'active' && status !== 'stopped')) return board
+
+  const active = Array.isArray(board.active) ? board.active : []
+  const inactive = Array.isArray(board.inactive) ? board.inactive : []
+  const fromActive = active.find((row) => presenceRowKey(row) === email)
+  const fromInactive = inactive.find((row) => presenceRowKey(row) === email)
+  const self = fromActive || fromInactive
+  if (!self) return board
+
+  if (status === 'active') {
+    if (fromActive) return board
+    const nextActive = [...active, self].sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+    const nextInactive = inactive.filter((row) => presenceRowKey(row) !== email)
+    return {
+      active: nextActive,
+      inactive: nextInactive,
+      activeCount: nextActive.length,
+      inactiveCount: nextInactive.length,
+    }
+  }
+
+  if (fromInactive) return board
+  const nextInactive = [...inactive, self].sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+  const nextActive = active.filter((row) => presenceRowKey(row) !== email)
+  return {
+    active: nextActive,
+    inactive: nextInactive,
+    activeCount: nextActive.length,
+    inactiveCount: nextInactive.length,
+  }
+}
+
+function HeaderTeamPresence({ enabled, selfEmail }) {
   const [board, setBoard] = useState({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
 
   useEffect(() => {
     if (!enabled) return undefined
     let live = true
+    let syncRefreshTimer = 0
+
     const load = () => {
       api
         .get('/pulse-checkin/admin/presence')
@@ -259,13 +301,40 @@ function HeaderTeamPresence({ enabled }) {
           setBoard({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
         })
     }
+
     load()
     const timer = window.setInterval(load, 30_000)
+
+    const onCheckInChange = (event) => {
+      const email = String(event?.detail?.email || '').toLowerCase()
+      const status = event?.detail?.status
+      const self = String(selfEmail || '').toLowerCase()
+      if (self && email === self) {
+        setBoard((prev) => applySelfPresence(prev, self, status))
+      }
+      // Remote sync is debounced ~1.4s — confirm from server after it lands.
+      if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
+      syncRefreshTimer = window.setTimeout(() => {
+        syncRefreshTimer = 0
+        load()
+      }, 1800)
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+
+    window.addEventListener(PULSE_CHECKIN_EVENT, onCheckInChange)
+    document.addEventListener('visibilitychange', onVisible)
+
     return () => {
       live = false
       window.clearInterval(timer)
+      if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
+      window.removeEventListener(PULSE_CHECKIN_EVENT, onCheckInChange)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [enabled])
+  }, [enabled, selfEmail])
 
   if (!enabled) return null
 
@@ -1022,7 +1091,7 @@ export default function PeopleHome() {
         </div>
         <div className="pulse-top-tools">
           <HeaderAssignedApps apps={assignedApps.slice(0, HEADER_APP_CAP)} user={user} />
-          <HeaderTeamPresence enabled={isPulseAdmin} />
+          <HeaderTeamPresence enabled={isPulseAdmin} selfEmail={user?.email} />
           <HeaderCheckInTimer
             elapsed={elapsed}
             checkedInAt={checkedInAt}
@@ -1091,11 +1160,14 @@ export default function PeopleHome() {
             aria-label="Assigned apps"
             onClick={() => setAppsOpen(true)}
           >
-            {user?.avatarUrl ? (
-              <Avatar className="pulse-avatar" size={30} src={user.avatarUrl} referrerPolicy="no-referrer" />
-            ) : (
-              <Avatar className="pulse-avatar" size={30}>{initial}</Avatar>
-            )}
+            <PulseUserAvatar
+              className="pulse-avatar"
+              size={30}
+              src={user?.avatarUrl}
+              alt={name}
+            >
+              {initial}
+            </PulseUserAvatar>
           </button>
           <Button
             type="text"

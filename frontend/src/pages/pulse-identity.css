@@ -121,6 +121,25 @@
   filter: none !important;
 }
 
+.pulse-shell.pulse-id .pulse-theme-toggle {
+  color: #3a4a3e;
+  background: transparent;
+  border: 0;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.pulse-shell.pulse-id .pulse-theme-toggle:hover,
+.pulse-shell.pulse-id .pulse-theme-toggle:focus-visible,
+.pulse-shell.pulse-id .pulse-theme-toggle:active {
+  color: #142019;
+  background: transparent;
+  border: 0;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: none !important;
+}
+
 .pulse-shell.pulse-id .pulse-head-timer {
   background: rgba(20, 32, 25, 0.06);
   color: #14110e;

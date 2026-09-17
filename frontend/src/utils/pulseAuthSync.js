@@ -59,7 +59,7 @@ export function broadcastPulseLogout() {
 
 let closingAuxiliary = false
 
-/** Close a service tab. If the browser blocks it, leave a blank page — never Login. */
+/** Close a service tab. If the browser blocks close, go to Login — never about:blank. */
 export function closePulseAuxiliaryTab() {
   if (closingAuxiliary) return
   closingAuxiliary = true
@@ -70,7 +70,7 @@ export function closePulseAuxiliaryTab() {
   }
   window.setTimeout(() => {
     try {
-      if (!window.closed) window.location.replace('about:blank')
+      if (!window.closed) window.location.replace('/login')
     } catch {
       /* ignore */
     }

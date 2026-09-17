@@ -262,10 +262,47 @@ const PULSE_AUXILIARY_PATHS = new Set([
   APP_TIMER,
 ])
 
-/** Extra BDA OS tabs (Employee, Leave, Notes, …). Logout should close these, not show Login. */
+const AUX_TAB_KEY = 'pulseAuxiliaryTab'
+
+/** Mark this browser tab as a dock/service popup (not the main My Space window). */
+export function markPulseAuxiliaryTab() {
+  try {
+    sessionStorage.setItem(AUX_TAB_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Persist aux-tab intent from `?boot=1` / `?aux=1` opens. */
+export function capturePulseAuxiliaryFromSearch(search = typeof window !== 'undefined' ? window.location.search : '') {
+  try {
+    const params = new URLSearchParams(search || '')
+    if (params.get('boot') === '1' || params.get('aux') === '1') {
+      markPulseAuxiliaryTab()
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function hasPulseAuxiliaryMark() {
+  try {
+    return sessionStorage.getItem(AUX_TAB_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Extra BDA OS tabs opened via dock / Notes / timer.
+ * Main-shell routes (Leave, Payroll, …) share the same paths — only treat them
+ * as auxiliary when this tab was opened with boot/aux, not in-app navigation.
+ */
 export function isPulseAuxiliaryTab(pathname = typeof window !== 'undefined' ? window.location.pathname : '') {
   const path = toAppPath(String(pathname || '').replace(/\/+$/, '') || '/')
-  return PULSE_AUXILIARY_PATHS.has(path)
+  if (path === APP_NOTES || path === APP_TIMER) return true
+  if (!PULSE_AUXILIARY_PATHS.has(path)) return false
+  return hasPulseAuxiliaryMark()
 }
 
 const LOCKUP = '/bda-logo.png'
@@ -283,7 +320,7 @@ function warmOpenAssets() {
 export function openPulsePath(path) {
   if (!path) return false
   warmOpenAssets()
-  const url = `${window.location.origin}${path}?boot=1`
+  const url = `${window.location.origin}${path}?boot=1&aux=1`
   const link = document.createElement('a')
   link.href = url
   link.target = '_blank'

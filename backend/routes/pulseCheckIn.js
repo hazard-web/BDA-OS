@@ -268,7 +268,7 @@ function lastCheckOutAt(plain) {
 }
 
 /** Compact org Attendance / Timesheet admin rows (avoids full event UA payloads). */
-function serializeAdminDay(doc, fallbackDate = '', { previewEvents = false } = {}) {
+function serializeAdminDay(doc, fallbackDate = '', { previewEvents = false, cardsOnly = false } = {}) {
   if (!doc) {
     return {
       ...emptyTimesheet(fallbackDate),
@@ -280,6 +280,35 @@ function serializeAdminDay(doc, fallbackDate = '', { previewEvents = false } = {
     };
   }
   const plain = doc.toObject ? doc.toObject() : doc;
+  const sessions = (plain.sessions || []).map((session) => ({
+    checkInAt: session.checkInAt,
+    checkOutAt: session.checkOutAt,
+    durationMs: session.durationMs || 0,
+  }));
+
+  // Cards grid: sessions + totals only — skip event arrays for faster payloads.
+  if (cardsOnly) {
+    const firstSession = sessions.find((item) => item.checkInAt);
+    const lastOut = [...sessions].reverse().find((item) => item.checkOutAt);
+    return {
+      date: plain.date || fallbackDate,
+      status: plain.status || 'idle',
+      totalActiveMs: Number(plain.totalActiveMs) || 0,
+      totalActiveHours: msToHours(plain.totalActiveMs),
+      targetHours: plain.targetHours || TARGET_HOURS,
+      checkInAt: firstSession?.checkInAt || null,
+      checkOutAt: lastOut?.checkOutAt || null,
+      anomaly: plain.anomaly?.flagged
+        ? {
+            flagged: true,
+            reason: plain.anomaly.reason || '',
+          }
+        : null,
+      events: [],
+      sessions,
+    };
+  }
+
   const events = Array.isArray(plain.events) ? plain.events : [];
   const mappedEvents = events.map((event) => ({
     _id: event._id,
@@ -312,11 +341,7 @@ function serializeAdminDay(doc, fallbackDate = '', { previewEvents = false } = {
       : null,
     lastHeartbeatAt: plain.lastHeartbeatAt || null,
     events: previewEvents ? mappedEvents.slice(-4) : mappedEvents,
-    sessions: (plain.sessions || []).map((session) => ({
-      checkInAt: session.checkInAt,
-      checkOutAt: session.checkOutAt,
-      durationMs: session.durationMs || 0,
-    })),
+    sessions,
   };
 }
 
@@ -450,20 +475,99 @@ router.get('/admin/days', auth, async (req, res) => {
     const orgObjectId = mongoose.Types.ObjectId.isValid(organizationId)
       ? new mongoose.Types.ObjectId(organizationId)
       : organizationId;
-    const members = await User.find({
-      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
-    })
-      .select('_id firstName lastName displayName email avatarUrl')
-      .lean();
+    const cardsView = String(req.query.view || '') === 'cards';
+
+    // Never pull full data: avatar blobs into the list — only HTTPS URLs + a flag for proxy.
+    const members = await User.aggregate([
+      {
+        $match: {
+          $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+        },
+      },
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          displayName: 1,
+          email: 1,
+          avatarUrl: {
+            $let: {
+              vars: { raw: { $ifNull: ['$avatarUrl', ''] } },
+              in: {
+                $cond: [
+                  {
+                    $regexMatch: {
+                      input: '$$raw',
+                      regex: '^https?://',
+                    },
+                  },
+                  '$$raw',
+                  '',
+                ],
+              },
+            },
+          },
+          hasEmbeddedAvatar: {
+            $let: {
+              vars: { raw: { $ifNull: ['$avatarUrl', ''] } },
+              in: {
+                $or: [
+                  {
+                    $regexMatch: {
+                      input: '$$raw',
+                      regex: '^data:image/',
+                    },
+                  },
+                  {
+                    $and: [
+                      { $gt: [{ $strLenCP: '$$raw' }, 200] },
+                      {
+                        $not: [
+                          {
+                            $regexMatch: {
+                              input: '$$raw',
+                              regex: '^https?://',
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    ]);
     const userIds = members.map((m) => m._id);
     if (!userIds.length) {
       return res.json({ success: true, data: [] });
     }
 
     const needOnboarding = members
-      .filter((m) => !safeListAvatarUrl(m.avatarUrl) && !hasEmbeddedAvatar(m.avatarUrl))
+      .filter((m) => !safeListAvatarUrl(m.avatarUrl) && !m.hasEmbeddedAvatar)
       .map((m) => m.email);
-    const onboardingEmails = await emailsWithOnboardingPhoto(orgObjectId, needOnboarding);
+
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 60));
+    const dayKey = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
+      ? String(req.query.date)
+      : '';
+    const query = { user: { $in: userIds } };
+    if (dayKey) query.date = dayKey;
+
+    const daysSelect = cardsView
+      ? 'user date status totalActiveMs anomaly.flagged anomaly.reason sessions.checkInAt sessions.checkOutAt sessions.durationMs'
+      : 'user date status totalActiveMs anomaly.flagged anomaly.reason timesheetSubmitted timesheetSubmittedAt taskEntries.description taskEntries.minutes taskEntries.project events.type events.at events._id events.activeMsAtEvent sessions.checkInAt sessions.checkOutAt sessions.durationMs';
+
+    const [onboardingEmails, days] = await Promise.all([
+      emailsWithOnboardingPhoto(orgObjectId, needOnboarding),
+      PulseWorkDay.find(query)
+        .select(daysSelect)
+        .sort({ date: -1, updatedAt: -1 })
+        .limit(dayKey ? 400 : limit)
+        .lean(),
+    ]);
 
     const personById = new Map(
       members.map((person) => {
@@ -472,7 +576,7 @@ router.get('/admin/days', auth, async (req, res) => {
         const httpsAvatar = safeListAvatarUrl(person.avatarUrl);
         const useProxy =
           !httpsAvatar
-          && (hasEmbeddedAvatar(person.avatarUrl) || onboardingEmails.has(email));
+          && (Boolean(person.hasEmbeddedAvatar) || onboardingEmails.has(email));
         return [
           String(person._id),
           {
@@ -480,7 +584,6 @@ router.get('/admin/days', auth, async (req, res) => {
               ? parts.join(' ')
               : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
             email: person.email || '',
-            // HTTPS account photo inline; data:/onboarding photos via /admin/avatar/:id (keeps list small).
             avatarUrl: httpsAvatar,
             avatarUserId: useProxy ? String(person._id) : '',
           },
@@ -490,36 +593,16 @@ router.get('/admin/days', auth, async (req, res) => {
     const personOf = (id) =>
       personById.get(String(id)) || { name: 'Employee', email: '', avatarUrl: '', avatarUserId: '' };
 
-    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 60));
-    const dayKey = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
-      ? String(req.query.date)
-      : '';
-    const cardsView = String(req.query.view || '') === 'cards';
-    const query = { user: { $in: userIds } };
-    if (dayKey) query.date = dayKey;
-
-    // Project only fields used by cards — never pull event UA / location blobs for the grid.
-    const days = await PulseWorkDay.find(query)
-      .select(
-        cardsView
-          ? 'user date status totalActiveMs anomaly.flagged anomaly.reason events.type events.at sessions.checkInAt sessions.checkOutAt'
-          : 'user date status totalActiveMs anomaly.flagged anomaly.reason timesheetSubmitted timesheetSubmittedAt taskEntries.description taskEntries.minutes taskEntries.project events.type events.at events._id events.activeMsAtEvent sessions.checkInAt sessions.checkOutAt sessions.durationMs',
-      )
-      .sort({ date: -1, updatedAt: -1 })
-      .limit(dayKey ? 400 : limit)
-      .lean();
-
     if (dayKey) {
       const byUser = new Map(days.map((row) => [String(row.user), row]));
       const rows = members.map((member) => {
         const row = byUser.get(String(member._id));
         return {
-          ...serializeAdminDay(row, dayKey, { previewEvents: true }),
+          ...serializeAdminDay(row, dayKey, { previewEvents: true, cardsOnly: cardsView }),
           user: member._id,
           ...personOf(member._id),
         };
       });
-      // Active employees first so live status is visible without scrolling.
       rows.sort((a, b) => {
         const aLive = a.status === 'active' ? 0 : 1;
         const bLive = b.status === 'active' ? 0 : 1;
@@ -532,7 +615,7 @@ router.get('/admin/days', auth, async (req, res) => {
     res.json({
       success: true,
       data: days.map((d) => ({
-        ...serializeAdminDay(d, '', { previewEvents: true }),
+        ...serializeAdminDay(d, '', { previewEvents: true, cardsOnly: cardsView }),
         ...personOf(d.user),
       })),
     });

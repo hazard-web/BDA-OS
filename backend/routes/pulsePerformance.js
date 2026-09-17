@@ -2,6 +2,7 @@ const express = require('express')
 const mongoose = require('mongoose')
 const { auth } = require('./auth')
 const User = require('../models/User')
+const Candidate = require('../models/Candidate')
 const PulsePerformanceMonth = require('../models/PulsePerformanceMonth')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
 const { upsertPayslipFromPerformance } = require('./pulsePayroll')
@@ -29,10 +30,55 @@ const MEMBER_SELECT = '_id firstName lastName displayName email avatarUrl role'
 const MONTH_SELECT =
   'user email month scores fixedPay projectTier projectApproved learningApproved innovationApproved managerNote employeeNote correctionRequested correctionNote status lockedAt'
 
+function safeListAvatarUrl(value) {
+  const url = String(value || '').trim()
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url) && url.length <= 2048) return url
+  return ''
+}
+
+function hasEmbeddedAvatar(value) {
+  const raw = String(value || '').trim()
+  return raw.startsWith('data:image/') || (/^[A-Za-z0-9+/=\s]+$/.test(raw) && raw.length > 200)
+}
+
+function looksLikeEmail(value) {
+  return /@/.test(String(value || ''))
+}
+
 function personName(user) {
   const parts = [user?.firstName, user?.lastName].filter(Boolean)
   if (parts.length) return parts.join(' ')
-  return user?.displayName || String(user?.email || '').split('@')[0] || 'Employee'
+  const display = String(user?.displayName || '').trim()
+  // Some invites store the mailbox as displayName — never show that as the title.
+  if (display && !looksLikeEmail(display)) return display
+  return String(user?.email || '').split('@')[0] || 'Employee'
+}
+
+/** Batch: emails that still have an onboarding Candidate photo (metadata only). */
+async function emailsWithOnboardingPhoto(organizationId, emails) {
+  const list = [...new Set((emails || []).map((e) => String(e || '').toLowerCase()).filter(Boolean))]
+  if (!list.length) return new Set()
+  const rows = await Candidate.find({
+    organizationId,
+    $and: [
+      { $or: [{ email: { $in: list } }, { officialEmail: { $in: list } }] },
+      {
+        $or: [
+          { 'photo.size': { $gt: 0 } },
+          { 'photo.mime': { $regex: /^image\//i } },
+        ],
+      },
+    ],
+  })
+    .select('email officialEmail')
+    .lean()
+  const out = new Set()
+  rows.forEach((row) => {
+    if (row.email) out.add(String(row.email).toLowerCase())
+    if (row.officialEmail) out.add(String(row.officialEmail).toLowerCase())
+  })
+  return out
 }
 
 function emptyMonthDoc({ organizationId, user, email, month }) {
@@ -72,7 +118,12 @@ function serializeRow(doc, user) {
     user: String(plain.user),
     email: plain.email,
     name: user ? personName(user) : plain.email,
-    avatarUrl: user?.avatarUrl || '',
+    // HTTPS only in list JSON — data: photos go through Attendance avatar proxy.
+    avatarUrl: safeListAvatarUrl(user?.avatarUrl),
+    avatarUserId:
+      user && !safeListAvatarUrl(user?.avatarUrl) && hasEmbeddedAvatar(user?.avatarUrl)
+        ? String(user._id)
+        : '',
     month: plain.month,
     scores: plain.scores || { ...EMPTY_SCORES },
     fixedPay: plain.fixedPay || 0,
@@ -222,17 +273,65 @@ router.get('/admin/month', auth, async (req, res) => {
     const orgObjectId = toOrgObjectId(organizationId)
 
     const [members, existing] = await Promise.all([
-      User.find({
-        $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
-      })
-        .select(MEMBER_SELECT)
-        .lean(),
+      User.aggregate([
+        {
+          $match: {
+            $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+          },
+        },
+        {
+          $project: {
+            firstName: 1,
+            lastName: 1,
+            displayName: 1,
+            email: 1,
+            role: 1,
+            avatarUrl: {
+              $let: {
+                vars: { raw: { $ifNull: ['$avatarUrl', ''] } },
+                in: {
+                  $cond: [
+                    { $regexMatch: { input: '$$raw', regex: '^https?://' } },
+                    '$$raw',
+                    '',
+                  ],
+                },
+              },
+            },
+            hasEmbeddedAvatar: {
+              $let: {
+                vars: { raw: { $ifNull: ['$avatarUrl', ''] } },
+                in: {
+                  $or: [
+                    { $regexMatch: { input: '$$raw', regex: '^data:image/' } },
+                    {
+                      $and: [
+                        { $gt: [{ $strLenCP: '$$raw' }, 200] },
+                        {
+                          $not: [
+                            { $regexMatch: { input: '$$raw', regex: '^https?://' } },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ]),
       PulsePerformanceMonth.find({ organizationId: orgObjectId, month })
         .select(MONTH_SELECT)
         .lean(),
     ])
 
     const byUser = new Map(existing.map((row) => [String(row.user), row]))
+    const needOnboarding = members
+      .filter((m) => !safeListAvatarUrl(m.avatarUrl) && !m.hasEmbeddedAvatar)
+      .map((m) => m.email)
+    const onboardingEmails = await emailsWithOnboardingPhoto(orgObjectId, needOnboarding)
+
     const rows = members.map((member) => {
       const doc =
         byUser.get(String(member._id)) ||
@@ -242,7 +341,15 @@ router.get('/admin/month', auth, async (req, res) => {
           email: member.email,
           month,
         })
-      return serializeRow(doc, member)
+      const row = serializeRow(doc, member)
+      const email = String(member.email || '').toLowerCase()
+      if (
+        !row.avatarUrl
+        && (member.hasEmbeddedAvatar || onboardingEmails.has(email))
+      ) {
+        row.avatarUserId = String(member._id)
+      }
+      return row
     })
 
     rows.sort(

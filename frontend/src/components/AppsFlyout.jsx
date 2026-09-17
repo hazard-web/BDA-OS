@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext'
 import { APP_BASE, getPulseOpenPath, isBdaOsAppLink } from '../utils/pulseEntry'
 import { goToLoginOrCloseTab } from '../utils/pulseAuthSync'
 import PulseMark from './PulseMark'
+import PulseUserAvatar from './PulseUserAvatar'
 import api from '../api'
 import './apps-flyout.css'
 
@@ -89,8 +90,7 @@ export default function AppsFlyout({
 }) {
   const pulseHome = variant === 'pulse'
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
-  const [photoBroken, setPhotoBroken] = useState(false)
+  const { user, logout, startExit } = useAuth()
   const [query, setQuery] = useState('')
   const [pos, setPos] = useState({ top: 58, right: 0, caretRight: 7 })
   const [apps, setApps] = useState(() =>
@@ -160,10 +160,6 @@ export default function AppsFlyout({
   }, [open, onClose])
 
   useEffect(() => {
-    setPhotoBroken(false)
-  }, [user?.avatarUrl, user?.picture, user?.photo, open])
-
-  useEffect(() => {
     if (!open) {
       setQuery('')
       return undefined
@@ -217,7 +213,7 @@ export default function AppsFlyout({
   const assignedLabel = `Assigned to ${user?.email || 'you'}${loading ? '' : ` (${count})`}`
   const name = profileName(user)
   const initial = (name || 'S').charAt(0).toUpperCase()
-  const photoSrc = !photoBroken ? profilePhoto(user) : ''
+  const photoSrc = profilePhoto(user)
 
   const assignedBlock = (
     <>
@@ -268,19 +264,16 @@ export default function AppsFlyout({
               {pulseHome ? (
                 <>
                   <div className="af-profile">
-                    <Avatar
+                    <PulseUserAvatar
                       className="af-profile-photo"
-                      src={photoSrc || undefined}
+                      src={photoSrc}
                       size={88}
-                      referrerPolicy="no-referrer"
+                      px={256}
+                      alt={name}
                       style={photoSrc ? undefined : { background: '#1A5F4A', fontSize: 32 }}
-                      onError={() => {
-                        setPhotoBroken(true)
-                        return true
-                      }}
                     >
                       {initial}
-                    </Avatar>
+                    </PulseUserAvatar>
                     <Title level={4}>{name}</Title>
                     <Text type="secondary">{user?.email}</Text>
                     <Text type="secondary" className="af-profile-id">
@@ -299,6 +292,7 @@ export default function AppsFlyout({
                           return
                         }
                         onClose()
+                        startExit?.()
                         logout()
                         goToLoginOrCloseTab(navigate)
                       }}
