@@ -556,6 +556,52 @@ body:has(.pulse-shell),
   box-shadow: none !important;
 }
 
+/* beUI theme CTA in header — flat like other top tools */
+.pulse-theme-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 2px;
+  padding: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: #3a4a3e;
+  cursor: pointer;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pulse-theme-toggle:hover,
+.pulse-theme-toggle:focus,
+.pulse-theme-toggle:focus-visible,
+.pulse-theme-toggle:active {
+  color: #142019;
+  background: transparent;
+  border: 0;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: none !important;
+}
+
+.pulse-theme-toggle-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.pulse-theme-toggle-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .pulse-plus {
   width: 32px !important;
   height: 32px !important;
@@ -791,6 +837,15 @@ body:has(.pulse-shell),
   cursor: pointer;
   color: #fff !important;
   font-weight: 700;
+  line-height: 1 !important;
+  font-size: 13px !important;
+}
+
+.pulse-avatar .ant-avatar-string {
+  line-height: 1 !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 700;
 }
 
 .pulse-avatar-btn .pulse-avatar.ant-avatar-image,
@@ -804,6 +859,10 @@ body:has(.pulse-shell),
 .pulse-top .pulse-avatar img {
   border: 0;
   object-fit: cover;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  visibility: visible;
 }
 
 .pulse-sider-left.ant-layout-sider {
@@ -3620,12 +3679,14 @@ body:has(.pulse-shell),
 .pulse-overview.is-reordering .pulse-ov-tile .ant-card,
 .pulse-overview.is-reordering .pulse-ov-portrait,
 .pulse-overview.is-reordering .pulse-games-card,
+.pulse-overview.is-reordering .pulse-dash-card,
 .pulse-overview.is-reordering .ms-hello-name,
 .pulse-overview.is-reordering .ms-hello-line,
 .pulse-overview.is-reordering .ms-hello-when,
 .pulse-overview.is-settled .pulse-ov-tile .ant-card,
 .pulse-overview.is-settled .pulse-ov-portrait,
 .pulse-overview.is-settled .pulse-games-card,
+.pulse-overview.is-settled .pulse-dash-card,
 .pulse-overview.is-settled .ms-hello-name,
 .pulse-overview.is-settled .ms-hello-line,
 .pulse-overview.is-settled .ms-hello-when {
@@ -6695,14 +6756,16 @@ button.pulse-ts-person.is-clickable:focus-visible {
   -webkit-backdrop-filter: var(--ov-glass-blur);
 }
 
-/* My Files — stronger frosted plate so titles/meta stay readable on the peak */
+/* My Files — opaque plate (no backdrop blur) so scroll doesn't zoom/settle */
 .pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files,
 .pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files:hover {
-  background: rgba(252, 253, 252, 0.92) !important;
-  border: 1px solid rgba(255, 255, 255, 0.7) !important;
-  box-shadow:
-    0 14px 36px rgba(8, 22, 16, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+  background: rgba(252, 253, 252, 0.96) !important;
+  border: 1px solid rgba(20, 32, 25, 0.08) !important;
+  box-shadow: 0 8px 22px rgba(8, 22, 16, 0.1) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transform: translateZ(0);
+  transition: none;
 }
 
 .pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card.is-files .pulse-dash-card-title {
@@ -7811,6 +7874,9 @@ body.pulse-dash-dragging * {
   scrollbar-width: thin;
   scrollbar-color: #c5cdd4 transparent;
   padding-top: 4px;
+  /* Avoid scroll chaining / compositor zoom feel inside the card */
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
 }
 
 .pulse-dash-files-body::-webkit-scrollbar {

@@ -20,6 +20,7 @@ const { assertAllowedCompanyEmail, resolveCompanyDomain } = require('../utils/co
 const { createAndSendOrgInvite } = require('../utils/pulseOrgInvite')
 const { sendPulseRoleChangedEmail } = require('../utils/emailService')
 const { DEFAULT_GENDER } = require('../utils/indiaLocation')
+const { ensureHttpsAvatar } = require('../utils/pulseAvatar')
 
 function memberConfirmName(user) {
   const n = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
@@ -345,10 +346,14 @@ router.post('/accept', async (req, res) => {
     let avatarUrl = ''
     if (candidate?.photo?.data) {
       const raw = String(candidate.photo.data)
-      if (raw.startsWith('data:')) avatarUrl = raw
-      else if (raw.length <= 350000) {
-        avatarUrl = `data:${candidate.photo.mime || 'image/jpeg'};base64,${raw}`
-      }
+      avatarUrl = await ensureHttpsAvatar(raw, {
+        mime: candidate.photo.mime || 'image/jpeg',
+        folder: 'payroll_portal/avatars',
+        publicId: `invite_${String(invite.organizationId)}_${String(invite.email || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .slice(0, 48)}`,
+      })
     }
 
     const user = new User({

@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
 import { CloseOutlined, HolderOutlined, ReloadOutlined, SlidersOutlined } from '@ant-design/icons'
 import { Circle, Pause } from '@phosphor-icons/react'
-import { Avatar, Button, Card, Popover, Switch, Typography } from 'antd'
+import { Button, Card, Popover, Switch, Typography } from 'antd'
 import api from '../api'
 import PulseGreetingBanner, { periodForHour, PulseSkyWash } from './PulseGreetingBanner'
 import PulseWorkSchedule from './PulseWorkSchedule'
 import PulseMySpaceCalendar from './PulseMySpaceCalendar'
 import PulseCheckinBuddy from './PulseCheckinBuddy'
+import PulseUserAvatar from './PulseUserAvatar'
 import {
   DashListWidget,
   DEMO as DASH_WIDGET_DEMO,
@@ -372,14 +373,14 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
       <PulseSkyWash hour={hour} />
       <PulseCheckinBuddy checkedIn={Boolean(checkedInAt)} />
       <div className="pulse-checkin-head">
-        <Avatar
+        <PulseUserAvatar
           size={40}
-          src={avatarUrl || undefined}
+          src={avatarUrl}
           className="pulse-avatar pulse-checkin-face"
-          referrerPolicy="no-referrer"
+          alt={name}
         >
           {initial}
-        </Avatar>
+        </PulseUserAvatar>
         <div className="pulse-checkin-who">
           <strong>{name}</strong>
           <span className={`pulse-checkin-status is-${view.mode}`}>{view.status}</span>

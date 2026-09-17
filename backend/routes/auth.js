@@ -8,6 +8,7 @@ const { buildVerifyLink, buildResetLink } = require('../utils/urlHelper');
 const { DEFAULT_GENDER, extractIndiaState } = require('../utils/indiaLocation');
 const { publicUserWithApps } = require('../utils/pulseAuth');
 const { assertAllowedCompanyEmail, resolveCompanyDomain, completeCompanyEmail } = require('../utils/companyDomain');
+const { ensureHttpsAvatar, isHttpsAvatar } = require('../utils/pulseAvatar');
 
 // In-process JWT → User cache.
 // Same token tends to be reused on every protected request; hitting Mongo
@@ -406,12 +407,27 @@ router.put('/profile', auth, async (req, res, next) => {
     const allowedFields = [
       'companyName', 'companyAddress', 'companyPhone', 'companyEmail',
       'companyCIN', 'companyGST', 'companyWebsite', 'companyDomain', 'companyLogo', 'industry',
-      'firstName', 'lastName', 'avatarUrl', 'displayName', 'gender',
+      'firstName', 'lastName', 'displayName', 'gender',
       'country', 'state', 'timezone', 'language',
     ];
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) user[field] = req.body[field];
     });
+
+    // Avatars must be short HTTPS CDN URLs — never persist data: blobs on User.
+    if (req.body.avatarUrl !== undefined) {
+      const nextAvatar = String(req.body.avatarUrl || '').trim();
+      if (!nextAvatar) {
+        user.avatarUrl = '';
+      } else if (isHttpsAvatar(nextAvatar)) {
+        user.avatarUrl = nextAvatar;
+      } else {
+        user.avatarUrl = await ensureHttpsAvatar(nextAvatar, {
+          folder: 'payroll_portal/avatars',
+          publicId: `user_${String(user._id)}`,
+        });
+      }
+    }
 
     if (!user.gender) user.gender = DEFAULT_GENDER;
     if (!user.country) user.country = 'India';

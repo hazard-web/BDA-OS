@@ -5,16 +5,16 @@ import { LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { hoursLabel } from '../utils/pulseCalendar'
-import { hiResAvatarUrl } from '../utils/hiResAvatar'
 import PulsePlaceLabel from './PulsePlaceLabel'
+import PulseOrgPersonAvatar from './PulseOrgPersonAvatar'
 
 const DATE_FILTERS = [
   { value: 'today', label: 'Today' },
   { value: 'custom', label: 'Custom' },
 ]
 
-/** Live status refresh while viewing today. */
-const LIVE_POLL_MS = 12_000
+/** Live status refresh while viewing today (keep light — cards API is org-wide). */
+const LIVE_POLL_MS = 30_000
 
 function dayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -27,10 +27,6 @@ function clockLabel(ms) {
 
 function personName(row) {
   return row.name || String(row.email || '').split('@')[0] || 'Employee'
-}
-
-function personInitial(row) {
-  return personName(row).trim().charAt(0).toUpperCase() || 'E'
 }
 
 function lastCheckOutAt(row) {
@@ -81,62 +77,6 @@ function eventTag(type) {
     default:
       return <Tag>{eventLabel(type)}</Tag>
   }
-}
-
-/** Account HTTPS photo, or onboarding/account data photo via authenticated blob. */
-function AttendanceAvatar({ row }) {
-  const initial = personInitial(row)
-  const httpsSrc = hiResAvatarUrl(row?.avatarUrl, 128)
-  const proxyId = String(row?.avatarUserId || '')
-  const [src, setSrc] = useState(httpsSrc || '')
-  const [broken, setBroken] = useState(false)
-
-  useEffect(() => {
-    setBroken(false)
-    if (httpsSrc) {
-      setSrc(httpsSrc)
-      return undefined
-    }
-    if (!proxyId) {
-      setSrc('')
-      return undefined
-    }
-    let alive = true
-    let objectUrl = ''
-    api
-      .get(`/pulse-checkin/admin/avatar/${proxyId}`, { responseType: 'blob', timeout: 20000 })
-      .then((res) => {
-        if (!alive) return
-        const type = String(res.data?.type || '')
-        if (type && !type.startsWith('image/')) {
-          setSrc('')
-          return
-        }
-        objectUrl = URL.createObjectURL(res.data)
-        setSrc(objectUrl)
-      })
-      .catch(() => {
-        if (alive) setSrc('')
-      })
-    return () => {
-      alive = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [httpsSrc, proxyId])
-
-  if (!src || broken) {
-    return <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{initial}</span>
-  }
-
-  return (
-    <img
-      className="pulse-ts-person-avatar"
-      src={src}
-      alt=""
-      referrerPolicy="no-referrer"
-      onError={() => setBroken(true)}
-    />
-  )
 }
 
 export default function PulseAttendanceAdmin() {
@@ -352,7 +292,7 @@ export default function PulseAttendanceAdmin() {
               onClick={() => void openDetail(row)}
             >
               <header className="pulse-ts-person-head">
-                <AttendanceAvatar row={row} />
+                <PulseOrgPersonAvatar row={row} />
                 <div>
                   <h3>{personName(row)}</h3>
                   <p>{row.email || 'No email'}</p>

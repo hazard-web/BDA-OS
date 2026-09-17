@@ -385,7 +385,14 @@ async function attachOAuthProvider(user, { provider, providerId, emailVerified, 
     user.oauthProviders.push({ provider, providerId });
   }
   if (emailVerified && !user.isVerified) user.isVerified = true;
-  if (picture && !user.avatarUrl) user.avatarUrl = String(picture);
+  const pic = String(picture || '').trim();
+  const current = String(user.avatarUrl || '').trim();
+  if (pic && /^https?:\/\//i.test(pic)) {
+    // Prefer Google/GitHub HTTPS over empty or fat data: blobs.
+    if (!current || current.startsWith('data:') || current.length > 2048) {
+      user.avatarUrl = pic;
+    }
+  }
   await user.save();
   return user;
 }
@@ -805,9 +812,12 @@ async function handleOAuthCallback(req, res) {
           picture: profile.picture,
         });
       } else {
-        if (profile.picture && !existing.avatarUrl) {
-          existing.avatarUrl = profile.picture;
-          await existing.save();
+        if (profile.picture && /^https?:\/\//i.test(String(profile.picture))) {
+          const current = String(existing.avatarUrl || '').trim();
+          if (!current || current.startsWith('data:') || current.length > 2048) {
+            existing.avatarUrl = profile.picture;
+            await existing.save();
+          }
         }
         if (!existing.isVerified && profile.emailVerified) {
           existing.isVerified = true;

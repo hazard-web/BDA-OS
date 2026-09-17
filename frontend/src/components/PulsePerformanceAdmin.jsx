@@ -15,6 +15,7 @@ import {
 import { ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
+import PulseOrgPersonAvatar from './PulseOrgPersonAvatar'
 import {
   AREA_KEYS,
   AREA_SHORT,
@@ -35,11 +36,9 @@ function monthLabel(month) {
 }
 
 function personName(row) {
-  return row.name || String(row.email || '').split('@')[0] || 'Employee'
-}
-
-function personInitial(row) {
-  return personName(row).trim().charAt(0).toUpperCase() || 'E'
+  const name = String(row?.name || '').trim()
+  if (name && !name.includes('@')) return name
+  return String(row?.email || '').split('@')[0] || 'Employee'
 }
 
 const emptyScores = () =>
@@ -196,11 +195,7 @@ export default function PulsePerformanceAdmin() {
             onClick={() => openEdit(row)}
           >
             <header className="pulse-ts-person-head">
-              {row.avatarUrl ? (
-                <img className="pulse-ts-person-avatar" src={row.avatarUrl} alt="" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{personInitial(row)}</span>
-              )}
+              <PulseOrgPersonAvatar row={row} />
               <div>
                 <h3>{personName(row)}</h3>
                 <p>{row.email || '—'}</p>

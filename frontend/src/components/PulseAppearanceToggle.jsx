@@ -1,12 +1,12 @@
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
-import { useTheme } from '../context/ThemeContext'
+import { ThemeToggle, useThemeToggle } from './beui/ThemeToggle'
 
-export default function PulseAppearanceToggle({ variant = 'icon' }) {
-  const { theme, setTheme } = useTheme()
-  const dark = theme === 'dark'
-  const label = dark ? 'Switch to light mode' : 'Switch to dark mode'
-  const icon = dark ? <SunOutlined /> : <MoonOutlined />
-  const toggle = () => setTheme(dark ? 'light' : 'dark')
+export default function PulseAppearanceToggle({ variant = 'switch' }) {
+  const { isDark, toggle } = useThemeToggle({
+    variant: 'circle',
+    start: 'center',
+  })
+  const label = isDark ? 'Switch to light mode' : 'Switch to dark mode'
 
   const onKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -21,11 +21,11 @@ export default function PulseAppearanceToggle({ variant = 'icon' }) {
         type="button"
         title={label}
         aria-label={label}
-        aria-pressed={dark}
-        className={dark ? 'is-on' : undefined}
+        aria-pressed={isDark}
+        className={isDark ? 'is-on' : undefined}
         onClick={toggle}
       >
-        {icon}
+        {isDark ? <SunOutlined /> : <MoonOutlined />}
       </button>
     )
   }
@@ -35,29 +35,40 @@ export default function PulseAppearanceToggle({ variant = 'icon' }) {
       <button
         type="button"
         title={label}
-        className={`pulse-ribbon-btn${dark ? ' is-on' : ''}`}
+        className={`pulse-ribbon-btn${isDark ? ' is-on' : ''}`}
         aria-label={label}
-        aria-pressed={dark}
+        aria-pressed={isDark}
         onClick={toggle}
       >
-        {icon}
+        {isDark ? <SunOutlined /> : <MoonOutlined />}
       </button>
     )
   }
 
-  // No Ant Tooltip — its dark bubble was showing as a black hover smear under the header.
+  if (variant === 'icon') {
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        title={label}
+        className="pulse-appearance-btn"
+        aria-label={label}
+        aria-pressed={isDark}
+        onClick={toggle}
+        onKeyDown={onKeyDown}
+      >
+        {isDark ? <SunOutlined /> : <MoonOutlined />}
+      </span>
+    )
+  }
+
+  // Header CTA — beUI circle View Transition theme toggle
   return (
-    <span
-      role="button"
-      tabIndex={0}
-      title={label}
-      className="pulse-appearance-btn"
-      aria-label={label}
-      aria-pressed={dark}
-      onClick={toggle}
-      onKeyDown={onKeyDown}
-    >
-      {icon}
-    </span>
+    <ThemeToggle
+      variant="circle"
+      start="center"
+      className="pulse-theme-toggle"
+      iconClassName="pulse-theme-toggle-icon"
+    />
   )
 }
