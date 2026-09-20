@@ -212,6 +212,25 @@
   box-shadow: 0 12px 28px rgba(232, 138, 45, 0.28);
 }
 
+.pwc-text-reveal {
+  display: block;
+}
+
+.pwc-text-reveal-line {
+  display: block;
+}
+
+.pwc-text-reveal-unit {
+  display: inline-block;
+  white-space: pre;
+  will-change: transform, filter, opacity;
+}
+
+.pwc-text-reveal-word {
+  display: inline-block;
+  white-space: pre;
+}
+
 .pwc-cta {
   appearance: none;
   display: inline-flex;

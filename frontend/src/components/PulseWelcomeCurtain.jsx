@@ -5,6 +5,7 @@ import gsap from 'gsap'
 import { periodForHour } from './PulseGreetingBanner'
 import { markWelcomeCurtainSeen, pickWelcomeLine } from '../utils/pulseWelcomeCurtain'
 import PulseChromaticTextReveal from './PulseChromaticTextReveal'
+import PulseTextReveal from './PulseTextReveal'
 import '../pages/pulse-welcome-curtain.css'
 
 function displayName(name) {
@@ -85,7 +86,7 @@ function WelcomeCurtainInner({ name, email, hour = new Date().getHours(), onDone
     if (!root) return undefined
 
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const hold = reduce ? 1 : 5.5
+    const hold = reduce ? 1 : 8.5
     const pullDur = reduce ? 0.4 : 1.1
 
     const drape = root.querySelector('.pwc-drape')
@@ -237,7 +238,17 @@ function WelcomeCurtainInner({ name, email, hour = new Date().getHours(), onDone
                 />
               </h1>
               <p id="pwc-line" className="pwc-line">
-                <span className="pwc-highlight">{line}</span>
+                <span className="pwc-highlight">
+                  <PulseTextReveal
+                    text={line}
+                    className="pwc-line-reveal"
+                    split="word"
+                    stagger={0.045}
+                    delay={0.55}
+                    blur={10}
+                    yOffset="32%"
+                  />
+                </span>
               </p>
               <button
                 type="button"
