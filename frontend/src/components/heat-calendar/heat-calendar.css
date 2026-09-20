@@ -1,0 +1,239 @@
+/* beUI Heat Calendar — Pulse tokens / no Tailwind */
+
+.pulse-hc {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.pulse-heat-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  overflow: visible;
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.pulse-heat-host .pulse-hc {
+  width: 100%;
+  max-width: 100%;
+}
+
+.pulse-heat-host .pulse-hc-grid {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.pulse-hc-grid {
+  position: relative;
+  display: grid;
+  margin: 0;
+  overflow: visible;
+}
+
+.pulse-hc-month {
+  align-self: end;
+  justify-self: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #94a3b8;
+  transition: color 0.2s ease;
+}
+
+.pulse-hc-month.is-hot {
+  color: var(--pulse-heading, #183b35);
+}
+
+.pulse-hc-cell {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  transition: opacity 0.2s ease;
+}
+
+.pulse-hc-hit {
+  position: absolute;
+  inset: -2px;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: default;
+  outline: none;
+  box-shadow: none;
+}
+
+.pulse-hc-hit:focus,
+.pulse-hc-hit:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.pulse-hc-swatch {
+  pointer-events: none;
+  position: absolute;
+  inset: 2px;
+  display: block;
+  border-radius: 4px;
+  box-shadow: none;
+  transition: box-shadow 150ms ease;
+}
+
+.pulse-hc-swatch.is-end {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 3.5px var(--pulse-heat, #0f766e);
+}
+
+.pulse-hc-ring {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: block;
+  border: 1.5px solid color-mix(in srgb, var(--pulse-heat, #0f766e) 65%, transparent);
+  border-radius: inherit;
+}
+
+.pulse-hc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.pulse-hc-legend-range,
+.pulse-hc-legend-steps {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.pulse-hc-legend-steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pulse-hc-legend-swatch {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  transition: transform 0.15s ease;
+}
+
+.pulse-hc-legend-swatch:focus,
+.pulse-hc-legend-swatch:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.pulse-hc-tip {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #183b35;
+  border: 1px solid rgba(232, 241, 238, 0.14);
+  box-shadow: 0 10px 24px rgba(8, 22, 16, 0.22);
+  font-size: 11px;
+  font-weight: 650;
+  color: #e8f1ee;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: min(280px, calc(100vw - 20px));
+}
+
+.pulse-hc-tip.is-portal {
+  position: fixed;
+  z-index: 1400;
+  transform: translate(-50%, -100%);
+  margin: 0;
+}
+
+.pulse-hc-tip.is-portal.is-below {
+  transform: translate(-50%, 0);
+}
+
+.pulse-hc-tip-value {
+  font-variant-numeric: tabular-nums;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #fff;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.pulse-hc-tip-when,
+.pulse-hc-tip-days {
+  color: rgba(232, 241, 238, 0.62);
+  font-weight: 600;
+  font-family: Figtree, system-ui, sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulse-hc-tip-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+:root[data-theme='dark'] .pulse-hc-month {
+  color: rgba(232, 241, 238, 0.45);
+}
+
+:root[data-theme='dark'] .pulse-hc-month.is-hot {
+  color: #e8f1ee;
+}
+
+:root[data-theme='dark'] .pulse-hc-swatch.is-end {
+  box-shadow:
+    0 0 0 2px #183b35,
+    0 0 0 3.5px #5eead4;
+}
+
+:root[data-theme='dark'] .pulse-hc-ring {
+  border-color: color-mix(in srgb, #5eead4 70%, transparent);
+}
+
+:root[data-theme='dark'] .pulse-hc-legend-range,
+:root[data-theme='dark'] .pulse-hc-legend-steps {
+  color: rgba(232, 241, 238, 0.58);
+}
+
+:root[data-theme='dark'] .pulse-hc-tip {
+  background: #0f1412;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e8f1ee;
+}

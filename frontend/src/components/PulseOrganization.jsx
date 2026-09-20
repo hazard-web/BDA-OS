@@ -27,7 +27,7 @@ export const BDA_LOGO = '/bda-logo.png'
 export const BDA_LOGO_WIDE = '/bda-logo-wide.png'
 
 export const ORG_TABS = [
-  { key: 'overview', label: 'Overview' },
+  { key: 'overview', label: 'Dashboard' },
   { key: 'onboarding', label: 'Onboarding' },
   { key: 'people', label: 'People' },
 ]
@@ -49,7 +49,7 @@ export const ORG_TABS = [
 const SERVICES = [
   { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined, hint: 'Employees' },
   { key: 'companyFiles', label: 'Files', Icon: FolderOpenOutlined, hint: 'Company and employee' },
-  { key: 'leaveTeam', label: 'Leave Tracker', Icon: CalendarOutlined, hint: 'Approvals and holidays' },
+  { key: 'leaveTeam', label: 'Team leave', Icon: CalendarOutlined, hint: 'Approvals and absences' },
   { key: 'attendance', label: 'Attendance', Icon: CarryOutOutlined, hint: 'Org check-in' },
   { key: 'companyTime', label: 'Timesheet', Icon: ThunderboltOutlined, hint: 'Tasks and hours' },
   { key: 'companyPerformance', label: 'Performance', Icon: RiseOutlined, hint: 'Scores and bonuses' },
@@ -74,7 +74,15 @@ const SERVICES = [
 function OrgPeak() {
   return (
     <div className="pulse-strip-scene" aria-hidden="true">
-      <img className="pulse-strip-photo" src="/pulse-overview-peak.jpg" alt="" />
+      <img
+        className="pulse-strip-photo"
+        src="/pulse-peak-wallpaper.jpg"
+        srcSet="/pulse-peak-wallpaper.jpg 2560w"
+        sizes="100vw"
+        alt=""
+        decoding="async"
+        fetchPriority="high"
+      />
       <div className="pulse-strip-shade" />
       <div className="pulse-aura-sheen" />
     </div>
@@ -177,20 +185,8 @@ function OverviewPanel({ user, onOpenService }) {
   )
 }
 
-function PeoplePanel({ user }) {
-  return (
-    <div className="pulse-org-overview">
-      <div className="pulse-org-grid">
-        <OrgIdentityCard user={user} />
-        <section className="pulse-org-main is-deep">
-          <Card size="small" className="pulse-org-card pulse-org-main-card">
-            <h2 className="pulse-org-pane-title">People</h2>
-            <PulseInviteAdmin />
-          </Card>
-        </section>
-      </div>
-    </div>
-  )
+function PeoplePanel() {
+  return <PulseInviteAdmin />
 }
 
 /** Organization — org home aligned with Overview. */
@@ -212,94 +208,64 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, live
 
   if (tab === 'onboarding') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <div className="pulse-org-overview pulse-org-employee">
-            <PulseOnboarding />
-          </div>
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseOnboarding />
       </div>
     )
   }
 
   if (tab === 'people') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <PeoplePanel user={user} />
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PeoplePanel />
       </div>
     )
   }
 
   if (tab === 'apps') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <div className="pulse-org-apps">
-            <PulseAppGrantsAdmin />
-          </div>
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseAppGrantsAdmin />
       </div>
     )
   }
 
   if (tab === 'attendance') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <PulseLiveModule kind="attendance" scope="org" {...liveProps} />
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseLiveModule kind="attendance" scope="org" {...liveProps} />
       </div>
     )
   }
 
   if (tab === 'time') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <PulseLiveModule kind="time" scope="org" {...liveProps} />
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseLiveModule kind="time" scope="org" {...liveProps} />
       </div>
     )
   }
 
   if (tab === 'performance') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <PulseLiveModule kind="performance" scope="org" {...liveProps} />
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseLiveModule kind="performance" scope="org" {...liveProps} />
       </div>
     )
   }
 
   if (tab === 'files') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <div className="pulse-org-overview pulse-org-employee">
-            <PulseCompanyFiles />
-          </div>
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseCompanyFiles />
       </div>
     )
   }
 
   if (tab === 'payroll') {
     return (
-      <div className="pulse-strip-root">
-        <OrgPeak />
-        <div className="pulse-scroll pulse-scroll-surface pulse-ov-open pulse-org-open">
-          <PulseLiveModule kind="payroll" scope="org" {...liveProps} />
-        </div>
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseLiveModule kind="payroll" scope="org" {...liveProps} />
       </div>
     )
   }

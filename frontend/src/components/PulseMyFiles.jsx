@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { App, Button, Empty, Spin } from 'antd'
 import {
   EyeOutlined,
-  FileOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
 import api from '../api'
+import PulseFileTypeIcon from './PulseFileTypeIcon'
 import PulseFileViewModal from './PulseFileViewModal'
 import './pulse-files.css'
 
@@ -94,7 +94,7 @@ export default function PulseMyFiles() {
                 onClick={() => setViewFile(row)}
               >
                 <span className="pulse-files-ico" aria-hidden="true">
-                  <FileOutlined />
+                  <PulseFileTypeIcon row={row} />
                 </span>
                 <div className="pulse-files-copy">
                   <p className="pulse-files-name">{row.title}</p>

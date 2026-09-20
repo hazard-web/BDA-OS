@@ -83,7 +83,7 @@ export default function HrSetup() {
       <header className="hrs-top">
         <div className="hrs-brand">
           <span className="hrs-mark" aria-hidden="true">
-            <i style={{ background: '#1A5F4A' }} />
+            <i style={{ background: '#176B5B' }} />
             <i style={{ background: '#2d8a6e' }} />
             <i style={{ background: '#c8e6d9' }} />
             <i style={{ background: '#f5f0e8' }} />

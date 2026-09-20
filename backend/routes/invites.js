@@ -16,6 +16,7 @@ const {
   effectiveRole,
   pulseRoleLabel,
 } = require('../utils/pulseAuth')
+const { personName } = require('../utils/pulsePerson')
 const { assertAllowedCompanyEmail, resolveCompanyDomain } = require('../utils/companyDomain')
 const { createAndSendOrgInvite } = require('../utils/pulseOrgInvite')
 const { sendPulseRoleChangedEmail } = require('../utils/emailService')
@@ -41,8 +42,7 @@ function requireAdmin(req, res, next) {
 }
 
 function inviterName(user) {
-  const n = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-  return n || user.displayName || user.email || 'Your admin'
+  return personName(user, 'Your admin')
 }
 
 function isManagerRole(role) {
@@ -340,7 +340,7 @@ router.post('/accept', async (req, res) => {
       organizationId: invite.organizationId,
       $or: [{ officialEmail: invite.email }, { email: invite.email }],
     })
-      .select('photo firstName lastName')
+      .select('photo firstName lastName phone countryCode')
       .lean()
 
     let avatarUrl = ''
@@ -356,6 +356,15 @@ router.post('/accept', async (req, res) => {
       })
     }
 
+    const candDigits = String(candidate?.phone || '').replace(/\D/g, '')
+    let mobilePhone = ''
+    if (candDigits.length === 10) {
+      const cc = String(candidate?.countryCode || '+91').replace(/\D/g, '') || '91'
+      mobilePhone = `+${cc}${candDigits}`
+    } else if (candDigits.length >= 11) {
+      mobilePhone = `+${candDigits}`
+    }
+
     const user = new User({
       email: invite.email,
       password,
@@ -366,6 +375,7 @@ router.post('/accept', async (req, res) => {
       companyName: (admin && admin.companyName) || invite.companyName || '',
       companyAddress: (admin && admin.companyAddress) || '',
       companyPhone: (admin && admin.companyPhone) || '',
+      mobilePhone,
       companyEmail: (admin && admin.companyEmail) || invite.email,
       companyDomain,
       companyCIN: (admin && admin.companyCIN) || '',

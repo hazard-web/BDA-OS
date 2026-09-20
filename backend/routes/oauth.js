@@ -545,6 +545,7 @@ router.post('/complete', async (req, res, next) => {
       companyEmail: data.email.toLowerCase(),
       companyDomain: resolveCompanyDomain(),
       companyPhone: digits.length === 10 ? `+91${digits}` : `+${digits}`,
+      mobilePhone: digits.length === 10 ? `+91${digits}` : `+${digits}`,
       companyCIN: '',
       companyGST: '',
       companyWebsite: '',

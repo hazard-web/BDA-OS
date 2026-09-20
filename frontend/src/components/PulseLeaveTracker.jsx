@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
 import {
   App,
@@ -18,7 +17,6 @@ import {
 } from 'antd'
 import {
   ArrowLeftOutlined,
-  CalendarOutlined,
   CloseOutlined,
   DownloadOutlined,
   DownOutlined,
@@ -37,7 +35,19 @@ import {
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import api from '../api'
-import leaveEmptyArt from '../assets/pulse-leave-empty.png'
+import { PULSE_LEAVE_EVENT } from '../utils/pulseCheckIn'
+import { pulseToast } from '../utils/pulseToast'
+import PulseSlideClose from './PulseSlideClose'
+import {
+  formatElapsed,
+  getElapsedSeconds,
+  hydrateCheckInFromServer,
+  PULSE_CHECKIN_EVENT,
+  readCheckInAt,
+  rolloverCheckInDayIfNeeded,
+  startCheckIn,
+  stopCheckIn,
+} from '../utils/pulseCheckIn'
 
 dayjs.extend(customParseFormat)
 
@@ -312,7 +322,7 @@ function formatHolidayDate(value) {
 function formatRangeLabel(startDate, endDate) {
   const start = new Date(startDate)
   const end = new Date(endDate)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '—'
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '-'
   if (format(start, 'yyyy-MM-dd') === format(end, 'yyyy-MM-dd')) {
     return format(start, 'dd-MMM-yyyy')
   }
@@ -395,18 +405,71 @@ function LeaveAttach({ value, onChange, disabled }) {
   )
 }
 
+function LeaveEmptyArt() {
+  const cells = []
+  const originX = 56.5
+  const originY = 62
+  const size = 7.4
+  const gap = 3.2
+  for (let row = 0; row < 5; row += 1) {
+    for (let col = 0; col < 5; col += 1) {
+      const marked = row === 2 && col === 2
+      cells.push(
+        <rect
+          key={`${row}-${col}`}
+          className={marked ? 'pulse-leave-empty-mark' : 'pulse-leave-empty-cell'}
+          x={originX + col * (size + gap)}
+          y={originY + row * (size + gap)}
+          width={size}
+          height={size}
+          rx={1.6}
+        />,
+      )
+    }
+  }
+
+  return (
+    <svg className="pulse-leave-empty-svg" viewBox="0 0 160 148" fill="none" aria-hidden="true">
+      <circle className="pulse-leave-empty-glow" cx="80" cy="84" r="56" />
+      <path
+        className="pulse-leave-empty-leaf"
+        d="M34 86c18-8 34 6 30 30-20 8-36-6-30-30Z"
+      />
+      <path
+        className="pulse-leave-empty-vein"
+        d="M42 96c8 8 12 16 14 24"
+      />
+      <path
+        className="pulse-leave-empty-sprig"
+        d="M26 104c-6-16-2-30 8-36"
+      />
+      <path
+        className="pulse-leave-empty-sprig"
+        d="M128 92c16 8 24 26 12 42M134 106c10 6 14 18 6 26"
+      />
+      <rect className="pulse-leave-empty-card" x="50" y="30" width="60" height="88" rx="11" />
+      <path
+        className="pulse-leave-empty-head"
+        d="M50 41.5V41c0-6.1 4.9-11 11-11h38c6.1 0 11 4.9 11 11v16.5H50V41.5Z"
+      />
+      <circle className="pulse-leave-empty-ring" cx="64" cy="30.5" r="3.2" />
+      <circle className="pulse-leave-empty-ring" cx="76.5" cy="30.5" r="3.2" />
+      <circle className="pulse-leave-empty-ring" cx="89" cy="30.5" r="3.2" />
+      <circle className="pulse-leave-empty-ring" cx="101.5" cy="30.5" r="3.2" />
+      {cells}
+      <path
+        className="pulse-leave-empty-day"
+        d="M79.6 85.4c2.2-1 4.1.7 3.6 3.4-2.4 1-4.3-.7-3.6-3.4Z"
+      />
+    </svg>
+  )
+}
+
 function LeaveEmpty({ title, actionLabel, onAction }) {
   return (
     <div className="pulse-leave-empty">
       <div className="pulse-leave-empty-art" aria-hidden="true">
-        <img
-          className="pulse-leave-empty-img"
-          src={leaveEmptyArt}
-          alt=""
-          width={180}
-          height={180}
-          draggable={false}
-        />
+        <LeaveEmptyArt />
       </div>
       <p>{title}</p>
       {actionLabel ? (
@@ -701,18 +764,9 @@ function FilterSelect({ value, onChange, options }) {
   )
 }
 
-function LeaveCard({ children, footer }) {
-  return (
-    <div className="pulse-leave-card">
-      <div className="pulse-leave-card-scroll">{children}</div>
-      {footer}
-    </div>
-  )
-}
-
 function LeavePagination({ total, page, pageSize, onPage, onPageSize }) {
   const lastPage = Math.max(1, Math.ceil(total / pageSize))
-  const start = total === 0 ? 1 : (page - 1) * pageSize + 1
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, total)
 
   return (
@@ -842,7 +896,10 @@ export default function PulseLeaveTracker({
     setAppliedFilter(next)
     if (next.from) {
       setHolidayYear(next.from.year())
-      setTeamWeek(next.from)
+      // Keep team week on a real week - don't jump to Jan 1 for "this year" filters
+      if (next.period === 'thisWeek' || next.period === 'thisMonth' || next.period === 'custom') {
+        setTeamWeek(dayjs(next.from).startOf('day'))
+      }
     }
     setRequestPage(1)
     setHolidayPage(1)
@@ -853,8 +910,8 @@ export default function PulseLeaveTracker({
     const next = defaultFilter()
     setDraftFilter(next)
     setAppliedFilter(next)
-    setHolidayYear(next.from.year())
-    setTeamWeek(dayjs())
+    setHolidayYear(dayjs().year())
+    setTeamWeek(dayjs().startOf('day'))
   }
 
   const load = useCallback(async () => {
@@ -963,11 +1020,13 @@ export default function PulseLeaveTracker({
     setRespondingId(id)
     try {
       await api.post(`/pulse-checkin/leaves/${id}/respond`, { status })
+      window.dispatchEvent(new CustomEvent(PULSE_LEAVE_EVENT))
       message.success({
         content: status === 'Approved' ? 'Leave approved' : 'Leave rejected',
         className: 'pulse-message',
       })
       await loadTeam()
+      await load()
     } catch (err) {
       message.error({
         content: err.response?.data?.message || err.message || 'Failed to update leave',
@@ -1022,10 +1081,8 @@ export default function PulseLeaveTracker({
   const teamRangeLabel = useMemo(() => {
     const start = startOfWeek(teamWeek.toDate(), { weekStartsOn: 0 })
     const end = endOfWeek(teamWeek.toDate(), { weekStartsOn: 0 })
-    return `${format(start, 'dd-MMM-yyyy')} - ${format(end, 'dd-MMM-yyyy')}`
+    return `${format(start, 'dd MMM yyyy')} - ${format(end, 'dd MMM yyyy')}`
   }, [teamWeek])
-
-  const holidayYearLabel = `01-Jan-${holidayYear} - 31-Dec-${holidayYear}`
 
   const indiaGalleryRows = useMemo(() => indiaHolidaysForYear(holidayYear), [holidayYear])
 
@@ -1078,7 +1135,7 @@ export default function PulseLeaveTracker({
         key: 'file',
         width: 88,
         render: (_, row) => {
-          if (!row.attachment?.name) return '—'
+          if (!row.attachment?.name) return '-'
           if (row.attachment.url) {
             return (
               <a
@@ -1113,7 +1170,7 @@ export default function PulseLeaveTracker({
       {
         title: 'Employee',
         key: 'employee',
-        render: (_, row) => row.staff?.name || row.staff?.email || '—',
+        render: (_, row) => row.staff?.name || row.staff?.email || '-',
       },
       {
         title: 'Leave type',
@@ -1173,7 +1230,7 @@ export default function PulseLeaveTracker({
       {
         title: 'Employee',
         key: 'employee',
-        render: (_, row) => row.staff?.name || row.staff?.email || '—',
+        render: (_, row) => row.staff?.name || row.staff?.email || '-',
       },
       {
         title: 'Leave type',
@@ -1220,12 +1277,12 @@ export default function PulseLeaveTracker({
         attachment: values.attachment || null,
       })
       closeAdd()
-      message.success({
-        content: res.data?.notified
-          ? `Leave request submitted · ${values.teamEmailId} notified`
-          : 'Leave request submitted',
-        className: 'pulse-message',
-      })
+      if (res.data?.casual) setCasual(res.data.casual)
+      window.dispatchEvent(new CustomEvent(PULSE_LEAVE_EVENT))
+      pulseToast.success(
+        'Leave request submitted',
+        res.data?.notified ? `${values.teamEmailId} notified` : undefined,
+      )
       await load()
       onMyTabChange?.('requests')
     } catch (err) {
@@ -1648,7 +1705,7 @@ export default function PulseLeaveTracker({
           dataIndex: field.key,
           width: 150,
           ellipsis: true,
-          render: (value) => value || '—',
+          render: (value) => value || '-',
         })),
       },
     ],
@@ -1896,29 +1953,79 @@ export default function PulseLeaveTracker({
   }
 
   const renderMyData = () => {
+    const lastPage = Math.max(1, Math.ceil(filteredRequests.length / requestPageSize))
+    const safePage = Math.min(requestPage, lastPage)
+
     return (
-      <>
-        <div className="pulse-leave-toolbar">
-          <Select
-            value={requestFilter}
-            onChange={setRequestFilter}
-            className="pulse-leave-select"
-            options={[{ value: 'Leave', label: 'Leave', title: '' }]}
-          />
-          <div className="pulse-leave-toolbar-right">
-            <Button
-              icon={<FilterOutlined />}
-              aria-label="Filter"
-              className={filterActive ? 'is-on' : ''}
-              onClick={openFilter}
-            />
-          </div>
-        </div>
-        <LeaveCard
-          footer={(
+      <div className="pulse-att-page pulse-leave-att">
+        <div className="pulse-att-board">
+          <header className="pulse-att-toolbar">
+            <div className="pulse-att-period" />
+            <div className="pulse-leave-toolbar-actions">
+              <button
+                type="button"
+                className="pov-cta plive-top-cta plive-checkin"
+                onClick={() => setAddOpen(true)}
+                disabled={sample}
+              >
+                Add Request
+              </button>
+              <Button
+                icon={<FilterOutlined />}
+                aria-label="Filter"
+                className={`pulse-leave-filter-btn${filterActive ? ' is-on' : ''}`}
+                onClick={openFilter}
+              />
+            </div>
+          </header>
+
+          <section className="pulse-att-panel" aria-label="Leave requests">
+            <div className="pulse-att-panel-chrome">
+              <header className="pulse-att-panel-head">
+                <h4>Leave requests</h4>
+                <span>
+                  {filteredRequests.length} request{filteredRequests.length === 1 ? '' : 's'}
+                </span>
+              </header>
+              <div className="pulse-att-cols pulse-leave-att-cols" aria-hidden="true">
+                <span>Type</span>
+                <span>Dates</span>
+                <span>Days</span>
+                <span>Status</span>
+              </div>
+            </div>
+
+            <div className="pulse-leave-att-body">
+              {filteredRequests.length === 0 && !loading ? (
+                <LeaveEmpty title="No leave requests yet" />
+              ) : (
+                <ul className="pulse-att-list pulse-leave-att-list" aria-label="Leave requests">
+                  {pagedRequests.map((row) => {
+                    const tone = String(row.status || '').toLowerCase()
+                    return (
+                      <li key={row.id} className={`pulse-att-row pulse-leave-att-row is-${tone}`}>
+                        <span className={`pulse-att-dot is-${tone === 'approved' ? 'ok' : tone === 'rejected' ? 'bad' : 'open'}`} aria-hidden="true" />
+                        <div className="pulse-att-day">
+                          <strong>{row.type || 'Casual'}</strong>
+                          <span>{row.reason || '-'}</span>
+                        </div>
+                        <div className="pulse-leave-att-dates">
+                          {formatRangeLabel(row.startDate, row.endDate)}
+                        </div>
+                        <div className="pulse-att-hours">{row.days ?? leaveDurationDays(row.startDate, row.endDate)}</div>
+                        <span className={`pulse-att-status is-${tone === 'approved' ? 'ok' : tone === 'rejected' ? 'bad' : 'open'}`}>
+                          {row.status || 'Pending'}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+
             <LeavePagination
               total={filteredRequests.length}
-              page={requestPage}
+              page={safePage}
               pageSize={requestPageSize}
               onPage={setRequestPage}
               onPageSize={(size) => {
@@ -1926,179 +2033,235 @@ export default function PulseLeaveTracker({
                 setRequestPage(1)
               }}
             />
-          )}
-        >
-          {filteredRequests.length === 0 && !loading ? (
-            <LeaveEmpty title="No Data Found" actionLabel="Add Request" onAction={() => setAddOpen(true)} />
-          ) : (
-            <Table
-              size="middle"
-              rowKey="id"
-              loading={loading}
-              pagination={false}
-              columns={columns}
-              dataSource={pagedRequests}
-              className="pulse-leave-table"
-            />
-          )}
-        </LeaveCard>
-      </>
+          </section>
+        </div>
+      </div>
     )
   }
 
+  const shiftTeamWeek = (delta) => {
+    setTeamWeek((value) => dayjs(value).add(delta, 'week').startOf('day'))
+  }
+
+  const goThisWeek = () => {
+    setTeamWeek(dayjs().startOf('day'))
+  }
+
   const renderTeam = () => (
-    <>
-      <div className="pulse-leave-toolbar pulse-leave-toolbar-center">
-        <div className="pulse-leave-period">
-          <Button
-            type="text"
-            icon={<LeftOutlined />}
-            aria-label="Previous week"
-            onClick={() => setTeamWeek((value) => value.subtract(1, 'week'))}
-          />
-          <Button
-            type="text"
-            icon={<CalendarOutlined />}
-            aria-label="This week"
-            onClick={() => setTeamWeek(dayjs())}
-          />
-          <Button
-            type="text"
-            icon={<RightOutlined />}
-            aria-label="Next week"
-            onClick={() => setTeamWeek((value) => value.add(1, 'week'))}
-          />
-          <span>{teamRangeLabel}</span>
-        </div>
-        <div className="pulse-leave-toolbar-right">
-          <Button
-            icon={<FilterOutlined />}
-            aria-label="Filter"
-            className={filterActive ? 'is-on' : ''}
-            onClick={openFilter}
-          />
-        </div>
-      </div>
-
-      {isAdmin ? (
-        <LeaveCard>
-          <div className="pulse-leave-section-head">Pending approvals</div>
-          {pendingLeaves.length === 0 && !teamLoading ? (
-            <LeaveEmpty title="No pending leave requests" />
-          ) : (
-            <Table
-              size="middle"
-              rowKey="id"
-              loading={teamLoading}
-              pagination={false}
-              columns={pendingColumns}
-              dataSource={pendingLeaves}
-              className="pulse-leave-table"
-            />
-          )}
-        </LeaveCard>
-      ) : null}
-
-      <LeaveCard>
-        <div className="pulse-leave-section-head">On leave this week</div>
-        {teamOnLeave.length === 0 && !teamLoading ? (
-          <LeaveEmpty title="No team members on leave this week" />
-        ) : (
-          <Table
-            size="middle"
-            rowKey="id"
-            loading={teamLoading}
-            pagination={false}
-            columns={onLeaveColumns}
-            dataSource={teamOnLeave}
-            className="pulse-leave-table"
-          />
-        )}
-      </LeaveCard>
-    </>
-  )
-
-  const renderHolidays = () => (
-    <>
-      <div className="pulse-leave-toolbar pulse-leave-toolbar-center">
-        <div className="pulse-leave-period">
-          <Button
-            type="text"
-            icon={<LeftOutlined />}
-            aria-label="Previous year"
-            onClick={() => setHolidayYear((year) => year - 1)}
-          />
-          <Button type="text" icon={<CalendarOutlined />} aria-label="Calendar" />
-          <Button
-            type="text"
-            icon={<RightOutlined />}
-            aria-label="Next year"
-            onClick={() => setHolidayYear((year) => year + 1)}
-          />
-          <span>{holidayYearLabel}</span>
-        </div>
-        <div className="pulse-leave-toolbar-right">
-          {isAdmin ? (
-            <Button
-              type="primary"
-              className="pulse-leave-add-btn"
-              loading={holidaySaving}
-              onClick={openPlanHolidays}
+    <div className="pulse-att-page pulse-leave-att">
+      <div className="pulse-att-board">
+        <header className="pulse-att-toolbar pulse-leave-team-toolbar">
+          <div className="pulse-att-period pulse-leave-week-period">
+            <div className="pulse-att-day-nav pulse-leave-week-nav" role="group" aria-label="Change week">
+              <button
+                type="button"
+                className="pulse-att-day-step"
+                onClick={() => shiftTeamWeek(-1)}
+                aria-label="Previous week"
+              >
+                <LeftOutlined />
+              </button>
+              <button
+                type="button"
+                className="pulse-att-day-step"
+                onClick={() => shiftTeamWeek(1)}
+                aria-label="Next week"
+              >
+                <RightOutlined />
+              </button>
+            </div>
+            <button
+              type="button"
+              className="pulse-leave-week-label"
+              onClick={goThisWeek}
+              title="Jump to this week"
             >
-              Plan holidays
-            </Button>
-          ) : null}
-          <Dropdown
-            trigger={['click']}
-            placement="bottomRight"
-            rootClassName="pulse-leave-more-menu"
-            menu={moreMenu(exportHolidays, visibleHolidays.length > 0)}
-          >
-            <Button icon={<EllipsisOutlined />} aria-label="More options" />
-          </Dropdown>
+              {teamRangeLabel}
+            </button>
+          </div>
+          <div className="pulse-leave-toolbar-actions">
+            <Button
+              icon={<FilterOutlined />}
+              aria-label="Filter"
+              className={`pulse-leave-filter-btn${filterActive ? ' is-on' : ''}`}
+              onClick={openFilter}
+            />
+          </div>
+        </header>
+
+        {isAdmin ? (
+          <section className="pulse-att-panel" aria-label="Pending approvals">
+            <div className="pulse-att-panel-chrome">
+              <header className="pulse-att-panel-head">
+                <h4>Pending approvals</h4>
+                <span>
+                  {pendingLeaves.length} request{pendingLeaves.length === 1 ? '' : 's'}
+                </span>
+              </header>
+            </div>
+            <div className="pulse-leave-att-body">
+              {pendingLeaves.length === 0 && !teamLoading ? (
+                <LeaveEmpty title="No pending leave requests" />
+              ) : (
+                <Table
+                  size="middle"
+                  rowKey="id"
+                  loading={teamLoading}
+                  pagination={false}
+                  columns={pendingColumns}
+                  dataSource={pendingLeaves}
+                  className="pulse-leave-table"
+                />
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="pulse-att-panel" aria-label="On leave this week">
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>On leave this week</h4>
+              <span>
+                {teamOnLeave.length} member{teamOnLeave.length === 1 ? '' : 's'}
+              </span>
+            </header>
+          </div>
+          <div className="pulse-leave-att-body">
+            {teamOnLeave.length === 0 && !teamLoading ? (
+              <LeaveEmpty title="No team members on leave this week" />
+            ) : (
+              <Table
+                size="middle"
+                rowKey="id"
+                loading={teamLoading}
+                pagination={false}
+                columns={onLeaveColumns}
+                dataSource={teamOnLeave}
+                className="pulse-leave-table"
+              />
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+
+  const renderHolidays = () => {
+    const lastPage = Math.max(1, Math.ceil(visibleHolidays.length / holidayPageSize))
+    const safePage = Math.min(holidayPage, lastPage)
+
+    return (
+      <div className="pulse-att-page pulse-leave-att">
+        <div className="pulse-att-board">
+          <header className="pulse-att-toolbar pulse-leave-team-toolbar">
+            <div className="pulse-att-period pulse-leave-week-period">
+              <div className="pulse-att-day-nav pulse-leave-week-nav" role="group" aria-label="Change year">
+                <button
+                  type="button"
+                  className="pulse-att-day-step"
+                  onClick={() => setHolidayYear((year) => year - 1)}
+                  aria-label="Previous year"
+                >
+                  <LeftOutlined />
+                </button>
+                <button
+                  type="button"
+                  className="pulse-att-day-step"
+                  onClick={() => setHolidayYear((year) => year + 1)}
+                  aria-label="Next year"
+                >
+                  <RightOutlined />
+                </button>
+              </div>
+              <button
+                type="button"
+                className="pulse-leave-week-label"
+                onClick={() => setHolidayYear(dayjs().year())}
+                title="Jump to this year"
+              >
+                {holidayYear}
+              </button>
+            </div>
+            <div className="pulse-leave-toolbar-actions">
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="pov-cta plive-top-cta plive-checkin"
+                  disabled={holidaySaving}
+                  onClick={openPlanHolidays}
+                >
+                  Plan holidays
+                </button>
+              ) : null}
+              <Dropdown
+                trigger={['click']}
+                placement="bottomRight"
+                rootClassName="pulse-leave-more-menu"
+                menu={moreMenu(exportHolidays, visibleHolidays.length > 0)}
+              >
+                <Button
+                  icon={<EllipsisOutlined />}
+                  aria-label="More options"
+                  className="pulse-leave-filter-btn"
+                />
+              </Dropdown>
+            </div>
+          </header>
+
+          <section className="pulse-att-panel" aria-label="Holidays">
+            <div className="pulse-att-panel-chrome">
+              <header className="pulse-att-panel-head">
+                <h4>Holidays</h4>
+                <span>
+                  {visibleHolidays.length} holiday{visibleHolidays.length === 1 ? '' : 's'}
+                </span>
+              </header>
+            </div>
+
+            <div className="pulse-leave-att-body">
+              {visibleHolidays.length === 0 ? (
+                <LeaveEmpty
+                  title="No holidays planned for this year"
+                  actionLabel={isAdmin ? 'Plan holidays' : undefined}
+                  onAction={isAdmin ? openPlanHolidays : undefined}
+                />
+              ) : (
+                <Table
+                  size="middle"
+                  rowKey={(row) => row.id || row.date}
+                  pagination={false}
+                  columns={holidayColumns}
+                  dataSource={pagedHolidays}
+                  className="pulse-leave-table"
+                />
+              )}
+            </div>
+
+            <LeavePagination
+              total={visibleHolidays.length}
+              page={safePage}
+              pageSize={holidayPageSize}
+              onPage={setHolidayPage}
+              onPageSize={(size) => {
+                setHolidayPageSize(size)
+                setHolidayPage(1)
+              }}
+            />
+          </section>
         </div>
       </div>
-      <LeaveCard
-        footer={(
-          <LeavePagination
-            total={visibleHolidays.length}
-            page={holidayPage}
-            pageSize={holidayPageSize}
-            onPage={setHolidayPage}
-            onPageSize={(size) => {
-              setHolidayPageSize(size)
-              setHolidayPage(1)
-            }}
-          />
-        )}
-      >
-        {visibleHolidays.length === 0 ? (
-          <LeaveEmpty
-            title="No company holidays planned for this year"
-            actionLabel={isAdmin ? 'Plan holidays' : undefined}
-            onAction={isAdmin ? openPlanHolidays : undefined}
-          />
-        ) : (
-          <Table
-            size="middle"
-            rowKey={(row) => row.id || row.date}
-            pagination={false}
-            columns={holidayColumns}
-            dataSource={pagedHolidays}
-            className="pulse-leave-table"
-          />
-        )}
-      </LeaveCard>
-    </>
-  )
+    )
+  }
+
+  const useAttShell = mainTab === 'mydata' || mainTab === 'team' || mainTab === 'holidays'
 
   return (
-    <div className="pulse-leave-page">
+    <div className={`pulse-leave-page${useAttShell ? ' is-att' : ''}`}>
       <div className="pulse-leave-shell">
-        <div className="pulse-leave-panel">
+        <div className={`pulse-leave-panel${useAttShell ? ' is-att' : ''}`}>
           {mainTab === 'mydata' ? renderMyData() : null}
           {mainTab === 'team' ? renderTeam() : null}
-          {/* Holidays — parked on branch `pulse/company-later-services`. Restore the tab in PeopleHome.jsx to ship it. */}
+          {/* Holidays - parked on branch `pulse/company-later-services`. Restore the tab in PeopleHome.jsx to ship it. */}
           {mainTab === 'holidays' ? renderHolidays() : null}
         </div>
       </div>
@@ -2232,19 +2395,7 @@ export default function PulseLeaveTracker({
           </div>
         </div>
       </Drawer>
-      {addOpen
-        ? createPortal(
-            <button
-              type="button"
-              className="pulse-leave-drawer-close"
-              aria-label="Close"
-              onClick={closeAdd}
-            >
-              <CloseOutlined />
-            </button>,
-            document.body,
-          )
-        : null}
+      <PulseSlideClose open={addOpen} onClose={closeAdd} width={560} />
 
       <Modal
         title="Plan holidays"
@@ -2343,7 +2494,7 @@ export default function PulseLeaveTracker({
         </div>
 
         <div className="pulse-leave-plan-section">
-          <div className="pulse-leave-plan-section-title">Company holidays · {holidayYear}</div>
+          <div className="pulse-leave-plan-section-title">Holidays · {holidayYear}</div>
           {visibleHolidays.length > 0 ? (
             <div className="pulse-leave-gallery-list">
               {visibleHolidays.map((row) => (
@@ -2422,14 +2573,6 @@ export default function PulseLeaveTracker({
         width={300}
         getContainer={false}
         closable={false}
-        extra={(
-          <Button
-            type="text"
-            icon={<CloseOutlined />}
-            aria-label="Close filter"
-            onClick={() => setFilterOpen(false)}
-          />
-        )}
         footer={(
           <div className="pulse-leave-filter-actions">
             <Button type="primary" onClick={applyFilter}>Apply</Button>
@@ -2491,6 +2634,7 @@ export default function PulseLeaveTracker({
           </>
         ) : null}
       </Drawer>
+      <PulseSlideClose open={filterOpen} onClose={() => setFilterOpen(false)} width={300} />
     </div>
   )
 }

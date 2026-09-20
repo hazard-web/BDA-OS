@@ -32,10 +32,13 @@ export default class ErrorBoundary extends Component {
   render() {
     if (!this.state.error) return this.props.children
 
+    const detail = String(this.state.error?.message || this.state.error || '')
+
     return (
       <div className="pulse-crash">
         <div className="pulse-crash-card">
           <h1>Couldn’t load</h1>
+          {detail ? <p className="pulse-crash-detail">{detail}</p> : null}
           <div className="pulse-crash-actions">
             <button type="button" className="pulse-crash-retry" onClick={this.handleReset}>
               Retry

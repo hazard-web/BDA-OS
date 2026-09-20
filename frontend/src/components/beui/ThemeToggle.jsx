@@ -71,6 +71,13 @@ html[data-beui-vt="blinds"]::view-transition-new(root) {
   from { --beui-vt-slat: -20px; }
   to { --beui-vt-slat: 72px; }
 }
+html::view-transition,
+html::view-transition-group(*),
+html::view-transition-image-pair(*),
+html::view-transition-old(*),
+html::view-transition-new(*) {
+  pointer-events: none !important;
+}
 `
 
 const RECT_FROM = {
@@ -135,13 +142,18 @@ export function useThemeToggle({
 
   const toggle = () => {
     const next = isDark ? 'light' : 'dark'
-
-    if (reduce || !('startViewTransition' in document)) {
-      setTheme(next)
-      return
+    const root = document.documentElement
+    const finishVt = () => {
+      delete root.dataset.beuiVt
+      root.style.removeProperty('--beui-vt-from')
+      root.style.removeProperty('--beui-vt-origin')
     }
 
-    const root = document.documentElement
+    if (reduce || typeof document.startViewTransition !== 'function') {
+      setTheme(next)
+      finishVt()
+      return
+    }
 
     if (variant === 'rectangle') {
       root.style.setProperty('--beui-vt-from', RECT_FROM[start] || RECT_FROM['bottom-up'])
@@ -149,17 +161,19 @@ export function useThemeToggle({
     } else if (variant === 'blinds') {
       root.dataset.beuiVt = 'blinds'
     } else {
-      root.style.setProperty('--beui-vt-origin', CIRCLE_ORIGIN[start] || CIRCLE_ORIGIN['bottom-up'])
+      root.style.setProperty('--beui-vt-origin', CIRCLE_ORIGIN[start] || CIRCLE_ORIGIN['center'])
       root.dataset.beuiVt = variant
     }
 
-    const vt = document.startViewTransition(() => {
+    try {
+      const vt = document.startViewTransition(() => {
+        setTheme(next)
+      })
+      Promise.resolve(vt?.finished).finally(finishVt)
+    } catch {
       setTheme(next)
-    })
-
-    vt.finished.finally(() => {
-      delete root.dataset.beuiVt
-    })
+      finishVt()
+    }
   }
 
   return { isDark, mounted, toggle }

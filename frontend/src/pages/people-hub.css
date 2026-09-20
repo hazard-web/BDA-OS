@@ -9,9 +9,9 @@
 
 /* ── Pulse welcome (/pulse) — Ant Design + Pulse theme tokens ── */
 .pp-page.pulse-welcome.ant-layout {
-  --pp-text: var(--ant-color-text, #1c1917);
-  --pp-muted: var(--ant-color-text-secondary, #6b6560);
-  --pp-link: var(--ant-color-primary, #1a5f4a);
+  --pp-text: var(--ant-color-text, #183B35);
+  --pp-muted: var(--ant-color-text-secondary, #6B7280);
+  --pp-link: var(--ant-color-primary, var(--pulse-primary));
   --pp-surface: #ffffff;
   --pp-layout: var(--ant-color-bg-layout, #f4f2ec);
 
@@ -125,9 +125,9 @@
   padding: 72px clamp(28px, 3.5vw, 56px) 56px;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 110% 80% at 0% 100%, rgba(26, 95, 74, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 110% 80% at 0% 100%, rgba(var(--pulse-primary-rgb), 0.18) 0%, transparent 55%),
     radial-gradient(ellipse 100% 70% at 100% 0%, rgba(196, 138, 42, 0.14) 0%, transparent 50%),
-    linear-gradient(160deg, #e8f2ee 0%, #f4f2ec 45%, #ebe6dc 100%);
+    linear-gradient(160deg, #E8F1EE 0%, #f4f2ec 45%, #ebe6dc 100%);
 }
 
 .pp-welcome-tools {
@@ -160,7 +160,7 @@
 }
 
 .pp-right-mark svg {
-  filter: drop-shadow(0 8px 20px rgba(26, 95, 74, 0.16));
+  filter: drop-shadow(0 8px 20px rgba(var(--pulse-primary-rgb), 0.16));
 }
 
 .pp-page .pp-cta-title.ant-typography {
@@ -179,7 +179,7 @@
   margin-inline: auto;
   font-size: 15px;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(26, 95, 74, 0.28);
+  box-shadow: 0 4px 14px rgba(var(--pulse-primary-rgb), 0.28);
 }
 
 .pp-page .pp-right-note.ant-typography {
@@ -263,7 +263,7 @@
   background: var(--ant-color-bg-layout, #f4f2ec);
   font-family: var(--ant-font-family, 'IBM Plex Sans', 'Source Sans 3', system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
-  color: var(--ant-color-text, #1c1917);
+  color: var(--ant-color-text, #183B35);
   padding-bottom: 56px;
 }
 
@@ -283,7 +283,7 @@
   gap: 4px;
   border: none;
   background: transparent;
-  color: var(--ant-color-text-secondary, #6b6560);
+  color: var(--ant-color-text-secondary, #6B7280);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -293,7 +293,7 @@
 }
 
 .ph-back:hover {
-  color: var(--ant-color-text, #1c1917);
+  color: var(--ant-color-text, #183B35);
   background: #f4f2ec;
 }
 
@@ -308,8 +308,8 @@
   height: 36px;
   display: grid;
   place-items: center;
-  color: #1a5f4a;
-  background: #e8f2ee;
+  color: var(--pulse-primary);
+  background: #E8F1EE;
   border-radius: 8px;
 }
 
@@ -330,7 +330,7 @@
   display: block;
   font-size: 11px;
   font-weight: 600;
-  color: var(--ant-color-text-secondary, #6b6560);
+  color: var(--ant-color-text-secondary, #6B7280);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -347,7 +347,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ant-color-text-secondary, #6b6560);
+  color: var(--ant-color-text-secondary, #6B7280);
 }
 
 .ph-main h1 {
@@ -362,7 +362,7 @@
   max-width: 520px;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--ant-color-text-secondary, #6b6560);
+  color: var(--ant-color-text-secondary, #6B7280);
 }
 
 .ph-grid {
@@ -416,7 +416,7 @@
 .ph-card-copy span {
   font-size: 13px;
   line-height: 1.4;
-  color: var(--ant-color-text-secondary, #6b6560);
+  color: var(--ant-color-text-secondary, #6B7280);
 }
 
 @media (max-width: 640px) {

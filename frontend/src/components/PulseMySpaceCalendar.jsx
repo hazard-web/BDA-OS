@@ -12,6 +12,14 @@ import {
   hoursLabel,
   leaveByDay,
 } from '../utils/pulseCalendar'
+import {
+  HeatCalendar,
+  HeatCalendarGrid,
+  HeatCalendarLegend,
+  HeatCalendarTooltip,
+  demoHeatValues,
+  hoursToHeatValues,
+} from './heat-calendar'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -45,7 +53,7 @@ function dayCaption(value, holiday, team, mine) {
   if (mine.onLeave) return `${when} · You are on leave`
   if (mine.absent) return `${when} · You were absent`
   if (mine.present && mine.hours) return `${when} · ${hoursLabel(mine.hours)} logged`
-  if (mine.weekend) return `${when} · Weekend`
+  if (mine.weekend && !mine.hours) return `${when} · Weekend`
   return `${when} · Ordinary working day`
 }
 
@@ -77,12 +85,11 @@ function PickMenu({ anchorRef, className, children }) {
   )
 }
 
-function CalendarToolbar({ value, onChange }) {
+function CalendarPickers({ value, onChange }) {
   const [open, setOpen] = useState(null)
   const wrapRef = useRef(null)
   const monthRef = useRef(null)
   const yearRef = useRef(null)
-  const goMonth = (delta) => onChange(value.add(delta, 'month'))
 
   useEffect(() => {
     if (!open) return undefined
@@ -104,14 +111,6 @@ function CalendarToolbar({ value, onChange }) {
 
   return (
     <div className="pulse-cal-toolbar" ref={wrapRef}>
-      <div className="pulse-cal-stepper" role="group" aria-label="Calendar month">
-        <button type="button" className="pulse-cal-step" aria-label="Previous month" onClick={() => goMonth(-1)}>
-          <CaretLeft size={14} weight="bold" />
-        </button>
-        <button type="button" className="pulse-cal-step" aria-label="Next month" onClick={() => goMonth(1)}>
-          <CaretRight size={14} weight="bold" />
-        </button>
-      </div>
       <div className="pulse-cal-pickers">
         <div className="pulse-cal-pick">
           <button
@@ -184,13 +183,27 @@ function CalendarToolbar({ value, onChange }) {
   )
 }
 
+function CalendarStepper({ value, onChange }) {
+  const goMonth = (delta) => onChange(value.add(delta, 'month'))
+  return (
+    <div className="pulse-cal-stepper" role="group" aria-label="Calendar month">
+      <button type="button" className="pulse-cal-step" aria-label="Previous month" onClick={() => goMonth(-1)}>
+        <CaretLeft size={14} weight="bold" />
+      </button>
+      <button type="button" className="pulse-cal-step" aria-label="Next month" onClick={() => goMonth(1)}>
+        <CaretRight size={14} weight="bold" />
+      </button>
+    </div>
+  )
+}
+
 function sampleDays(month) {
   const start = dayjs(`${month}-01`)
   const days = {}
   const last = start.daysInMonth()
   for (let date = 1; date <= last; date += 1) {
     const key = start.date(date).format('YYYY-MM-DD')
-    const weekend = start.date(date).day() === 0 || start.date(date).day() === 6
+    const weekend = start.date(date).day() === 0
     days[key] = {
       date: key,
       hours: weekend ? 0 : key === '2026-09-08' ? 8.4 : 0,
@@ -223,24 +236,39 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
 
   useEffect(() => {
     if (sample) {
+      const sampleMonths = compact
+        ? Array.from({ length: 4 }, (_, i) => dayjs().subtract(i, 'month').format('YYYY-MM'))
+        : [month]
+      const days = {}
+      sampleMonths.forEach((m) => Object.assign(days, sampleDays(m)))
       setBoard({
         holidays: sampleHolidays(),
-        teamLeave: SAMPLE_TEAM_LEAVE.filter((row) => row.days.some((day) => day.startsWith(month))),
-        days: sampleDays(month),
+        teamLeave: SAMPLE_TEAM_LEAVE.filter((row) => row.days.some((day) => sampleMonths.some((m) => day.startsWith(m)))),
+        days,
       })
       return undefined
     }
     let live = true
-    api
-      .get('/pulse-checkin/calendar', { params: { month } })
-      .then((res) => {
+    const months = compact
+      ? Array.from({ length: 4 }, (_, i) => dayjs().subtract(i, 'month').format('YYYY-MM'))
+      : [month]
+
+    Promise.all(
+      months.map((m) =>
+        api.get('/pulse-checkin/calendar', { params: { month: m } }).then((res) => res.data?.data || {}),
+      ),
+    )
+      .then((payloads) => {
         if (!live) return
-        const payload = res.data?.data || {}
-        setBoard({
-          holidays: Array.isArray(payload.holidays) ? payload.holidays : [],
-          teamLeave: Array.isArray(payload.teamLeave) ? payload.teamLeave : [],
-          days: payload.days && typeof payload.days === 'object' ? payload.days : {},
+        const days = {}
+        const holidays = []
+        const teamLeave = []
+        payloads.forEach((payload) => {
+          Object.assign(days, payload.days && typeof payload.days === 'object' ? payload.days : {})
+          if (Array.isArray(payload.holidays)) holidays.push(...payload.holidays)
+          if (Array.isArray(payload.teamLeave)) teamLeave.push(...payload.teamLeave)
         })
+        setBoard({ holidays, teamLeave, days })
       })
       .catch(() => {
         if (!live) return
@@ -253,7 +281,7 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
     return () => {
       live = false
     }
-  }, [month, sample])
+  }, [month, sample, compact])
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -279,6 +307,36 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
     })
     return map
   }, [weekDays])
+
+  const loggingHours = useMemo(() => {
+    const map = {}
+    Object.entries(board.days || {}).forEach(([key, day]) => {
+      const hours = Number(day?.hours) || 0
+      if (hours > 0) map[key] = hours
+    })
+    weekDays.forEach((day) => {
+      const key = format(day.date, 'yyyy-MM-dd')
+      const hours = Number(day.hours) || (day.present || (day.today && checkedInAt) ? 1 : 0)
+      if (hours > 0) map[key] = Math.max(map[key] || 0, hours)
+    })
+    return map
+  }, [board.days, weekDays, checkedInAt])
+
+  const heatValues = useMemo(() => {
+    const weeks = 16
+    const fromHours = hoursToHeatValues(loggingHours, { weeks, maxHours: 10 })
+    const hasSignal = fromHours.some((row) => row.some((v) => v > 0))
+    if (hasSignal) return fromHours
+    return demoHeatValues(weeks)
+  }, [loggingHours])
+
+  const heatHoursByDay = useMemo(() => {
+    const weeks = 16
+    const fromHours = hoursToHeatValues(loggingHours, { weeks, maxHours: 10 })
+    const hasSignal = fromHours.some((row) => row.some((v) => v > 0))
+    // Only bind exact hours when the grid is driven by real logs (not demo fill)
+    return hasSignal ? loggingHours : null
+  }, [loggingHours])
 
   const selectedKey = dayKey(value)
   const selected = board.days[selectedKey] || {}
@@ -333,7 +391,7 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
     const isToday = date.isSame(dayjs(), 'day')
     if (compact) {
       const tone = marksFor(date)[0]?.tone
-      const weekend = date.day() === 0 || date.day() === 6
+      const weekend = date.day() === 0
       return (
         <div className={`ant-picker-cell-inner pulse-cal-mini${isToday ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}${tone ? ` is-${tone}` : ''}`}>
           <span>{date.date()}</span>
@@ -350,39 +408,52 @@ export default function PulseMySpaceCalendar({ sample, weekDays = [], checkedInA
   }
 
   return (
-    <div ref={rootRef} className={compact ? 'pulse-cal-widget' : 'pulse-cal-scroll'}>
-      <CalendarToolbar value={value} onChange={setValue} />
+    <div ref={rootRef} className={compact ? 'pulse-heat-host' : 'pulse-cal-scroll'}>
       {compact ? (
-        <p className="pulse-cal-legend pulse-cal-legend-mini">
-          <span className="is-holiday">Holiday</span>
-          <span className="is-present">Hours in</span>
-          <span className="is-absent">Absent</span>
-        </p>
+        <HeatCalendar
+          className="is-widget"
+          values={heatValues}
+          weeks={16}
+          maxCount={10}
+          unit="hrs"
+          color="var(--pulse-heat, #0f766e)"
+          hoursByDay={heatHoursByDay}
+          formatHours={hoursLabel}
+        >
+          <HeatCalendarGrid>
+            <HeatCalendarTooltip />
+          </HeatCalendarGrid>
+          <HeatCalendarLegend />
+        </HeatCalendar>
       ) : (
-        <p className="pulse-cal-legend">
-          <span className="is-holiday">Holiday</span>
-          <span className="is-absent">Absent</span>
-          <span className="is-present">Hours in</span>
-        </p>
-      )}
-      <Calendar
-        fullscreen={!compact}
-        value={value}
-        onChange={(next) => {
-          if (next.isSame(value, 'month')) setValue(next)
-        }}
-        onPanelChange={() => {}}
-        headerRender={() => null}
-        className="pulse-calendar"
-        locale={CALENDAR_LOCALE}
-        fullCellRender={fullCellRender}
-      />
-      {compact ? (
-        <p className="pulse-cal-caption">{dayCaption(value, selectedHoliday, selectedTeam, selected)}</p>
-      ) : (
-        <p className="pulse-cal-caption pulse-cal-caption-full">
-          {dayCaption(value, selectedHoliday, selectedTeam, selected)}
-        </p>
+        <>
+          <div className="pulse-cal-toolbar-row">
+            <p className="pulse-cal-legend">
+              <span className="is-holiday">Holiday</span>
+              <span className="is-absent">Absent</span>
+              <span className="is-present">Hours in</span>
+            </p>
+            <CalendarPickers value={value} onChange={setValue} />
+          </div>
+          <Calendar
+            fullscreen
+            value={value}
+            onChange={(next) => {
+              if (next.isSame(value, 'month')) setValue(next)
+            }}
+            onPanelChange={() => {}}
+            headerRender={() => null}
+            className="pulse-calendar"
+            locale={CALENDAR_LOCALE}
+            fullCellRender={fullCellRender}
+          />
+          <div className="pulse-cal-footer">
+            <CalendarStepper value={value} onChange={setValue} />
+            <p className="pulse-cal-caption pulse-cal-caption-full">
+              {dayCaption(value, selectedHoliday, selectedTeam, selected)}
+            </p>
+          </div>
+        </>
       )}
     </div>
   )

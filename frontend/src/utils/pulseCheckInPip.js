@@ -110,7 +110,7 @@ function renderPipShell(win, email) {
       align-items: center;
       gap: 10px;
       padding: 10px 14px;
-      border: 1.5px solid #1a5f4a;
+      border: 1.5px solid #176B5B;
       border-radius: 12px;
       background: #fff;
     }
@@ -128,7 +128,7 @@ function renderPipShell(win, email) {
       font-weight: 700;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: #1a5f4a;
+      color: #176B5B;
     }
     .time {
       font-family: "IBM Plex Mono", ui-monospace, monospace;

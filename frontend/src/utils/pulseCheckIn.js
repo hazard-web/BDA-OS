@@ -3,6 +3,7 @@ import { syncPulseDesktopCheckIn } from './pulseDesktopBridge'
 import { syncPulseCheckInEvent, fetchPulseWorkDayToday } from './pulseCheckInApi'
 
 export const PULSE_CHECKIN_EVENT = 'pulse-checkin-change'
+export const PULSE_LEAVE_EVENT = 'pulse-leave-change'
 export const PULSE_CHECKIN_POS_KEY = 'pulseCheckInFloatPos'
 export const PULSE_CHECKIN_ACTIVE_EMAIL_KEY = 'pulseCheckInActiveEmail'
 
@@ -88,6 +89,8 @@ function readRawSession(email, day = pulseDayKey()) {
       if (parsed && (Number(parsed.activeMs) > 0 || Number(parsed.checkedInAt) > 0 || parsed.status)) {
         return {
           checkedInAt: Number(parsed.checkedInAt) || null,
+          firstCheckedInAt:
+            Number(parsed.firstCheckedInAt) || Number(parsed.checkedInAt) || null,
           activeMs: Math.max(0, Number(parsed.activeMs) || 0),
           lastTickAt: Number(parsed.lastTickAt) || Number(parsed.checkedInAt) || Date.now(),
           status: parsed.status === 'stopped' ? 'stopped' : parsed.status === 'active' ? 'active' : (Number(parsed.checkedInAt) > 0 ? 'active' : 'stopped'),
@@ -107,6 +110,7 @@ function readRawSession(email, day = pulseDayKey()) {
     if (!Number.isFinite(checkedInAt) || checkedInAt <= 0) return null
     return {
       checkedInAt,
+      firstCheckedInAt: checkedInAt,
       activeMs: 0,
       lastTickAt: checkedInAt,
       status: 'active',
@@ -246,6 +250,17 @@ export function readCheckInAt(email) {
   return session?.status === 'active' ? session.checkedInAt || null : null
 }
 
+/** First check-in of the calendar day (survives pause / resume / re-check-in). */
+export function readFirstCheckInAt(email) {
+  const session = readRawSession(email)
+  if (!session) return null
+  return (
+    Number(session.firstCheckedInAt) ||
+    Number(session.checkedInAt) ||
+    null
+  )
+}
+
 export function isCheckedIn(email) {
   return Boolean(readCheckInAt(email))
 }
@@ -277,6 +292,7 @@ export function mergeServerActiveMs(email, serverActiveMs) {
   const now = Date.now()
   const next = {
     checkedInAt: prev?.status === 'active' ? prev.checkedInAt || now : prev?.checkedInAt || null,
+    firstCheckedInAt: prev?.firstCheckedInAt || prev?.checkedInAt || null,
     activeMs,
     lastTickAt: prev?.status === 'active' ? now : prev?.lastTickAt || now,
     status: prev?.status === 'active' ? 'active' : 'stopped',
@@ -297,8 +313,24 @@ export async function hydrateCheckInFromServer(email) {
   try {
     const day = await fetchPulseWorkDayToday(pulseDayKey())
     const serverMs = Math.max(0, Number(day?.totalActiveMs) || 0)
-    if (serverMs <= 0) return readRawSession(email)
-    return mergeServerActiveMs(email, serverMs)
+    const firstAt = day?.checkInAt ? new Date(day.checkInAt).getTime() : null
+    const merged = serverMs > 0 ? mergeServerActiveMs(email, serverMs) : readRawSession(email)
+    if (firstAt && Number.isFinite(firstAt) && firstAt > 0) {
+      const current = merged || readRawSession(email)
+      if (current) {
+        const firstCheckedInAt = Math.min(
+          firstAt,
+          Number(current.firstCheckedInAt) || firstAt,
+          Number(current.checkedInAt) || firstAt,
+        )
+        if (firstCheckedInAt !== current.firstCheckedInAt) {
+          const next = { ...current, firstCheckedInAt }
+          writeRawSession(email, next)
+          return next
+        }
+      }
+    }
+    return merged
   } catch {
     return readRawSession(email)
   }
@@ -320,6 +352,7 @@ export function startCheckIn(email, timestamp = Date.now(), { baseActiveMs } = {
   )
   const session = {
     checkedInAt: now,
+    firstCheckedInAt: Number(prev?.firstCheckedInAt) || Number(prev?.checkedInAt) || now,
     activeMs: priorMs,
     lastTickAt: now,
     status: 'active',

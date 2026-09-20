@@ -7,17 +7,12 @@
 }
 
 .pulse-maincol:has(.pulse-body-overview) {
-  background:
-    radial-gradient(ellipse 80% 60% at 12% 8%, #f4ecff 0%, transparent 58%),
-    radial-gradient(ellipse 70% 55% at 88% 4%, #c5d6ff 0%, transparent 56%),
-    radial-gradient(ellipse 55% 50% at 82% 88%, #f0d4f4 0%, transparent 52%),
-    radial-gradient(ellipse 50% 45% at 8% 92%, #d4e8fb 0%, transparent 50%),
-    linear-gradient(165deg, #e8dcf6 0%, #d4e0f8 42%, #ece4f6 100%);
+  background: var(--pulse-page, #fafbf7);
 }
 
 .pulse-sub.pulse-sub-overview {
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid rgba(22, 19, 38, 0.06);
+  background: var(--pulse-card, #fff);
+  border-bottom: 1px solid var(--pulse-border, #d9dfc9);
 }
 
 .pulse-scroll-overview {
@@ -34,7 +29,7 @@
   max-width: 1320px;
   margin: 0 auto;
   padding: 10px 14px 28px;
-  color: #1b1830;
+  color: var(--pulse-text, #35421f);
   font-family: Inter, 'IBM Plex Sans', system-ui, sans-serif;
 }
 

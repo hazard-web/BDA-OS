@@ -69,7 +69,7 @@ function AppTile({ app, onOpen }) {
         size={40}
         src={app.iconUrl || undefined}
         className="af-app-avatar"
-        style={{ background: app.iconUrl ? '#fff' : '#E8F2EE', color: '#1A5F4A' }}
+        style={{ background: app.iconUrl ? '#fff' : '#E8F1EE', color: '#176B5B' }}
       >
         {(app.name || '?').charAt(0)}
       </Avatar>
@@ -270,7 +270,7 @@ export default function AppsFlyout({
                       size={88}
                       px={256}
                       alt={name}
-                      style={photoSrc ? undefined : { background: '#1A5F4A', fontSize: 32 }}
+                      style={photoSrc ? undefined : { background: '#176B5B', fontSize: 32 }}
                     >
                       {initial}
                     </PulseUserAvatar>

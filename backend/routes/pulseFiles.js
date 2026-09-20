@@ -6,6 +6,7 @@ const Candidate = require('../models/Candidate')
 const Staff = require('../models/Staff')
 const PulseCompanyFile = require('../models/PulseCompanyFile')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
+const { personName } = require('../utils/pulsePerson')
 const { uploadBase64, cloudinaryResourceType } = require('../utils/cloudinary')
 const { logActivity } = require('../utils/logger')
 
@@ -42,12 +43,6 @@ function toOrgObjectId(organizationId) {
   return mongoose.Types.ObjectId.isValid(organizationId)
     ? new mongoose.Types.ObjectId(organizationId)
     : organizationId
-}
-
-function personName(user) {
-  const parts = [user?.firstName, user?.lastName].filter(Boolean)
-  if (parts.length) return parts.join(' ')
-  return user?.displayName || String(user?.email || '').split('@')[0] || 'Admin'
 }
 
 function formatBytes(size) {

@@ -1,36 +1,52 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Badge, Button, Empty, Input, Popover, Typography } from 'antd'
+import { Badge, Button, Empty, Popover, Typography } from 'antd'
 import { BellOutlined, SearchOutlined } from '@ant-design/icons'
+import {
+  BookOpen,
+  CalendarDays,
+  Clock3,
+  Home,
+  LineChart,
+  Plane,
+  Timer,
+  User,
+  Wallet,
+} from 'lucide-react'
 import api from '../api'
-import { isPulseAdmin } from '../utils/pulseRoles'
+import { isPulseAdmin, pulseRoleLabel } from '../utils/pulseRoles'
 import { APP_NOTES } from '../utils/pulseEntry'
 import { PULSE_SHELL_VIEWS } from '../utils/pulseOpenPage'
-import { MORE_SERVICES } from './PulseMoreLauncher'
+import { personName } from '../utils/pulsePerson'
+import { CommandPalette } from './command-palette'
 
-const PAGE_RESULTS = [
-  { key: 'home', title: 'Overview', subtitle: 'You · Home', type: 'Page', view: 'home' },
-  { key: 'calendar', title: 'Calendar', subtitle: 'You · Calendar', type: 'Page', view: 'calendar' },
-  { key: 'leave', title: 'Leave Tracker', subtitle: 'You · Leave', type: 'Page', view: 'leave' },
-  { key: 'my-attendance', title: 'My Attendance', subtitle: 'You · Attendance', type: 'Page', view: 'myAttendance' },
-  { key: 'hours', title: 'Timesheet', subtitle: 'You · Hours', type: 'Page', view: 'hours' },
-  { key: 'account', title: 'Account', subtitle: 'You · Account', type: 'Page', view: 'account' },
-  { key: 'company', title: 'Company', subtitle: 'Organization overview', type: 'Page', view: 'company', admin: true },
-  { key: 'onboarding', title: 'Onboarding', subtitle: 'Company · Employees', type: 'Page', view: 'onboarding', admin: true },
-  { key: 'org-attendance', title: 'Company Attendance', subtitle: 'Company · Attendance', type: 'Page', view: 'attendance', admin: true },
-  { key: 'apps', title: 'App access', subtitle: 'Company · Apps', type: 'Page', view: 'apps', admin: true },
+const YOU_PAGES = [
+  { key: 'home', title: 'Dashboard', subtitle: 'You · Home', type: 'Page', view: 'home', icon: Home, group: 'You' },
+  { key: 'calendar', title: 'Calendar', subtitle: 'You · Calendar', type: 'Page', view: 'calendar', icon: CalendarDays, group: 'You' },
+  { key: 'leave', title: 'Leave Tracker', subtitle: 'You · Leave', type: 'Page', view: 'leave', icon: Plane, group: 'You' },
+  { key: 'my-attendance', title: 'My Attendance', subtitle: 'You · Attendance', type: 'Page', view: 'myAttendance', icon: Clock3, group: 'You' },
+  { key: 'hours', title: 'Timesheet', subtitle: 'You · Hours', type: 'Page', view: 'hours', icon: Timer, group: 'You' },
+  { key: 'performance', title: 'Performance', subtitle: 'You · Performance', type: 'Page', view: 'performance', icon: LineChart, group: 'You' },
+  { key: 'payroll', title: 'Payroll', subtitle: 'You · Payroll', type: 'Page', view: 'payroll', icon: Wallet, group: 'You' },
+  { key: 'account', title: 'Account', subtitle: 'You · Account', type: 'Page', view: 'account', icon: User, group: 'You' },
   {
     key: 'notes',
     title: 'Notebook',
     subtitle: 'Open notes board',
     type: 'Page',
+    icon: BookOpen,
+    group: 'You',
     open: () => window.open(`${window.location.origin}${APP_NOTES}`, '_blank', 'noopener,noreferrer'),
   },
 ]
 
-function matchQuery(text, q) {
-  return String(text || '')
+function samePerson(row, user) {
+  const id = String(user?._id || '')
+  const email = String(user?.email || '')
+    .trim()
     .toLowerCase()
-    .includes(q)
+  if (id && String(row?._id || '') === id) return true
+  if (email && String(row?.email || '').trim().toLowerCase() === email) return true
+  return false
 }
 
 export function PulseHeaderSearch({ user, onOpenModule, onOpenView }) {
@@ -39,7 +55,7 @@ export function PulseHeaderSearch({ user, onOpenModule, onOpenView }) {
   const [q, setQ] = useState('')
   const [people, setPeople] = useState([])
   const [loadingPeople, setLoadingPeople] = useState(false)
-  const query = q.trim().toLowerCase()
+  const query = q.trim()
 
   const runHit = (item) => {
     if (typeof item.open === 'function') {
@@ -56,116 +72,93 @@ export function PulseHeaderSearch({ user, onOpenModule, onOpenView }) {
     if (item.module) onOpenModule?.(item.module)
   }
 
-  const pageHits = useMemo(() => {
-    if (query.length < 1) return []
-    const pages = PAGE_RESULTS.filter((item) => !item.admin || admin)
-    const services = MORE_SERVICES.map((item) => ({
-      key: `svc-${item.id}`,
-      title: item.name,
-      subtitle: 'More services',
-      type: 'Service',
-      module: item.id,
-    }))
-    return [...pages, ...services]
-      .filter((item) => matchQuery(item.title, query) || matchQuery(item.subtitle, query))
-      .slice(0, 8)
-  }, [query, admin])
+  const toCommand = (item) => ({
+    id: item.key,
+    label: item.title,
+    group: item.group || item.type || 'Results',
+    badge: item.type,
+    hint: item.hint,
+    keywords: [item.subtitle, item.type, item.hint, ...(item.keywords || [])].filter(Boolean),
+    icon: item.icon,
+    onSelect: () => {
+      setOpen(false)
+      setQ('')
+      runHit(item)
+    },
+  })
 
   useEffect(() => {
-    if (!open || !admin || query.length < 2) {
+    if (!open) {
       setPeople([])
+      setLoadingPeople(false)
       return undefined
     }
     let cancelled = false
     setLoadingPeople(true)
-    const timer = window.setTimeout(async () => {
-      try {
-        const res = await api.get('/candidates', { params: { q: query } })
+    api
+      .get('/launcher/people')
+      .then((res) => {
         if (cancelled) return
-        const rows = res.data?.data?.candidates || []
-        setPeople(
-          rows.slice(0, 8).map((row) => {
-            const name = [row.firstName, row.lastName].filter(Boolean).join(' ') || row.email || 'Employee'
-            return {
-              key: `cand-${row._id}`,
-              title: name,
-              subtitle: row.officialEmail || row.email || row.status || 'Onboarding',
-              type: 'Employee',
-              view: 'onboarding',
-            }
-          }),
-        )
-      } catch {
+        const rows = res.data?.data?.members || []
+        setPeople(rows.filter((row) => !samePerson(row, user)))
+      })
+      .catch(() => {
         if (!cancelled) setPeople([])
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setLoadingPeople(false)
-      }
-    }, 220)
+      })
     return () => {
       cancelled = true
-      window.clearTimeout(timer)
     }
-  }, [open, admin, query])
+  }, [open, user?._id, user?.email])
 
-  const hits = [...pageHits, ...people]
-  const showEmpty = query.length >= 1 && !loadingPeople && hits.length === 0
-
-  const panel = (
-    <div className="pulse-head-search-panel">
-      <Input
-        allowClear
-        autoFocus
-        prefix={<SearchOutlined />}
-        placeholder="Search pages, people…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
-      <div className="pulse-head-search-list">
-        {query.length < 1 ? <p className="pulse-head-search-hint">Type to search BDA OS</p> : null}
-        {loadingPeople ? <p className="pulse-head-search-hint">Searching people…</p> : null}
-        {showEmpty ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={`No matches for “${q.trim()}”`} />
-        ) : null}
-        {hits.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className="pulse-head-search-row"
-            onClick={() => {
-              setOpen(false)
-              setQ('')
-              runHit(item)
-            }}
-          >
-            <span>
-              <strong>{item.title}</strong>
-              <em>{item.subtitle}</em>
-            </span>
-            <Typography.Text type="secondary">{item.type}</Typography.Text>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
+  const items = useMemo(() => {
+    if (query) {
+      return people.map((row) => {
+        const name = personName(row) || row.email || 'Employee'
+        return toCommand({
+          key: `user-${row._id}`,
+          title: name,
+          subtitle: row.email || '',
+          hint: row.email || '',
+          type: pulseRoleLabel(row.role),
+          view: admin ? 'people' : undefined,
+          icon: User,
+          group: 'People',
+          keywords: [row.email, row.firstName, row.lastName, row.displayName, row.role].filter(Boolean),
+        })
+      })
+    }
+    return YOU_PAGES.map(toCommand)
+  }, [query, people, admin])
 
   return (
-    <Popover
-      trigger="click"
-      placement="bottomRight"
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) setQ('')
-      }}
-      content={panel}
-      arrow={false}
-      destroyOnHidden
-      rootClassName="pulse-head-pop"
-      getPopupContainer={() => document.body}
-      styles={{ root: { zIndex: 10000 } }}
-    >
-      <Button type="text" icon={<SearchOutlined />} aria-label="Search" aria-expanded={open} />
-    </Popover>
+    <>
+      <Button
+        type="text"
+        icon={<SearchOutlined />}
+        aria-label="Search people"
+        aria-keyshortcuts="Meta+K Control+K"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      />
+      <CommandPalette
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (!next) {
+            setQ('')
+            setPeople([])
+          }
+        }}
+        onQueryChange={setQ}
+        shortcut="k"
+        placeholder="Search people…"
+        emptyMessage={loadingPeople ? 'Searching people…' : 'No people found.'}
+        items={items}
+      />
+    </>
   )
 }
 

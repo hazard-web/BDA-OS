@@ -1,20 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   App,
-  AutoComplete,
   Button,
-  Card,
   Empty,
-  Flex,
   Form,
   Input,
-  Space,
+  Select,
   Table,
   Tag,
   Typography,
 } from 'antd'
-import { AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
+import { AppstoreAddOutlined } from '@ant-design/icons'
 import api from '../api'
+import { personName } from '../utils/pulsePerson'
+
+function memberLabel(member) {
+  const name = personName(member, '')
+  return name ? `${name} · ${member.email}` : member.email
+}
+
+function groupGrantsByApp(grants) {
+  const map = new Map()
+  for (const grant of grants) {
+    const key = grant.appId || `${grant.name}|${grant.url}`
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        appId: grant.appId,
+        name: grant.name,
+        url: grant.url,
+        iconUrl: grant.iconUrl,
+        people: [],
+      })
+    }
+    map.get(key).people.push(grant)
+  }
+  return [...map.values()]
+    .map((row) => ({
+      ...row,
+      people: row.people.slice().sort((a, b) => String(a.email).localeCompare(String(b.email))),
+    }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+}
 
 export default function PulseAppGrantsAdmin() {
   const { message } = App.useApp()
@@ -47,8 +74,9 @@ export default function PulseAppGrantsAdmin() {
   const onAssign = async (values) => {
     setSaving(true)
     try {
+      const emails = (values.emails || []).map((email) => String(email).trim().toLowerCase()).filter(Boolean)
       const res = await api.post('/launcher/admin', {
-        email: values.email.trim().toLowerCase(),
+        emails,
         name: values.name.trim(),
         url: values.url.trim(),
       })
@@ -72,30 +100,57 @@ export default function PulseAppGrantsAdmin() {
     }
   }
 
-  const emailOptions = members.map((m) => ({
-    value: m.email,
-    label: [m.firstName, m.lastName].filter(Boolean).join(' ')
-      ? `${[m.firstName, m.lastName].filter(Boolean).join(' ')} (${m.email})`
-      : m.email,
-  }))
+  const revokeApp = async (people) => {
+    try {
+      await Promise.all(people.map((person) => api.delete(`/launcher/admin/${person.id}`)))
+      message.success('Access removed for this app')
+      await load()
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not remove access')
+    }
+  }
 
-  const counts = grants.reduce((acc, g) => {
-    acc[g.email] = (acc[g.email] || 0) + 1
-    return acc
-  }, {})
+  const emailOptions = useMemo(
+    () => members.map((m) => ({
+      value: m.email,
+      label: memberLabel(m),
+    })),
+    [members],
+  )
+
+  const grouped = useMemo(() => groupGrantsByApp(grants), [grants])
+  const appCount = grouped.length
 
   const columns = [
-    { title: 'Employee email', dataIndex: 'email', ellipsis: true },
     {
       title: 'App',
       dataIndex: 'name',
       render: (name, row) => (
-        <Flex align="center" gap={8}>
+        <span className="pulse-apps-app-cell">
           {row.iconUrl ? (
-            <img src={row.iconUrl} alt="" width={16} height={16} style={{ borderRadius: 3 }} />
+            <img src={row.iconUrl} alt="" width={16} height={16} />
           ) : null}
           <span>{name}</span>
-        </Flex>
+        </span>
+      ),
+    },
+    {
+      title: 'People',
+      key: 'people',
+      render: (_, row) => (
+        <div className="pulse-apps-people">
+          <span className="pulse-apps-people-count">
+            {row.people.length} {row.people.length === 1 ? 'person' : 'people'}
+          </span>
+          <div className="pulse-apps-people-tags">
+            {row.people.slice(0, 4).map((person) => (
+              <Tag key={person.id}>{person.email}</Tag>
+            ))}
+            {row.people.length > 4 ? (
+              <Tag>+{row.people.length - 4}</Tag>
+            ) : null}
+          </div>
+        </div>
       ),
     },
     {
@@ -111,93 +166,116 @@ export default function PulseAppGrantsAdmin() {
     {
       title: '',
       key: 'actions',
-      width: 100,
+      width: 120,
+      align: 'right',
       render: (_, row) => (
-        <Button type="link" danger size="small" onClick={() => revoke(row.id)}>
-          Revoke
+        <Button type="link" danger size="small" onClick={() => revokeApp(row.people)}>
+          Revoke all
         </Button>
       ),
     },
   ]
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }} className="pulse-org-stack">
-      <Card
-        size="small"
-        className="pulse-org-card"
-        title="Assign apps to an email"
-        extra={
-          <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
-        }
-      >
-        <Form form={form} layout="vertical" onFinish={onAssign} requiredMark={false}>
-          <Flex gap={10} wrap="wrap" align="flex-start">
-            <Form.Item
-              name="email"
-              style={{ flex: '1 1 220px', marginBottom: 0, minWidth: 200 }}
-              rules={[{ required: true, message: 'Pick an employee email' }]}
-            >
-              <AutoComplete
-                allowClear
-                placeholder="Employee email"
-                options={emailOptions}
-                filterOption={(input, option) =>
-                  String(option?.label || option?.value || '')
-                    .toLowerCase()
-                    .includes(input.toLowerCase())
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              name="name"
-              style={{ width: 140, marginBottom: 0 }}
-              rules={[{ required: true, message: 'App name' }]}
-            >
-              <Input placeholder="App name" />
-            </Form.Item>
-            <Form.Item
-              name="url"
-              style={{ flex: '1 1 200px', marginBottom: 0 }}
-              rules={[{ required: true, type: 'url', message: 'https://…' }]}
-            >
-              <Input placeholder="https://" />
-            </Form.Item>
-            <Form.Item style={{ marginBottom: 0 }}>
-              <Button type="primary" htmlType="submit" icon={<AppstoreAddOutlined />} loading={saving}>
-                Give access
-              </Button>
-            </Form.Item>
-          </Flex>
-        </Form>
-      </Card>
-
-      <Card size="small" className="pulse-org-card" title={`Assigned access (${grants.length})`}>
-        <Table
-          size="small"
-          rowKey="id"
-          loading={loading}
-          pagination={false}
-          columns={columns}
-          dataSource={grants}
-          locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="No apps assigned yet. Add a name and URL for each employee."
-              />
-            ),
-          }}
-        />
-        {Object.keys(counts).length > 0 ? (
-          <div style={{ marginTop: 8 }}>
-            {Object.entries(counts).map(([email, n]) => (
-              <Tag key={email} style={{ marginBottom: 6 }}>
-                {email}: {n} app{n === 1 ? '' : 's'}
-              </Tag>
-            ))}
+    <div className="pulse-att-page pulse-apps-att">
+      <div className="pulse-att-board">
+        <section className="pulse-att-panel" aria-label="App access">
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>App access</h4>
+              <span>
+                {appCount} app{appCount === 1 ? '' : 's'} · {grants.length} grant{grants.length === 1 ? '' : 's'}
+              </span>
+            </header>
           </div>
-        ) : null}
-      </Card>
-    </Space>
+
+          <div className="pulse-apps-att-body">
+            <div className="pulse-apps-assign-well">
+              <Form
+                form={form}
+                layout="vertical"
+                onFinish={onAssign}
+                requiredMark={false}
+                className="pulse-apps-assign-form"
+                autoComplete="off"
+              >
+                <div className="pulse-apps-assign-row">
+                  <Form.Item
+                    name="emails"
+                    className="pulse-apps-field is-email"
+                    rules={[{ required: true, type: 'array', min: 1, message: 'Pick at least one person' }]}
+                  >
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder="People"
+                      options={emailOptions}
+                      maxTagCount="responsive"
+                      autoComplete="off"
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="name"
+                    className="pulse-apps-field is-name"
+                    rules={[{ required: true, message: 'App name' }]}
+                  >
+                    <Input placeholder="App name" autoComplete="off" />
+                  </Form.Item>
+                  <Form.Item
+                    name="url"
+                    className="pulse-apps-field is-url"
+                    rules={[{ required: true, type: 'url', message: 'https://…' }]}
+                  >
+                    <Input placeholder="https://" autoComplete="off" />
+                  </Form.Item>
+                  <Form.Item className="pulse-apps-field is-submit">
+                    <button type="submit" className="pov-cta plive-top-cta plive-checkin" disabled={saving}>
+                      <AppstoreAddOutlined />
+                      {saving ? 'Assigning…' : 'Give access'}
+                    </button>
+                  </Form.Item>
+                </div>
+              </Form>
+            </div>
+
+            <div className="pulse-apps-table-wrap">
+              <Table
+                size="middle"
+                rowKey="key"
+                loading={loading}
+                pagination={false}
+                columns={columns}
+                dataSource={grouped}
+                className="pulse-apps-table"
+                expandable={{
+                  expandedRowRender: (row) => (
+                    <ul className="pulse-apps-grant-list">
+                      {row.people.map((person) => (
+                        <li key={person.id}>
+                          <span>{person.email}</span>
+                          <Button type="link" danger size="small" onClick={() => revoke(person.id)}>
+                            Revoke
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ),
+                }}
+                locale={{
+                  emptyText: (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="No apps assigned yet. Pick people, then add an app name and URL."
+                    />
+                  ),
+                }}
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   )
 }

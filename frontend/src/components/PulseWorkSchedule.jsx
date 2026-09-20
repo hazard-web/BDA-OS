@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api'
-import { PULSE_CHECKIN_EVENT } from '../utils/pulseCheckIn'
+import { PULSE_CHECKIN_EVENT, PULSE_LEAVE_EVENT } from '../utils/pulseCheckIn'
 import {
   DEFAULT_WORK_DAYS,
   GENERAL_SHIFT,
   buildWeekDays,
+  resolvePulseWorkDays,
   weekRange,
 } from '../utils/pulseWorkWeek'
 
@@ -41,15 +42,16 @@ function formatLoggedDuration(day) {
  * Hours logged → show time (seconds when under 1m).
  */
 function dayStatusLine(day) {
-  if (day.status === 'Weekend') return { text: 'Weekend', kind: 'Weekend' }
   if (day.status === 'Holiday') return { text: 'Holiday', kind: 'Holiday' }
   if (day.onLeave || day.status === 'On Leave' || day.status === 'Leave applied') {
     return { text: day.leaveLabel || day.status || 'On Leave', kind: 'On Leave' }
   }
-  if (day.status === 'Absent') return { text: 'Absent', kind: 'Absent' }
 
   const label = formatLoggedDuration(day)
   if (label) return { text: label, kind: 'Present' }
+
+  if (day.status === 'Weekend') return { text: 'Weekend', kind: 'Weekend' }
+  if (day.status === 'Absent') return { text: 'Absent', kind: 'Absent' }
 
   // 0 time on a past workday without leave = Absent
   if (day.past && !day.weekend && !day.holiday) {
@@ -117,9 +119,11 @@ export function usePulseWorkWeek({
         const payload = res.data?.data || {}
         setRecords(Array.isArray(payload.days) ? payload.days : [])
         setWorkDays(
-          Array.isArray(payload.workDays) && payload.workDays.length
-            ? payload.workDays
-            : DEFAULT_WORK_DAYS,
+          resolvePulseWorkDays(
+            Array.isArray(payload.workDays) && payload.workDays.length
+              ? payload.workDays
+              : DEFAULT_WORK_DAYS,
+          ),
         )
         setHolidays(Array.isArray(payload.holidays) ? payload.holidays : [])
         setLeaveDates(Array.isArray(payload.leaveDates) ? payload.leaveDates : [])
@@ -145,7 +149,11 @@ export function usePulseWorkWeek({
     if (useSample) return undefined
     const onChange = () => load()
     window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
-    return () => window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
+    window.addEventListener(PULSE_LEAVE_EVENT, onChange)
+    return () => {
+      window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
+      window.removeEventListener(PULSE_LEAVE_EVENT, onChange)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useSample, range.from, range.to, checkedInToday])
 
@@ -176,6 +184,7 @@ export function usePulseWorkWeek({
       announcements,
       month,
       profile,
+      reload: load,
     }),
     [days, range, loading, leaveBalances, approvals, announcements, month, profile],
   )

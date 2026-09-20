@@ -72,7 +72,7 @@ function spawnZipBurst(canvas) {
     return { width, height }
   }
   let { width: w, height: h } = size()
-  const colors = ['#fff8ee', '#ffe36a', '#1a5f4a', '#142019', '#ffd7a8', '#ffffff', '#c45c26']
+  const colors = ['#fff8ee', '#ffe36a', '#176B5B', '#183B35', '#ffd7a8', '#ffffff', '#E88A2D']
   const bits = Array.from({ length: 72 }, (_, i) => {
     const left = i % 2 === 0
     const angle = left

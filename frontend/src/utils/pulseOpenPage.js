@@ -59,7 +59,7 @@ export const PULSE_SHELL_VIEWS = {
     sub: 'overview',
     leaveTab: 'team',
     leaveSubTab: 'requests',
-    label: 'Opening Leave Tracker',
+    label: 'Opening Team leave',
   },
   leaveHolidays: {
     path: `${APP_BASE}/leave/holidays`,
@@ -182,6 +182,11 @@ export const PULSE_OPEN_VIEWS = Object.fromEntries(
 )
 
 export const PULSE_SHELL_PATHS = [...new Set(Object.values(PULSE_SHELL_VIEWS).map((view) => view.path))]
+
+export function isPulseShellPath(pathname) {
+  const path = toAppPath(String(pathname || '').replace(/\/+$/, '') || '/')
+  return PULSE_SHELL_PATHS.includes(path)
+}
 
 export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time', 'people', 'performance', 'payroll', 'files'])
 

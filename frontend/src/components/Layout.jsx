@@ -291,7 +291,7 @@ export default function Layout() {
           {user?.companyLogo ? (
             <Avatar src={user.companyLogo} shape="square" size={36} />
           ) : (
-            <Avatar shape="square" size={36} style={{ background: '#1A5F4A' }}>
+            <Avatar shape="square" size={36} style={{ background: '#176B5B' }}>
               {companyName.charAt(0).toUpperCase()}
             </Avatar>
           )}
@@ -401,7 +401,7 @@ export default function Layout() {
               }
             >
               <List.Item.Meta
-                avatar={<Avatar style={{ background: n.isRead ? '#E6E1D8' : '#1A5F4A' }}>{(n.staff?.fullName || 'N').charAt(0)}</Avatar>}
+                avatar={<Avatar style={{ background: n.isRead ? '#E6E1D8' : '#176B5B' }}>{(n.staff?.fullName || 'N').charAt(0)}</Avatar>}
                 title={
                   <a
                     onClick={() => {

@@ -13,8 +13,8 @@ import { closeCheckInPip } from '../../utils/pulseCheckInPip'
 
 const DEFAULT_MS = 900
 
-export function AuthLogoLoader({ show = false, label = 'Loading' }) {
-  return <BdaGateLoader show={show} label={label} />
+export function AuthLogoLoader({ show = false, label = 'Loading', variant = 'page' }) {
+  return <BdaGateLoader show={show} label={label} variant={variant} />
 }
 
 /** Shows BDA 3D loader, then navigates. */

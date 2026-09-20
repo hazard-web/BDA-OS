@@ -5,7 +5,7 @@
   min-height: 0;
   height: 100%;
   font-family: Figtree, system-ui, sans-serif;
-  color: #142019;
+  color: #183B35;
   outline: none;
   user-select: none;
 }
@@ -23,7 +23,7 @@
   font-weight: 750;
   letter-spacing: -0.02em;
   line-height: 1.2;
-  color: #142019;
+  color: #183B35;
 }
 
 .pdg-brand {
@@ -38,7 +38,7 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
-  color: #57534e;
+  color: #6B7280;
 }
 
 .pdg-stats {
@@ -56,13 +56,13 @@
   background: rgba(255, 248, 238, 0.72);
   font-size: 11px;
   font-weight: 600;
-  color: #57534e;
+  color: #6B7280;
 }
 
 .pdg-stats b {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 13px;
-  color: #142019;
+  color: #183B35;
 }
 
 .pdg-saucer {
@@ -500,7 +500,7 @@
 .pdg-zip-ranks li.is-me em,
 .pdg-zip-ranks li.is-me span,
 .pdg-zip-ranks li.is-me b {
-  color: #c45c26;
+  color: #E88A2D;
 }
 
 .pdg-zip-again {

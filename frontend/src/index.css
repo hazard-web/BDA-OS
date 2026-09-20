@@ -4,8 +4,8 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 
 @theme {
-  --color-brand: #58833b;
-  --color-brand-soft: #e5ebdd;
+  --color-brand: #556B2F;
+  --color-brand-soft: #E5EBD6;
   --color-navy: #0b1a2b;
   --color-brand-blue: #0096de;
   --color-brand-red: #e42527;
@@ -27,24 +27,25 @@ html {
 
 :root {
   /* Official Design System Palette (Light) */
-  --bda-green: #58833b;
-  --bda-sage: #e5ebdd;
-  --text-dark: #1a1a1a;
+  --bda-green: #556B2F;
+  --bda-sage: #E5EBD6;
+  --text-dark: #35421F;
   --white: #ffffff;
   --navy-dark: #0b1a2b;
-  --emerald: #58833b;
-  --emerald-light: #e5ebdd;
+  --emerald: #465A27;
+  --emerald-light: #E5EBD6;
 
   /* Semantic Mappings */
-  --primary: var(--bda-green);
-  --bg: #ffffff;
+  --primary: #465A27;
+  --bg: #FAFBF7;
   --surface: #ffffff;
   --sidebar-bg: var(--bg);
-  --sidebar-active: var(--primary);
+  --sidebar-active: var(--bda-green);
   --text: var(--text-dark);
-  --text-muted: #6b7280;
+  --text-muted: #6B7280;
   --text-light: #9ca3af;
-  --border: #e5e7eb;
+  --border: #D9DFC9;
+  --primary-tint: #E5EBD6;
 
   --shadow-sm: 0 1px 2px rgba(26, 26, 26, 0.05);
   --shadow: 0 4px 6px -1px rgba(26, 26, 26, 0.1);
@@ -55,7 +56,6 @@ html {
   --padding-card: 1.5rem;
 
   /* Missing semantic tokens */
-  --primary-tint: #e5ebdd;
   --modal-z: 1000;
   --header-z: 130;
   --navy-tint: rgba(11, 26, 43, 0.06);
@@ -70,7 +70,7 @@ html {
   /* Midnight Dark Mode Palette */
   --bda-dark: #090e17;
   --bda-surface: #121a2f;
-  --bda-primary: #10b981;
+  --bda-primary: var(--pulse-primary);
   --text-light: #94a3b8;
 
   /* Semantic Mappings */
@@ -467,7 +467,7 @@ h3 {
 .badge-emerald,
 .badge-green {
   background: rgba(88, 131, 59, 0.1);
-  color: #58833b;
+  color: var(--pulse-primary);
   border: 1px solid rgba(88, 131, 59, 0.25);
 }
 
@@ -1536,7 +1536,7 @@ h3 {
 }
 
 .avatar--employee {
-  background: #58833b;
+  background: var(--pulse-primary);
 }
 
 /* ── Stat card icon block ────────────────────────────────────── */

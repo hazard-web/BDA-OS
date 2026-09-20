@@ -13,7 +13,7 @@ export default function AuthPromo() {
 
   return (
     <div className={`auth-promo is-${period}`}>
-      <img className="auth-promo-photo" src="/pulse-overview-peak.jpg" alt="" />
+      <img className="auth-promo-photo" src="/pulse-peak-bg.jpg" alt="" decoding="async" />
       <div className="auth-promo-shade" />
       <div className="auth-promo-sheen" />
       {period === 'evening' ? <span className="auth-promo-stars" aria-hidden="true" /> : null}

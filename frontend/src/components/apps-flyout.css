@@ -195,7 +195,7 @@
 }
 
 .af-app:focus-visible {
-  outline: 2px solid #1a5f4a;
+  outline: 2px solid var(--pulse-primary);
   outline-offset: 2px;
 }
 

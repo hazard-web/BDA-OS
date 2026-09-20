@@ -9,6 +9,47 @@ const { DEFAULT_GENDER, extractIndiaState } = require('../utils/indiaLocation');
 const { publicUserWithApps } = require('../utils/pulseAuth');
 const { assertAllowedCompanyEmail, resolveCompanyDomain, completeCompanyEmail } = require('../utils/companyDomain');
 const { ensureHttpsAvatar, isHttpsAvatar } = require('../utils/pulseAvatar');
+const Staff = require('../models/Staff');
+const Candidate = require('../models/Candidate');
+
+function normalizeIndiaMobile(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+  if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
+  return '';
+}
+
+/** Prefer explicit personal mobile; else Staff / Candidate phone for this employee. Never use org companyPhone. */
+async function resolvePersonalMobile(user) {
+  const existing = normalizeIndiaMobile(user.mobilePhone);
+  if (existing) return existing;
+
+  const email = String(user.email || '').toLowerCase().trim();
+  const orgId = user.organizationId || user._id;
+  if (!email || !orgId) return '';
+
+  const [staff, candidate] = await Promise.all([
+    Staff.findOne({ user: orgId, email }).select('phone').lean(),
+    Candidate.findOne({
+      organizationId: orgId,
+      $or: [{ officialEmail: email }, { email }],
+    })
+      .select('phone countryCode')
+      .lean(),
+  ]);
+
+  const fromStaff = normalizeIndiaMobile(staff?.phone);
+  if (fromStaff) return fromStaff;
+
+  const candDigits = String(candidate?.phone || '').replace(/\D/g, '');
+  if (!candDigits) return '';
+  if (candDigits.length === 10) {
+    const cc = String(candidate.countryCode || '+91').replace(/\D/g, '') || '91';
+    return `+${cc}${candDigits}`;
+  }
+  return normalizeIndiaMobile(candidate.phone);
+}
 
 // In-process JWT → User cache.
 // Same token tends to be reused on every protected request; hitting Mongo
@@ -371,6 +412,13 @@ router.get('/profile', auth, async (req, res) => {
       user.role = 'admin';
       dirty = true;
     }
+    if (!normalizeIndiaMobile(user.mobilePhone)) {
+      const personal = await resolvePersonalMobile(user);
+      if (personal) {
+        user.mobilePhone = personal;
+        dirty = true;
+      }
+    }
     if (dirty) await user.save();
 
     const { listActiveGrantsForEmail } = require('../utils/appCatalog');
@@ -408,11 +456,28 @@ router.put('/profile', auth, async (req, res, next) => {
       'companyName', 'companyAddress', 'companyPhone', 'companyEmail',
       'companyCIN', 'companyGST', 'companyWebsite', 'companyDomain', 'companyLogo', 'industry',
       'firstName', 'lastName', 'displayName', 'gender',
-      'country', 'state', 'timezone', 'language',
+      'country', 'state', 'timezone', 'language', 'mobilePhone',
     ];
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) user[field] = req.body[field];
     });
+
+    if (req.body.mobilePhone !== undefined) {
+      user.mobilePhone = normalizeIndiaMobile(req.body.mobilePhone) || String(req.body.mobilePhone || '').trim();
+      // Keep payroll Staff record in sync when present
+      try {
+        const orgId = user.organizationId || user._id;
+        const email = String(user.email || '').toLowerCase().trim();
+        if (orgId && email) {
+          await Staff.updateOne(
+            { user: orgId, email },
+            { $set: { phone: user.mobilePhone || '' } },
+          );
+        }
+      } catch {
+        /* Staff phone sync is best-effort */
+      }
+    }
 
     // Avatars must be short HTTPS CDN URLs — never persist data: blobs on User.
     if (req.body.avatarUrl !== undefined) {

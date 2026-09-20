@@ -1,0 +1,220 @@
+.pulse-toast-stack {
+  pointer-events: none;
+  display: flex;
+  width: min(24rem, calc(100vw - 2rem));
+  max-width: 24rem;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pulse-toast-stack--top {
+  flex-direction: column;
+}
+
+.pulse-toast-stack--bottom {
+  flex-direction: column-reverse;
+}
+
+.pulse-toast-stack--fixed {
+  position: fixed;
+  z-index: 1200;
+}
+
+.pulse-toast-stack--absolute {
+  position: absolute;
+  z-index: 20;
+}
+
+.pulse-toast-stack--top-left {
+  top: 16px;
+  left: 16px;
+}
+
+.pulse-toast-stack--top-center {
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.pulse-toast-stack--top-right {
+  top: 16px;
+  right: 16px;
+}
+
+.pulse-toast-stack--bottom-left {
+  bottom: 24px;
+  left: 16px;
+}
+
+.pulse-toast-stack--bottom-center {
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.pulse-toast-stack--bottom-right {
+  bottom: 24px;
+  right: 16px;
+}
+
+.pulse-toast-item {
+  pointer-events: auto;
+  position: relative;
+  will-change: transform;
+}
+
+.pulse-toast-surface {
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--pulse-border, #d9e4e0);
+  background: color-mix(in srgb, #ffffff 95%, transparent);
+  box-shadow: 0 18px 40px rgba(24, 59, 53, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.pulse-toast-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pulse-toast-row--details {
+  align-items: flex-start;
+}
+
+.pulse-toast-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.pulse-toast-icon--offset {
+  margin-top: 2px;
+}
+
+.pulse-toast-icon--neutral {
+  color: var(--pulse-muted, #6b7280);
+  background: color-mix(in srgb, var(--pulse-primary, var(--pulse-primary)) 5%, transparent);
+}
+
+.pulse-toast-icon--info,
+.pulse-toast-icon--loading {
+  color: var(--pulse-primary, var(--pulse-primary));
+  background: color-mix(in srgb, var(--pulse-primary, var(--pulse-primary)) 10%, transparent);
+}
+
+.pulse-toast-icon--success {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.pulse-toast-icon--error {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.pulse-toast-icon-swap {
+  display: inline-flex;
+}
+
+.pulse-toast-glyph {
+  width: 14px;
+  height: 14px;
+}
+
+.pulse-toast-spin {
+  display: inline-flex;
+  animation: pulse-toast-spin 0.85s linear infinite;
+}
+
+@keyframes pulse-toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pulse-toast-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.pulse-toast-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+  color: var(--pulse-heading, #183b35);
+}
+
+.pulse-toast-desc {
+  margin: 2px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--pulse-muted, #6b7280);
+}
+
+.pulse-toast-action {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pulse-primary, var(--pulse-primary)) 6%, transparent);
+  font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--pulse-heading, #183b35);
+  cursor: pointer;
+}
+
+.pulse-toast-action:hover {
+  background: color-mix(in srgb, var(--pulse-primary, var(--pulse-primary)) 10%, transparent);
+}
+
+.pulse-toast-action:focus,
+.pulse-toast-action:focus-visible,
+.pulse-toast-close:focus,
+.pulse-toast-close:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.pulse-toast-close {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pulse-muted, #6b7280);
+  cursor: pointer;
+}
+
+.pulse-toast-close:hover {
+  background: color-mix(in srgb, var(--pulse-primary, var(--pulse-primary)) 6%, transparent);
+  color: var(--pulse-heading, #183b35);
+}
