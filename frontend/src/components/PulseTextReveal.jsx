@@ -6,7 +6,9 @@ const DEFAULT_SPRING = { stiffness: 140, damping: 26, mass: 1.2 }
 
 /**
  * One tokenizer for both modes: a line becomes the words it is made of, each
- * carrying the whitespace that follows it.
+ * carrying the whitespace that follows it. Word mode animates a group at a
+ * time, char mode the characters inside one — so the two can't drift apart on
+ * what counts as a word or where a space belongs.
  */
 function toWordGroups(line) {
   const chunks = String(line || '').match(/\S+\s*|\s+/g) ?? []
@@ -85,6 +87,7 @@ export default function PulseTextReveal({
               initial={initial}
               animate={animate}
               transition={transition}
+              // whitespace-pre keeps trailing spaces inside inline-block units
               className="pwc-text-reveal-unit"
             >
               {unit}
@@ -98,18 +101,9 @@ export default function PulseTextReveal({
         return (
           <span key={lineKey} className="pwc-text-reveal-line">
             {groups.map((group) => {
-              if (split !== 'char') {
-                const wordCount = groupCounts.get(group.text) ?? 0
-                groupCounts.set(group.text, wordCount + 1)
-                return (
-                  <span key={`${group.text}-${wordCount}`} className="pwc-text-reveal-word">
-                    {renderUnit(group.text || group.trailing)}
-                    {group.text && group.trailing ? group.trailing : null}
-                  </span>
-                )
-              }
-
               const whole = group.text + group.trailing
+              if (split !== 'char') return renderUnit(whole)
+
               const groupCount = groupCounts.get(whole) ?? 0
               groupCounts.set(whole, groupCount + 1)
               return (

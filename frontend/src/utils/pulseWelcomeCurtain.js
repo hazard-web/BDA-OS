@@ -1,4 +1,4 @@
-const STORAGE_PREFIX = 'pulseWelcomeCurtain.v27:'
+const STORAGE_PREFIX = 'pulseWelcomeCurtain.v28:'
 const LINE_PREFIX = 'pulseWelcomeLines.v2:'
 
 export function welcomeCurtainStorageKey(email) {
