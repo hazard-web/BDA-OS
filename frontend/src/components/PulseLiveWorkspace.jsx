@@ -4,6 +4,7 @@ import { App, Button, DatePicker, Input, Modal, Select } from 'antd'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import PulseGlassBoard from './PulseGlassBoard'
+import '../pages/pulse-live.css'
 import PulseTimesheetForm from './PulseTimesheetForm'
 import PulseTimesheetAdmin from './PulseTimesheetAdmin'
 import PulseAttendanceAdmin from './PulseAttendanceAdmin'
@@ -19,16 +20,37 @@ import PulseMyFiles from './PulseMyFiles'
 import PulseCompanyFiles from './PulseCompanyFiles'
 import api from '../api'
 import { getPulseSampleChoice } from '../utils/pulseEntry'
-import { PULSE_CHECKIN_EVENT } from '../utils/pulseCheckIn'
+import { PULSE_CHECKIN_EVENT, hydrateCheckInFromServer, readCheckInSession, readFirstCheckInAt } from '../utils/pulseCheckIn'
 import {
   ATTENDANCE_PERIODS,
   DEFAULT_WORK_DAYS,
   buildRangeDays,
   periodRange,
+  resolvePulseWorkDays,
 } from '../utils/pulseWorkWeek'
 import { hoursLabel } from '../utils/pulseCalendar'
 
 const STORE_KEY = 'pulseLiveBoards.v1'
+const ATT_LEAVE_TOTAL = 18
+
+function scoreAttendanceDays(days) {
+  const scored = (days || []).filter(
+    (day) => !day.weekend && !day.holiday && !day.onLeave && (day.past || (day.today && day.present)),
+  )
+  const present = scored.filter((day) => day.present).length
+  const absent = scored.filter((day) => !day.present).length
+  const pct = scored.length ? Math.round((present / scored.length) * 100) : null
+  return { present, absent, pct, scored: scored.length }
+}
+
+function formatClock(ts) {
+  if (!ts) return '—'
+  try {
+    return format(new Date(ts), 'h:mm a')
+  } catch {
+    return '—'
+  }
+}
 
 const STATUS_CYCLE = ['Waiting', 'On track', 'Done']
 
@@ -88,18 +110,65 @@ function promptAdd(message, onOk) {
 function attendanceRows(days, name, checkedInAt) {
   return (days || []).map((day) => {
     const status = day.status || (day.today ? (checkedInAt ? 'Checked in' : 'Open') : day.present ? 'Present' : 'Open')
+    const tone = attStatusTone(status)
     return {
       key: day.key,
-      task: `${format(day.date, 'EEE')} ${format(day.date, 'd MMM')}`,
+      date: day.date,
+      label: format(day.date, 'EEE d MMM'),
+      year: format(day.date, 'yyyy'),
       owner: name,
-      due: format(day.date, 'd MMM yyyy'),
       status,
-      done: Boolean(day.present || day.onLeave || ['Weekend', 'Holiday'].includes(status)),
+      tone,
+      hours: day.hours,
+      seconds: day.seconds,
+      today: Boolean(day.today),
+      done: Boolean(day.present || day.onLeave || tone === 'rest'),
     }
   })
 }
 
+function attStatusTone(status) {
+  const value = String(status || '').toLowerCase()
+  if (value === 'weekend' || value === 'holiday') return 'rest'
+  if (value.includes('leave')) return 'leave'
+  if (['present', 'checked in'].includes(value)) return 'ok'
+  if (value === 'absent') return 'bad'
+  return 'open'
+}
+
+function formatAttHours(row) {
+  const seconds = Math.max(0, Math.floor(Number(row.seconds) || 0))
+  if (seconds > 0) return hoursLabel(seconds / 3600)
+  const hours = Number(row.hours)
+  if (Number.isFinite(hours) && hours > 0) return hoursLabel(hours)
+  if (row.tone === 'rest' || row.tone === 'leave' || row.tone === 'bad') return '—'
+  return '—'
+}
+
 const ATT_PAGE_SIZE = 20
+
+function PulseAttendanceList({ rows, empty }) {
+  if (!rows?.length) {
+    return <p className="pulse-att-empty">{empty || 'No attendance in this period.'}</p>
+  }
+  return (
+    <ul className="pulse-att-list" aria-label="Attendance by day">
+      {rows.map((row) => (
+        <li key={row.key} className={`pulse-att-row is-${row.tone}${row.today ? ' is-today' : ''}`}>
+          <span className={`pulse-att-dot is-${row.tone}`} aria-hidden="true" />
+          <div className="pulse-att-day">
+            <strong>{row.label}</strong>
+            <span>{row.year}</span>
+          </div>
+          <div className="pulse-att-hours" title="Hours logged">
+            {formatAttHours(row)}
+          </div>
+          <span className={`pulse-att-status is-${row.tone}`}>{row.status}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 function decorateSampleDay(day, checkedInAt) {
   if (day.weekend) return { ...day, status: 'Weekend', present: false }
@@ -139,7 +208,9 @@ function useAttendanceHistory({ period, custom, sample, checkedInAt, todaySecond
         const data = res.data?.data || {}
         setPayload({
           records: Array.isArray(data.days) ? data.days : [],
-          workDays: Array.isArray(data.workDays) && data.workDays.length ? data.workDays : DEFAULT_WORK_DAYS,
+          workDays: resolvePulseWorkDays(
+            Array.isArray(data.workDays) && data.workDays.length ? data.workDays : DEFAULT_WORK_DAYS,
+          ),
           holidays: Array.isArray(data.holidays) ? data.holidays : [],
           leaveDates: Array.isArray(data.leaveDates) ? data.leaveDates : [],
           leaveByDate: data.leaveByDate && typeof data.leaveByDate === 'object' ? data.leaveByDate : {},
@@ -170,7 +241,9 @@ function useAttendanceHistory({ period, custom, sample, checkedInAt, todaySecond
           const data = res.data?.data || {}
           setPayload({
             records: Array.isArray(data.days) ? data.days : [],
-            workDays: Array.isArray(data.workDays) && data.workDays.length ? data.workDays : DEFAULT_WORK_DAYS,
+            workDays: resolvePulseWorkDays(
+              Array.isArray(data.workDays) && data.workDays.length ? data.workDays : DEFAULT_WORK_DAYS,
+            ),
             holidays: Array.isArray(data.holidays) ? data.holidays : [],
             leaveDates: Array.isArray(data.leaveDates) ? data.leaveDates : [],
             leaveByDate: data.leaveByDate && typeof data.leaveByDate === 'object' ? data.leaveByDate : {},
@@ -203,49 +276,132 @@ function useAttendanceHistory({ period, custom, sample, checkedInAt, todaySecond
 
 function PulseAttendanceBoard({
   name,
+  email,
   checkedInAt,
   elapsed,
   checkBusy,
   onCheckIn,
   leaveLeft,
+  leaveTaken,
+  leaveTotal = ATT_LEAVE_TOTAL,
   mtdPct,
   sample,
 }) {
   const [period, setPeriod] = useState('week')
   const [customRange, setCustomRange] = useState(() => [dayjs().startOf('month'), dayjs()])
   const [page, setPage] = useState(1)
+  const [sessionTick, setSessionTick] = useState(0)
   const custom = useMemo(() => {
     if (period !== 'custom' || !customRange?.[0] || !customRange?.[1]) return null
     return { start: customRange[0].toDate(), end: customRange[1].toDate() }
   }, [period, customRange])
+  const todaySeconds = Math.max(0, Math.floor(Number(elapsed) || 0))
   const { days, range } = useAttendanceHistory({
     period,
     custom,
     sample,
     checkedInAt,
-    todaySeconds: Math.max(0, Math.floor(Number(elapsed) || 0)),
+    todaySeconds,
+  })
+  const weekHistory = useAttendanceHistory({
+    period: 'week',
+    custom: null,
+    sample,
+    checkedInAt,
+    todaySeconds,
+  })
+  const monthHistory = useAttendanceHistory({
+    period: 'month',
+    custom: null,
+    sample,
+    checkedInAt,
+    todaySeconds,
   })
 
   useEffect(() => {
     setPage(1)
   }, [range.from, range.to])
 
+  useEffect(() => {
+    const onChange = () => setSessionTick((n) => n + 1)
+    window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
+    return () => window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
+  }, [])
+
+  useEffect(() => {
+    if (!email || sample) return undefined
+    let cancelled = false
+    hydrateCheckInFromServer(email).then(() => {
+      if (!cancelled) setSessionTick((n) => n + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [email, sample])
+
   const rows = useMemo(() => attendanceRows(days, name, checkedInAt), [days, name, checkedInAt])
-  const scored = days.filter((day) => !day.weekend && !day.holiday && !day.onLeave && (day.past || (day.today && day.present)))
-  const presentCount = scored.filter((day) => day.present).length
-  const absentCount = scored.filter((day) => !day.present).length
-  const pct = scored.length ? Math.round((presentCount / scored.length) * 100) : mtdPct
+  const periodScore = useMemo(() => scoreAttendanceDays(days), [days])
+  const weekScore = useMemo(() => scoreAttendanceDays(weekHistory.days), [weekHistory.days])
+  const monthScore = useMemo(
+    () => {
+      const scored = scoreAttendanceDays(monthHistory.days)
+      return scored.pct == null && mtdPct != null ? { ...scored, pct: mtdPct } : scored
+    },
+    [monthHistory.days, mtdPct],
+  )
+
+  const session = useMemo(
+    () => (email ? readCheckInSession(email) : null),
+    // sessionTick + checkedInAt keep clock labels fresh after check-in/out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [email, checkedInAt, sessionTick],
+  )
+  const todayRecord =
+    weekHistory.days.find((day) => day.today)?.record
+    || days.find((day) => day.today)?.record
+  const serverFirstCheckIn = todayRecord?.checkInAt
+    ? new Date(todayRecord.checkInAt).getTime()
+    : null
+  const localFirstCheckIn = email ? readFirstCheckInAt(email) : null
+  const firstCheckInAt = [serverFirstCheckIn, localFirstCheckIn, session?.checkedInAt]
+    .map((value) => Number(value) || 0)
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b)[0] || null
+  const checkInLabel = formatClock(firstCheckInAt)
+  const checkOutLabel = session?.status === 'active'
+    ? '—'
+    : formatClock(session?.stoppedAt)
+
+  const allotment = Math.max(0, Number(leaveTotal) || ATT_LEAVE_TOTAL)
+  const taken = Math.max(
+    0,
+    Math.min(
+      allotment,
+      leaveTaken != null
+        ? Number(leaveTaken) || 0
+        : allotment - Math.max(0, Number(leaveLeft) || 0),
+    ),
+  )
+  const remaining = Math.max(0, allotment - taken)
+  const statusTitle = ({
+    week: 'Status this week',
+    month: 'Status this month',
+    '2m': 'Status last 2 months',
+    '3m': 'Status last 3 months',
+    custom: 'Status',
+  })[period] || 'Status this week'
+  const daysLabel = (count) => `${count} Day${Number(count) === 1 ? '' : 's'}`
+
   const lastPage = Math.max(1, Math.ceil(rows.length / ATT_PAGE_SIZE))
   const safePage = Math.min(page, lastPage)
   const paged = rows.slice((safePage - 1) * ATT_PAGE_SIZE, safePage * ATT_PAGE_SIZE)
   const start = rows.length === 0 ? 0 : (safePage - 1) * ATT_PAGE_SIZE + 1
   const end = Math.min(safePage * ATT_PAGE_SIZE, rows.length)
-  const periodLabel = ATTENDANCE_PERIODS.find((item) => item.value === period)?.label || 'This week'
 
   return (
     <div className="pulse-att-page">
-      <PulseGlassBoard
-        lead={(
+      <div className="pulse-att-board">
+        <header className="pulse-att-toolbar">
           <div className="pulse-att-period">
             <Select
               value={period}
@@ -253,6 +409,7 @@ function PulseAttendanceBoard({
               options={ATTENDANCE_PERIODS}
               className="pulse-att-select"
               classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
+              popupMatchSelectWidth={false}
               aria-label="Attendance period"
             />
             {period === 'custom' ? (
@@ -261,6 +418,8 @@ function PulseAttendanceBoard({
                 allowClear={false}
                 format="DD-MMM-YYYY"
                 className="pulse-att-range"
+                placement="bottomLeft"
+                getPopupContainer={(node) => node.parentElement || document.body}
                 classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
                 disabledDate={(value) => value && value.isAfter(dayjs(), 'day')}
                 onChange={(next) => {
@@ -269,44 +428,107 @@ function PulseAttendanceBoard({
               />
             ) : null}
           </div>
-        )}
-        ctaLabel={checkBusy ? 'Working…' : checkedInAt ? 'Check out' : 'Check in'}
-        checkIn
-        onCta={onCheckIn}
-        metrics={[
-          { label: 'Present', value: String(presentCount), hint: `${absentCount} absent` },
-          { label: 'Today', value: checkedInAt ? 'In' : 'Out', hint: checkedInAt ? 'Timer running' : 'Day still open' },
-          { label: 'Attendance', value: pct == null ? '—' : `${pct}%`, hint: periodLabel },
-          { label: 'Leave left', value: String(leaveLeft), hint: 'Days' },
-        ]}
-        groups={[{
-          title: range.label,
-          hint: `${rows.length} day${rows.length === 1 ? '' : 's'}`,
-          rows: paged,
-          empty: 'No attendance in this period.',
-        }]}
-        extra={rows.length > ATT_PAGE_SIZE ? (
-          <div className="pulse-att-pager">
-            <span>{start}–{end} of {rows.length}</span>
-            <div>
-              <Button
-                type="text"
-                icon={<LeftOutlined />}
-                aria-label="Previous page"
-                disabled={safePage <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              />
-              <Button
-                type="text"
-                icon={<RightOutlined />}
-                aria-label="Next page"
-                disabled={safePage >= lastPage}
-                onClick={() => setPage((value) => Math.min(lastPage, value + 1))}
-              />
+          <button
+            type="button"
+            className={`pov-cta plive-top-cta plive-checkin`}
+            onClick={onCheckIn}
+            disabled={checkBusy}
+          >
+            {checkBusy ? 'Working…' : checkedInAt ? 'Check out' : 'Check in'}
+          </button>
+        </header>
+
+        <div className="plive-metrics">
+          <article className="plive-metric plive-metric--split">
+            <p>{statusTitle}</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{daysLabel(periodScore.present)}</strong>
+                <span>Present</span>
+              </div>
+              <div>
+                <strong>{daysLabel(periodScore.absent)}</strong>
+                <span>Absent</span>
+              </div>
+            </div>
+          </article>
+          <article className="plive-metric plive-metric--split">
+            <p>Today</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{checkInLabel}</strong>
+                <span>Check in</span>
+              </div>
+              <div>
+                <strong>{checkOutLabel}</strong>
+                <span>Check out</span>
+              </div>
+            </div>
+          </article>
+          <article className="plive-metric plive-metric--split">
+            <p>Attendance</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{weekScore.pct == null ? '—' : `${weekScore.pct}%`}</strong>
+                <span>This week</span>
+              </div>
+              <div>
+                <strong>{monthScore.pct == null ? '—' : `${monthScore.pct}%`}</strong>
+                <span>This month</span>
+              </div>
+            </div>
+          </article>
+          <article className="plive-metric plive-metric--split">
+            <p>Leave Status</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{remaining}</strong>
+                <span>Leave left</span>
+              </div>
+              <div>
+                <strong>{taken}</strong>
+                <span>Leave taken</span>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <section className="pulse-att-panel" aria-label={range.label}>
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>{range.label}</h4>
+              <span>{rows.length} day{rows.length === 1 ? '' : 's'}</span>
+            </header>
+            <div className="pulse-att-cols" aria-hidden="true">
+              <span>Date</span>
+              <span>Hours</span>
+              <span>Status</span>
             </div>
           </div>
-        ) : null}
-      />
+          <PulseAttendanceList rows={paged} empty="No attendance in this period." />
+          {rows.length > ATT_PAGE_SIZE ? (
+            <div className="pulse-att-pager">
+              <span>{start}–{end} of {rows.length}</span>
+              <div>
+                <Button
+                  type="text"
+                  icon={<LeftOutlined />}
+                  aria-label="Previous page"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                />
+                <Button
+                  type="text"
+                  icon={<RightOutlined />}
+                  aria-label="Next page"
+                  disabled={safePage >= lastPage}
+                  onClick={() => setPage((value) => Math.min(lastPage, value + 1))}
+                />
+              </div>
+            </div>
+          ) : null}
+        </section>
+      </div>
     </div>
   )
 }
@@ -316,6 +538,7 @@ export default function PulseLiveModule({
   scope = 'me',
   name = 'You',
   initial = 'Y',
+  email,
   weekDays = [],
   checkedInAt,
   elapsed = 0,
@@ -323,6 +546,8 @@ export default function PulseLiveModule({
   onCheckIn,
   weekHours = 0,
   leaveLeft = 0,
+  leaveTaken,
+  leaveTotal = ATT_LEAVE_TOTAL,
   mtdPct,
   timesheetRows = [],
   onOpenCalendar,
@@ -394,11 +619,14 @@ export default function PulseLiveModule({
     return (
       <PulseAttendanceBoard
         name={name}
+        email={email}
         checkedInAt={checkedInAt}
         elapsed={elapsed}
         checkBusy={checkBusy}
         onCheckIn={onCheckIn}
         leaveLeft={leaveLeft}
+        leaveTaken={leaveTaken}
+        leaveTotal={leaveTotal}
         mtdPct={mtdPct}
         sample={demo}
       />
@@ -410,16 +638,14 @@ export default function PulseLiveModule({
       return <PulseTimesheetAdmin />
     }
     return (
-      <div className="pulse-ts-page">
-        <PulseTimesheetForm
-          name={name}
-          checkedInAt={checkedInAt}
-          elapsed={elapsed}
-          weekHours={weekHours}
-          timesheetRows={timesheetRows}
-          sample={demo}
-        />
-      </div>
+      <PulseTimesheetForm
+        name={name}
+        checkedInAt={checkedInAt}
+        elapsed={elapsed}
+        weekHours={weekHours}
+        timesheetRows={timesheetRows}
+        sample={demo}
+      />
     )
   }
 
@@ -427,22 +653,14 @@ export default function PulseLiveModule({
     if (org) {
       return <PulsePerformanceAdmin />
     }
-    return (
-      <div className="pulse-ts-page">
-        <PulsePerformance />
-      </div>
-    )
+    return <PulsePerformance />
   }
 
   if (kind === 'payroll') {
     if (org) {
       return <PulsePayrollAdmin />
     }
-    return (
-      <div className="pulse-ts-page">
-        <PulsePayroll />
-      </div>
-    )
+    return <PulsePayroll />
   }
 
   if (kind === 'onboarding') {

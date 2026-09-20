@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import './people-os-logo-load.css'
 
-const GREEN = '#1A5F4A'
+const GREEN = '#556B2F'
 
 /** People OS four-square mark with a spinning green ring. */
 export default function PeopleOsLogoLoader({

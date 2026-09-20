@@ -208,6 +208,7 @@ export const emptyCandidate = {
   firstName: '',
   lastName: '',
   email: '',
+  personalEmails: [],
   officialEmail: '',
   phone: '',
   countryCode: '+91',
@@ -815,7 +816,13 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
   )
 }
 
-export default function PulseCandidateForm({ form, mode = 'admin', reviewEmployee = false, employeeStep = 'you' }) {
+export default function PulseCandidateForm({
+  form,
+  mode = 'admin',
+  reviewEmployee = false,
+  employeeStep = 'you',
+  allowMultiEmail = false,
+}) {
   const departments = useMemo(() => DEPARTMENTS.map((d) => ({ value: d, label: d })), [])
   const isAdmin = mode === 'admin'
   const isEmployee = mode === 'employee'
@@ -832,32 +839,59 @@ export default function PulseCandidateForm({ form, mode = 'admin', reviewEmploye
       {isEmployee ? null : (
         <Row gutter={24}>
           <Col xs={24} md={12}>
-            <Form.Item
-              name="firstName"
-              label="First name"
-            >
+            <Form.Item name="firstName" label="First name">
               <Input autoComplete="given-name" disabled={isAdmin && reviewEmployee} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item
-              name="lastName"
-              label="Last name"
-            >
+            <Form.Item name="lastName" label="Last name">
               <Input autoComplete="family-name" disabled={isAdmin && reviewEmployee} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item
-              name="email"
-              label="Personal email"
-              rules={[
-                { type: 'email', message: 'Enter a valid email' },
-                { required: true, message: 'Personal email is required' },
-              ]}
-            >
-              <Input autoComplete="email" />
-            </Form.Item>
+          <Col xs={24} md={allowMultiEmail ? 24 : 12}>
+            {allowMultiEmail ? (
+              <Form.Item
+                name="personalEmails"
+                label="Personal emails"
+                extra="Press Enter to add more. Each email gets an invite."
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      const list = Array.isArray(value)
+                        ? value.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean)
+                        : []
+                      if (!list.length) {
+                        return Promise.reject(new Error('Add at least one personal email'))
+                      }
+                      const bad = list.find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+                      if (bad) {
+                        return Promise.reject(new Error(`Enter a valid email (${bad})`))
+                      }
+                      return Promise.resolve()
+                    },
+                  },
+                ]}
+              >
+                <Select
+                  mode="tags"
+                  tokenSeparators={[',', ';', ' ']}
+                  placeholder="name@gmail.com"
+                  open={false}
+                  suffixIcon={null}
+                />
+              </Form.Item>
+            ) : (
+              <Form.Item
+                name="email"
+                label="Personal email"
+                rules={[
+                  { type: 'email', message: 'Enter a valid email' },
+                  { required: true, message: 'Personal email is required' },
+                ]}
+              >
+                <Input autoComplete="email" />
+              </Form.Item>
+            )}
           </Col>
         </Row>
       )}

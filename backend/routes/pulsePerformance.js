@@ -5,7 +5,9 @@ const User = require('../models/User')
 const Candidate = require('../models/Candidate')
 const PulsePerformanceMonth = require('../models/PulsePerformanceMonth')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
+const { personName, namesMatch } = require('../utils/pulsePerson')
 const { upsertPayslipFromPerformance } = require('./pulsePayroll')
+const { uploadBase64 } = require('../utils/cloudinary')
 const {
   AREA_LABELS,
   AREA_WEIGHTS,
@@ -26,9 +28,48 @@ const EMPTY_SCORES = Object.freeze({
   bms: 0,
 })
 
-const MEMBER_SELECT = '_id firstName lastName displayName email avatarUrl role'
+const MEMBER_SELECT = '_id firstName lastName displayName email avatarUrl role pulseNetPay'
 const MONTH_SELECT =
-  'user email month scores fixedPay projectTier projectApproved learningApproved innovationApproved managerNote employeeNote correctionRequested correctionNote status lockedAt'
+  'user email month scores fixedPay projectTier projectApproved learningApproved innovationApproved managerNote employeeNote correctionRequested correctionNote correctionAttachment status lockedAt'
+
+const CORRECTION_ATTACH_MAX = 5 * 1024 * 1024
+
+function serializeAttachment(raw) {
+  const name = String(raw?.name || '').trim()
+  if (!name) return null
+  const url = String(raw?.url || '').trim()
+  return {
+    name,
+    mime: String(raw?.mime || '').trim(),
+    size: Number(raw?.size) || 0,
+    url: /^https?:\/\//i.test(url) ? url : '',
+  }
+}
+
+function parseCorrectionAttachment(raw) {
+  if (!raw || typeof raw !== 'object') return { ok: true, value: null }
+  const name = String(raw.name || '').trim().slice(0, 180)
+  const data = String(raw.data || '')
+  const mime = String(raw.mime || '').trim().toLowerCase()
+  const size = Number(raw.size) || 0
+  if (!name || !data.startsWith('data:')) {
+    return { ok: false, message: 'Attachment is not a valid file' }
+  }
+  if (size > CORRECTION_ATTACH_MAX) {
+    return { ok: false, message: 'Attachment must be 5 MB or smaller' }
+  }
+  const mimeOk = mime.startsWith('image/') || mime === 'application/pdf' || mime.includes('word')
+  if (mime && !mimeOk) {
+    return { ok: false, message: 'Use PDF, Word, or an image' }
+  }
+  return { ok: true, value: { name, mime, size, data } }
+}
+
+async function storeCorrectionAttachment(file, userId) {
+  if (!file) return null
+  const url = await uploadBase64(file.data, `payroll_portal/performance/${userId}`)
+  return { name: file.name, mime: file.mime, size: file.size, url }
+}
 
 function safeListAvatarUrl(value) {
   const url = String(value || '').trim()
@@ -40,19 +81,6 @@ function safeListAvatarUrl(value) {
 function hasEmbeddedAvatar(value) {
   const raw = String(value || '').trim()
   return raw.startsWith('data:image/') || (/^[A-Za-z0-9+/=\s]+$/.test(raw) && raw.length > 200)
-}
-
-function looksLikeEmail(value) {
-  return /@/.test(String(value || ''))
-}
-
-function personName(user) {
-  const parts = [user?.firstName, user?.lastName].filter(Boolean)
-  if (parts.length) return parts.join(' ')
-  const display = String(user?.displayName || '').trim()
-  // Some invites store the mailbox as displayName — never show that as the title.
-  if (display && !looksLikeEmail(display)) return display
-  return String(user?.email || '').split('@')[0] || 'Employee'
 }
 
 /** Batch: emails that still have an onboarding Candidate photo (metadata only). */
@@ -98,6 +126,7 @@ function emptyMonthDoc({ organizationId, user, email, month }) {
     employeeNote: '',
     correctionRequested: false,
     correctionNote: '',
+    correctionAttachment: null,
     status: 'draft',
     lockedAt: null,
   }
@@ -135,6 +164,7 @@ function serializeRow(doc, user) {
     employeeNote: plain.employeeNote || '',
     correctionRequested: Boolean(plain.correctionRequested),
     correctionNote: plain.correctionNote || '',
+    correctionAttachment: serializeAttachment(plain.correctionAttachment),
     status: plain.status || 'draft',
     lockedAt: plain.lockedAt || null,
     ...calc,
@@ -238,6 +268,10 @@ router.post('/me/correction', auth, async (req, res) => {
     if (!note) {
       return res.status(400).json({ success: false, message: 'Add evidence for your correction request' })
     }
+    const parsedFile = parseCorrectionAttachment(req.body.attachment)
+    if (!parsedFile.ok) {
+      return res.status(400).json({ success: false, message: parsedFile.message })
+    }
     const organizationId = orgIdOf(req.user)
     const doc = await getOrCreateMonth({
       organizationId,
@@ -251,9 +285,18 @@ router.post('/me/correction', auth, async (req, res) => {
     if (doc.correctionRequested) {
       return res.status(400).json({ success: false, message: 'You already requested one correction this month' })
     }
+    let savedAttachment = null
+    if (parsedFile.value) {
+      try {
+        savedAttachment = await storeCorrectionAttachment(parsedFile.value, req.user._id)
+      } catch (err) {
+        return res.status(500).json({ success: false, message: err.message || 'Could not upload evidence' })
+      }
+    }
     doc.correctionRequested = true
     doc.correctionNote = note.slice(0, 2000)
     doc.employeeNote = note.slice(0, 2000)
+    doc.correctionAttachment = savedAttachment || undefined
     if (doc.status === 'draft') doc.status = 'review'
     await doc.save()
     res.json({ success: true, data: serializeRow(doc, req.user) })
@@ -462,6 +505,51 @@ router.post('/admin/:userId/lock', auth, async (req, res) => {
     })
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to lock performance' })
+  }
+})
+
+// Admin / superadmin: unlock after typing the employee name
+router.post('/admin/:userId/unlock', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const month = assertMonth(req.body.month)
+    const organizationId = orgIdOf(req.user)
+    const orgObjectId = toOrgObjectId(organizationId)
+
+    const member = await User.findOne({
+      _id: req.params.userId,
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+    }).select(MEMBER_SELECT)
+    if (!member) return res.status(404).json({ success: false, message: 'Member not found in your organization' })
+
+    if (!namesMatch(req.body.confirmName, member)) {
+      const err = new Error(`Type ${personName(member)} to unlock`)
+      err.status = 400
+      throw err
+    }
+
+    const doc = await getOrCreateMonth({
+      organizationId: orgObjectId,
+      user: member,
+      email: member.email,
+      month,
+    })
+    if (doc.status !== 'locked') {
+      return res.status(400).json({ success: false, message: 'This month is not locked' })
+    }
+    doc.status = 'confirmed'
+    doc.lockedAt = null
+    doc.reviewedBy = req.user._id
+    await doc.save()
+
+    res.json({
+      success: true,
+      data: serializeRow(doc, member),
+    })
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to unlock performance' })
   }
 })
 

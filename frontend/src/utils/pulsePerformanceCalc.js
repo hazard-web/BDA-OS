@@ -35,6 +35,38 @@ export const PERFORMANCE_TIERS = [
   { min: 80, max: 100, status: 'Exceptional', bonus: 3000 },
 ]
 
+/** Compact labels for tight KPI tiles */
+export const STATUS_SHORT = {
+  'Needs improvement': 'Needs Imp.',
+  'Needs Improvement': 'Needs Imp.',
+  Developing: 'Developing',
+  Dependable: 'Dependable',
+  Strong: 'Strong',
+  Exceptional: 'Exceptional',
+}
+
+/** Hover / full display labels */
+export const STATUS_FULL = {
+  'Needs improvement': 'Needs Improvement',
+  'Needs Improvement': 'Needs Improvement',
+  Developing: 'Developing',
+  Dependable: 'Dependable',
+  Strong: 'Strong',
+  Exceptional: 'Exceptional',
+}
+
+export function statusShortLabel(status) {
+  const full = String(status || '').trim()
+  if (!full) return '—'
+  return STATUS_SHORT[full] || full
+}
+
+export function statusFullLabel(status) {
+  const full = String(status || '').trim()
+  if (!full) return '—'
+  return STATUS_FULL[full] || full
+}
+
 export const PROJECT_TIER_OPTIONS = [
   { value: 'Core', label: 'Core' },
   { value: 'Enhanced', label: 'Enhanced' },
@@ -68,10 +100,33 @@ export function statusTone(status) {
   }
 }
 
+export const SCORE_STEPS = [0, 25, 50, 75, 100]
+
+export const SCORE_MARKS = {
+  0: '0',
+  25: '25',
+  50: '50',
+  75: '75',
+  100: '100',
+}
+
 function clampScore(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return 0
-  return Math.max(0, Math.min(100, Math.round(n)))
+  const clamped = Math.max(0, Math.min(100, n))
+  return Math.round(clamped / 25) * 25
+}
+
+export function snapScore(value) {
+  return clampScore(value)
+}
+
+export function snapScores(scores = {}) {
+  const next = {}
+  for (const key of AREA_KEYS) {
+    next[key] = snapScore(scores[key])
+  }
+  return next
 }
 
 export function weightedPerformanceScore(scores = {}) {

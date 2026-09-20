@@ -606,7 +606,7 @@ export default function Dashboard() {
             </Flex>
             <div style={{ marginTop: 16 }}>
               <Typography.Text type="secondary">Team efficiency</Typography.Text>
-              <Progress percent={performanceStats.teamEfficiency} strokeColor="#1A5F4A" />
+              <Progress percent={performanceStats.teamEfficiency} strokeColor="#176B5B" />
             </div>
           </Card>
         </Col>
@@ -653,7 +653,7 @@ export default function Dashboard() {
                 renderItem={(a) => (
                   <List.Item>
                     <List.Item.Meta
-                      avatar={<Avatar icon={<SoundOutlined />} style={{ background: '#E8F2EE', color: '#1A5F4A' }} />}
+                      avatar={<Avatar icon={<SoundOutlined />} style={{ background: '#E8F1EE', color: '#176B5B' }} />}
                       title={a.title}
                       description={new Date(a.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     />

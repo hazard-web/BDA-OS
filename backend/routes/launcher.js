@@ -28,14 +28,21 @@ async function orgMembers(organizationId) {
   return User.find({
     $or: [{ organizationId }, { _id: organizationId }],
   })
-    .select('email firstName lastName role')
+    .select('email firstName lastName displayName avatarUrl role')
     .sort({ createdAt: 1 })
     .lean()
 }
 
-async function emailBelongsToOrg(organizationId, email) {
-  const members = await orgMembers(organizationId)
-  return members.some((m) => normalizeEmail(m.email) === email)
+function publicMember(row) {
+  return {
+    _id: row._id,
+    email: row.email,
+    firstName: row.firstName || '',
+    lastName: row.lastName || '',
+    displayName: row.displayName || '',
+    avatarUrl: row.avatarUrl || '',
+    role: row.role || 'admin',
+  }
 }
 
 async function grantsForEmail(email) {
@@ -93,23 +100,28 @@ router.post('/google/sync', auth, async (req, res) => {
   }
 })
 
+router.get('/people', auth, async (req, res) => {
+  try {
+    const organizationId = orgIdOf(req.user)
+    const members = await orgMembers(organizationId)
+    res.set('Cache-Control', 'no-store')
+    res.json({ success: true, data: { members: members.map(publicMember) } })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load people' })
+  }
+})
+
 router.get('/admin', auth, requireAdmin, async (req, res) => {
   try {
     const organizationId = orgIdOf(req.user)
     const [members, grants] = await Promise.all([
       orgMembers(organizationId),
-      EmployeeAppGrant.find({ organizationId, status: 'active' }).sort({ email: 1, name: 1 }).lean(),
+      EmployeeAppGrant.find({ organizationId, status: 'active' }).sort({ name: 1, email: 1 }).lean(),
     ])
     res.json({
       success: true,
       data: {
-        members: members.map((m) => ({
-          _id: m._id,
-          email: m.email,
-          firstName: m.firstName || '',
-          lastName: m.lastName || '',
-          role: m.role || 'admin',
-        })),
+        members: members.map(publicMember),
         grants: grants.map((g) => ({
           ...hydrateGrant(g),
           grantedAt: g.updatedAt || g.createdAt,
@@ -124,17 +136,19 @@ router.get('/admin', auth, requireAdmin, async (req, res) => {
 router.post('/admin', auth, requireAdmin, async (req, res) => {
   try {
     const organizationId = orgIdOf(req.user)
-    const email = normalizeEmail(req.body.email)
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({ success: false, message: 'Employee email is required' })
-    }
+    const rawEmails = Array.isArray(req.body.emails)
+      ? req.body.emails
+      : req.body.email
+        ? [req.body.email]
+        : []
+    const emails = [...new Set(
+      rawEmails
+        .map((value) => normalizeEmail(value))
+        .filter((email) => email && email.includes('@')),
+    )]
 
-    const inOrg = await emailBelongsToOrg(organizationId, email)
-    if (!inOrg) {
-      return res.status(400).json({
-        success: false,
-        message: 'Assign apps only to people in this company (invite them first)',
-      })
+    if (!emails.length) {
+      return res.status(400).json({ success: false, message: 'Pick at least one employee' })
     }
 
     const name = String(req.body.name || '').trim()
@@ -146,31 +160,50 @@ router.post('/admin', auth, requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'App URL must start with http:// or https://' })
     }
 
-    const appId = slugAppId(req.body.appId || name)
-    const grant = await EmployeeAppGrant.findOneAndUpdate(
-      { organizationId, email, appId },
-      {
-        organizationId,
-        email,
-        appId,
-        name,
-        url,
-        color: String(req.body.color || '').trim() || '#1A5F4A',
-        iconUrl: String(req.body.iconUrl || '').trim() || iconFromUrl(url),
-        grantedBy: req.user._id,
-        status: 'active',
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    )
+    const members = await orgMembers(organizationId)
+    const memberEmails = new Set(members.map((m) => normalizeEmail(m.email)).filter(Boolean))
+    const outside = emails.filter((email) => !memberEmails.has(email))
+    if (outside.length) {
+      return res.status(400).json({
+        success: false,
+        message: `Assign apps only to people in this company: ${outside.slice(0, 3).join(', ')}${outside.length > 3 ? '…' : ''}`,
+      })
+    }
 
+    const appId = slugAppId(req.body.appId || name)
+    const color = String(req.body.color || '').trim() || '#1A5F4A'
+    const iconUrl = String(req.body.iconUrl || '').trim() || iconFromUrl(url)
+    const granted = []
+
+    for (const email of emails) {
+      const grant = await EmployeeAppGrant.findOneAndUpdate(
+        { organizationId, email, appId },
+        {
+          organizationId,
+          email,
+          appId,
+          name,
+          url,
+          color,
+          iconUrl,
+          grantedBy: req.user._id,
+          status: 'active',
+          source: 'manual',
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      )
+      granted.push(hydrateGrant(grant))
+    }
+
+    const label = emails.length === 1 ? emails[0] : `${emails.length} people`
     res.json({
       success: true,
-      message: `${grant.name} assigned to ${email}`,
-      data: hydrateGrant(grant),
+      message: `${name} assigned to ${label}`,
+      data: granted,
     })
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(409).json({ success: false, message: 'This person already has that app' })
+      return res.status(409).json({ success: false, message: 'Someone already has that app' })
     }
     res.status(500).json({ success: false, message: err.message || 'Could not assign app' })
   }

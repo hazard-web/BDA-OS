@@ -1,7 +1,18 @@
 import { addDays, format, isToday, startOfDay, startOfMonth, startOfWeek, subMonths } from 'date-fns'
 import { pulseDayKey } from './pulseCheckIn'
 
-export const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5]
+export const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5, 6]
+
+/** Pulse week is Mon–Sat (timesheets). Older Mon–Fri defaults hid Saturday’s timer. */
+export function resolvePulseWorkDays(raw) {
+  const days = [...new Set((Array.isArray(raw) ? raw : []).map(Number).filter((d) => d >= 0 && d <= 6))]
+  if (!days.length) return [...DEFAULT_WORK_DAYS]
+  if (!days.includes(6) && days.includes(1) && days.includes(5) && !days.includes(0)) {
+    return [...days, 6].sort((a, b) => a - b)
+  }
+  return days.sort((a, b) => a - b)
+}
+
 export const GENERAL_SHIFT = {
   name: 'General',
   hours: 'Complete 9 hours daily',

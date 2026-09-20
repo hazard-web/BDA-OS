@@ -31,6 +31,8 @@ const pulsePayrollPayslipSchema = new mongoose.Schema(
     performanceStatus: { type: String, default: '' },
     grossPay: { type: Number, default: 0, min: 0 },
     netPay: { type: Number, default: 0, min: 0 },
+    /** When true, admin-set net pay is kept across regenerate. */
+    netPayManual: { type: Boolean, default: false },
     status: {
       type: String,
       enum: ['generated', 'paid'],

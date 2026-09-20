@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
 import { format, parse } from 'date-fns'
-import { App, Button, DatePicker, Empty } from 'antd'
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
+import { App, DatePicker, Tooltip } from 'antd'
+import { DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
-import { formatInr, monthKey } from '../utils/pulsePerformanceCalc'
+import { formatInr, monthKey, statusFullLabel, statusShortLabel } from '../utils/pulsePerformanceCalc'
+import { withEmployeePayrollDemo, needsPayrollDemo } from '../utils/pulsePerformanceDemo'
 import './pulse-performance.css'
 
 function monthLabel(month) {
   try {
     return format(parse(`${month}-01`, 'yyyy-MM-dd', new Date()), 'MMMM yyyy')
+  } catch {
+    return month
+  }
+}
+
+function shortMonth(month) {
+  try {
+    return format(parse(`${month}-01`, 'yyyy-MM-dd', new Date()), 'MMM yyyy')
   } catch {
     return month
   }
@@ -25,6 +34,14 @@ function downloadBlob(blob, filename) {
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+const LINE_ITEMS = [
+  { key: 'fixedPay', label: 'Fixed pay', hint: 'Base salary' },
+  { key: 'performanceBonus', label: 'Performance bonus', hint: 'Score linked' },
+  { key: 'projectBonus', label: 'Project bonus', hint: 'Project tier' },
+  { key: 'learningBonus', label: 'Learning bonus', hint: 'Approved learning' },
+  { key: 'innovationBonus', label: 'Innovation bonus', hint: 'Approved innovation' },
+]
 
 export default function PulsePayroll() {
   const { message } = App.useApp()
@@ -71,93 +88,149 @@ export default function PulsePayroll() {
     }
   }
 
+  const display = !loading ? withEmployeePayrollDemo(row, month) : null
+  const isDemo = Boolean(display) && needsPayrollDemo(row)
+  const dash = loading ? '…' : '—'
+
   return (
-    <div className="pulse-perf-page pulse-ts-page">
-      <div className="pov-app pov-app-bare">
-        <div className="pov-app-body">
-          <header className="pov-top pulse-perf-topbar">
-            <h2 className="pulse-perf-month">{monthLabel(month)}</h2>
-            <div className="pulse-ts-admin-filter">
-              <DatePicker
-                picker="month"
-                value={dayjs(`${month}-01`)}
-                allowClear={false}
-                format="MMM YYYY"
-                className="pulse-ts-admin-date"
-                classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
-                disabledDate={(value) => value && value.isAfter(dayjs(), 'month')}
-                onChange={(next) => {
-                  if (next) setMonth(next.format('YYYY-MM'))
-                }}
-              />
-              <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
-              {row ? (
-                <Button
-                  type="primary"
-                  className="pulse-perf-cta"
-                  icon={<DownloadOutlined />}
-                  loading={downloading}
-                  onClick={downloadPayslip}
-                >
-                  Download
-                </Button>
-              ) : null}
-            </div>
-          </header>
-
-          {loading ? <p className="pulse-ts-admin-empty">Loading…</p> : null}
-
-          {!loading && !row ? (
-            <div className="pov-glass pov-tasks">
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="Payslip appears after performance is locked"
-              />
-            </div>
+    <div className="pulse-att-page pulse-pay-att">
+      <div className="pulse-att-board">
+        <header className="pulse-att-toolbar">
+          <div className="pulse-att-period">
+            <DatePicker
+              picker="month"
+              value={dayjs(`${month}-01`)}
+              allowClear={false}
+              format="MMM YYYY"
+              className="pulse-att-range pulse-pay-month-picker"
+              classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
+              disabledDate={(value) => value && value.isAfter(dayjs(), 'month')}
+              onChange={(next) => {
+                if (next) setMonth(next.format('YYYY-MM'))
+              }}
+              aria-label="Payroll month"
+            />
+          </div>
+          {row && !isDemo ? (
+            <button
+              type="button"
+              className="pov-cta plive-top-cta plive-checkin"
+              onClick={downloadPayslip}
+              disabled={downloading}
+            >
+              <DownloadOutlined />
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
           ) : null}
+        </header>
 
-          {row ? (
-            <>
-              <div className="plive-metrics pulse-perf-metrics pulse-pay-metrics">
-                <article className="pov-glass plive-metric">
-                  <p>Net pay</p>
-                  <strong>{formatInr(row.netPay)}</strong>
-                  <span>{row.status === 'paid' ? 'Paid' : 'Generated'}</span>
-                </article>
-                <article className="pov-glass plive-metric">
-                  <p>Fixed</p>
-                  <strong>{formatInr(row.fixedPay)}</strong>
-                  <span>Base</span>
-                </article>
-                <article className="pov-glass plive-metric">
-                  <p>Variable</p>
-                  <strong>{formatInr(row.totalBonus)}</strong>
-                  <span>Bonuses</span>
-                </article>
-                <article className="pov-glass plive-metric">
-                  <p>Score</p>
-                  <strong>{row.weightedScore ?? 0}</strong>
-                  <span>{row.performanceStatus || '—'}</span>
-                </article>
+        <div className="plive-metrics">
+          <article className="plive-metric plive-metric--split">
+            <p>Net pay</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{display ? formatInr(display.netPay) : dash}</strong>
+                <span>Take home</span>
               </div>
-
-              <section className="pov-glass pov-tasks pulse-perf-board">
-                <div className="pov-group-head">
-                  <h4>Payslip</h4>
-                  <span>{monthLabel(row.month)}</span>
-                </div>
-                <ul className="pulse-perf-lines">
-                  <li><span>Fixed pay</span><em>{formatInr(row.fixedPay)}</em></li>
-                  <li><span>Performance bonus</span><em>{formatInr(row.performanceBonus)}</em></li>
-                  <li><span>Project bonus</span><em>{formatInr(row.projectBonus)}</em></li>
-                  <li><span>Learning bonus</span><em>{formatInr(row.learningBonus)}</em></li>
-                  <li><span>Innovation bonus</span><em>{formatInr(row.innovationBonus)}</em></li>
-                  <li className="is-total"><span>Net pay</span><em>{formatInr(row.netPay)}</em></li>
-                </ul>
-              </section>
-            </>
-          ) : null}
+              <div>
+                <strong>{display ? (display.status === 'paid' ? 'Paid' : isDemo ? 'Demo' : 'Generated') : dash}</strong>
+                <span>Status</span>
+              </div>
+            </div>
+          </article>
+          <article className="plive-metric plive-metric--split">
+            <p>Fixed</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{display ? formatInr(display.fixedPay) : dash}</strong>
+                <span>Base</span>
+              </div>
+              <div>
+                <strong>{display ? formatInr(display.totalBonus) : dash}</strong>
+                <span>Variable</span>
+              </div>
+            </div>
+          </article>
+          <article className="plive-metric plive-metric--split">
+            <p>Score</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{display ? (display.weightedScore ?? 0) : dash}</strong>
+                <span>Weighted</span>
+              </div>
+              <div>
+                {display?.performanceStatus ? (
+                  <Tooltip title={statusFullLabel(display.performanceStatus)}>
+                    <strong className="is-short">{statusShortLabel(display.performanceStatus)}</strong>
+                  </Tooltip>
+                ) : (
+                  <strong>{dash}</strong>
+                )}
+                <span>Level</span>
+              </div>
+            </div>
+          </article>
+          <article className="plive-metric plive-metric--split">
+            <p>Period</p>
+            <div className="plive-metric-split">
+              <div>
+                <strong>{shortMonth(display?.month || month)}</strong>
+                <span>Payslip month</span>
+              </div>
+              <div>
+                <strong>{display ? (isDemo ? 'Showcase' : 'Final') : dash}</strong>
+                <span>{isDemo ? 'Matches Performance' : 'Ready to download'}</span>
+              </div>
+            </div>
+          </article>
         </div>
+
+        <section className="pulse-att-panel" aria-label="Payslip breakdown">
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>Payslip</h4>
+              <span>{loading ? 'Loading…' : monthLabel(display?.month || month)}</span>
+            </header>
+            <div className="pulse-att-cols pulse-pay-att-cols" aria-hidden="true">
+              <span>Component</span>
+              <span>Amount</span>
+              <span>Type</span>
+            </div>
+          </div>
+
+          {loading && !display ? (
+            <p className="pulse-att-empty">Loading…</p>
+          ) : (
+            <ul className="pulse-att-list pulse-pay-att-list" aria-label="Payslip lines">
+              {LINE_ITEMS.map((item) => {
+                const amount = Number(display?.[item.key]) || 0
+                const tone = amount > 0 ? 'ok' : 'open'
+                return (
+                  <li key={item.key} className={`pulse-att-row pulse-pay-att-row is-${tone}`}>
+                    <span className={`pulse-att-dot is-${tone}`} aria-hidden="true" />
+                    <div className="pulse-att-day">
+                      <strong>{item.label}</strong>
+                      <span>{item.hint}</span>
+                    </div>
+                    <div className="pulse-att-hours">{formatInr(amount)}</div>
+                    <span className={`pulse-att-status is-${tone}`}>
+                      {item.key === 'fixedPay' ? 'Fixed' : 'Bonus'}
+                    </span>
+                  </li>
+                )
+              })}
+              <li className="pulse-att-row pulse-pay-att-row is-ok pulse-pay-att-total">
+                <span className="pulse-att-dot is-ok" aria-hidden="true" />
+                <div className="pulse-att-day">
+                  <strong>Net pay</strong>
+                  <span>Take home</span>
+                </div>
+                <div className="pulse-att-hours">{formatInr(display?.netPay)}</div>
+                <span className="pulse-att-status is-ok">Total</span>
+              </li>
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   )

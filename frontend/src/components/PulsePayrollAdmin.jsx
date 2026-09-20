@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { format, parse } from 'date-fns'
-import { App, Button, DatePicker, Empty } from 'antd'
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
+import { App, Button, DatePicker } from 'antd'
+import { DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { formatInr, monthKey } from '../utils/pulsePerformanceCalc'
+import { buildPayrollAdminDemoRow } from '../utils/pulsePerformanceDemo'
+import { personName } from '../utils/pulsePerson'
 import './pulse-performance.css'
 
 function monthLabel(month) {
@@ -15,8 +17,27 @@ function monthLabel(month) {
   }
 }
 
-function personInitial(row) {
-  return String(row.name || row.email || 'E').trim().charAt(0).toUpperCase() || 'E'
+function suggestedNet(row) {
+  if (Number(row?.payslip?.netPay) > 0) return Number(row.payslip.netPay)
+  if (Number(row?.standingNetPay) > 0) return Number(row.standingNetPay)
+  if (Number(row?.netPay) > 0) return Number(row.netPay)
+  return Math.max(0, Math.round((Number(row?.fixedPay) || 0) + (Number(row?.totalBonus) || 0)))
+}
+
+function statusLabel(row) {
+  if (row.payslip?.status === 'paid') return 'Paid'
+  if (row.hasPayslip) return 'Payslip'
+  if (row.performanceLocked) return 'Locked'
+  if (row.performanceState && row.performanceState !== 'none') return 'In review'
+  return 'Open'
+}
+
+function statusChipClass(row) {
+  if (row.payslip?.status === 'paid') return 'is-paid'
+  if (row.hasPayslip) return 'is-slip'
+  if (row.performanceLocked) return 'is-locked'
+  if (row.performanceState && row.performanceState !== 'none') return 'is-review'
+  return 'is-open'
 }
 
 function downloadBlob(blob, filename) {
@@ -34,7 +55,6 @@ export default function PulsePayrollAdmin() {
   const { message } = App.useApp()
   const [month, setMonth] = useState(() => monthKey())
   const [rows, setRows] = useState([])
-  const [meta, setMeta] = useState({ locked: 0, generated: 0 })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [downloadingUser, setDownloadingUser] = useState(null)
@@ -44,10 +64,8 @@ export default function PulsePayrollAdmin() {
     try {
       const res = await api.get('/pulse-payroll/admin/month', { params: { month } })
       setRows(res.data?.data || [])
-      setMeta(res.data?.meta || { locked: 0, generated: 0 })
     } catch (err) {
       setRows([])
-      setMeta({ locked: 0, generated: 0 })
       message.error(err?.response?.data?.message || 'Could not load payroll')
     } finally {
       setLoading(false)
@@ -117,107 +135,140 @@ export default function PulsePayrollAdmin() {
     }
   }
 
-  const pending = Math.max(0, (meta.locked || 0) - (meta.generated || 0))
+  const canGenerate = (row) =>
+    Boolean(row.performanceLocked) || suggestedNet(row) > 0
+
+  const pending = Math.max(
+    0,
+    rows.filter((r) => canGenerate(r) && !r.hasPayslip).length,
+  )
+  const displayRows = !loading
+    ? (rows.length ? rows : [buildPayrollAdminDemoRow(month)])
+    : []
+  const emptyTeam = !loading && !rows.length
+  const peopleCount = displayRows.length
 
   return (
-    <div className="pulse-ts-admin pulse-perf-admin">
-      <header className="pulse-ts-admin-head">
-        <h2>{monthLabel(month)}</h2>
-        <div className="pulse-ts-admin-filter">
-          <DatePicker
-            picker="month"
-            value={dayjs(`${month}-01`)}
-            allowClear={false}
-            format="MMM YYYY"
-            className="pulse-ts-admin-date"
-            classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
-            disabledDate={(value) => value && value.isAfter(dayjs(), 'month')}
-            onChange={(next) => {
-              if (next) setMonth(next.format('YYYY-MM'))
-            }}
-          />
-          <Button type="text" icon={<ReloadOutlined />} onClick={load} loading={loading} aria-label="Refresh" />
-          <Button
-            type="primary"
-            className="pulse-perf-cta"
-            loading={busy}
-            disabled={!pending}
-            onClick={generateAll}
-          >
-            Generate {pending ? `(${pending})` : ''}
-          </Button>
-        </div>
-      </header>
+    <div className="pulse-att-page pulse-org-admin-att pulse-pay-admin-att">
+      <div className="pulse-att-board">
+        <header className="pulse-att-toolbar">
+          <div className="pulse-att-period">
+            <DatePicker
+              picker="month"
+              value={dayjs(`${month}-01`)}
+              allowClear={false}
+              format="MMM YYYY"
+              className="pulse-att-range"
+              classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
+              disabledDate={(value) => value && value.isAfter(dayjs(), 'month')}
+              onChange={(next) => {
+                if (next) setMonth(next.format('YYYY-MM'))
+              }}
+              aria-label="Payroll month"
+            />
+          </div>
+          <div className="pulse-org-admin-actions">
+            <button
+              type="button"
+              className="pov-cta plive-top-cta plive-checkin"
+              disabled={busy || !pending || emptyTeam}
+              onClick={generateAll}
+            >
+              {busy ? 'Generating…' : `Generate${pending ? ` (${pending})` : ''}`}
+            </button>
+          </div>
+        </header>
 
-      {loading && !rows.length ? <p className="pulse-ts-admin-empty">Loading…</p> : null}
-
-      {!loading && !rows.length ? (
-        <div className="pov-glass pulse-ts-person">
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="Lock performance first to run payroll"
-          />
-        </div>
-      ) : null}
-
-      <div className="pulse-ts-admin-grid">
-        {rows.map((row) => (
-          <article key={row.user} className="pov-glass pulse-ts-person">
-            <header className="pulse-ts-person-head">
-              {row.avatarUrl ? (
-                <img className="pulse-ts-person-avatar" src={row.avatarUrl} alt="" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{personInitial(row)}</span>
-              )}
-              <div>
-                <h3>{row.name}</h3>
-                <p>{row.email || '—'}</p>
-              </div>
-              <span className={`pulse-ts-person-tag${row.hasPayslip ? ' is-on' : ''}`}>
-                {row.payslip?.status === 'paid' ? 'Paid' : row.hasPayslip ? 'Payslip' : 'Ready'}
+        <section className="pulse-att-panel" aria-label="Payroll team">
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>Payroll · {monthLabel(month)}</h4>
+              <span>
+                {loading ? 'Loading…' : `${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}`}
               </span>
             </header>
-
-            <div className="pulse-ts-person-metrics">
-              <div>
-                <p>Score</p>
-                <strong>{row.weightedScore ?? 0}</strong>
-              </div>
-              <div>
-                <p>Variable</p>
-                <strong>{formatInr(row.totalBonus)}</strong>
-              </div>
-              <div>
-                <p>Net</p>
-                <strong>{formatInr(row.payslip?.netPay ?? (row.fixedPay || 0) + (row.totalBonus || 0))}</strong>
-              </div>
+            <div className="pulse-att-cols pulse-org-admin-cols pulse-pay-admin-cols" aria-hidden="true">
+              <span className="pulse-att-cols-spacer" />
+              <span>Person</span>
+              <span>Score</span>
+              <span>Variable</span>
+              <span>Net</span>
+              <span>Status</span>
+              <span>Actions</span>
             </div>
+          </div>
 
-            <div className="pulse-pay-actions">
-              {!row.hasPayslip ? (
-                <Button size="small" loading={busy} onClick={() => generateOne(row.user)}>
-                  Generate payslip
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    size="small"
-                    icon={<DownloadOutlined />}
-                    loading={downloadingUser === row.user}
-                    onClick={() => downloadPayslip(row)}
-                  >
-                    Download
-                  </Button>
-                  {row.payslip?.status !== 'paid' ? (
-                    <Button size="small" type="primary" className="pulse-perf-cta" loading={busy} onClick={() => markPaid(row.user)}>
-                      Mark paid
-                    </Button>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </article>
-        ))}
+          <div className="pulse-org-admin-body">
+            {emptyTeam ? (
+              <p className="pulse-org-admin-note">
+                No team members yet - invite people, then lock Performance to create payslips. Showing a demo row.
+              </p>
+            ) : null}
+
+            {loading && !displayRows.length ? (
+              <p className="pulse-org-admin-empty">Loading…</p>
+            ) : (
+              <ul className="pulse-att-list" aria-label="Payroll people">
+                {displayRows.map((row) => {
+                  const isDemo = row.demoOverlay || row.user === 'demo-employee'
+                  const chip = statusChipClass(row)
+                  const tone = chip.replace(/^is-/, '')
+                  const tag = statusLabel(row)
+
+                  return (
+                    <li key={row.user} className={`pulse-att-row pulse-org-admin-row pulse-pay-admin-row is-${tone}`}>
+                      <span className={`pulse-att-dot is-${tone}`} aria-hidden="true" />
+                      <div className="pulse-att-day">
+                        <strong>{personName(row)}</strong>
+                        <span>{row.email || '-'}</span>
+                      </div>
+                      <div className="pulse-att-hours">{row.weightedScore ?? 0}</div>
+                      <div className="pulse-pay-admin-var">{formatInr(row.totalBonus)}</div>
+                      <div className="pulse-pay-admin-var">{formatInr(suggestedNet(row))}</div>
+                      <span className={`pulse-att-status ${chip}`}>{tag}</span>
+                      <div className="pulse-org-admin-actions-cell">
+                        {isDemo ? (
+                          <span className="pulse-pay-admin-demo-hint">Invite to run payroll</span>
+                        ) : !row.hasPayslip ? (
+                          <Button
+                            size="small"
+                            loading={busy}
+                            disabled={!canGenerate(row)}
+                            onClick={() => generateOne(row.user)}
+                          >
+                            Generate
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="small"
+                              icon={<DownloadOutlined />}
+                              loading={downloadingUser === row.user}
+                              onClick={() => downloadPayslip(row)}
+                            >
+                              Download
+                            </Button>
+                            {row.payslip?.status !== 'paid' ? (
+                              <Button
+                                size="small"
+                                type="primary"
+                                className="pulse-perf-cta"
+                                loading={busy}
+                                onClick={() => markPaid(row.user)}
+                              >
+                                Mark paid
+                              </Button>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   )

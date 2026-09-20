@@ -1,0 +1,62 @@
+/**
+ * Shared close (X) hover — red across Pulse / BDA OS.
+ */
+
+.ob-drawer-close:hover,
+.ob-drawer-close:focus,
+.ob-drawer-close:focus-visible,
+.ms-more-close:hover,
+.ms-more-close:focus-visible,
+.pulse-leave-drawer-close:hover,
+.pulse-leave-drawer-close:focus,
+.pulse-leave-drawer-close:focus-visible,
+.pulse-org-slide-close:hover,
+.pulse-org-slide-close:focus,
+.pulse-org-slide-close:focus-visible,
+.pulse-people-confirm-close:hover,
+.pulse-people-confirm-close:focus-visible,
+.pulse-ts-add-drawer .ant-drawer-close:hover,
+.pulse-ts-add-drawer .ant-drawer-close:focus,
+.pulse-ts-add-drawer .ant-drawer-close:focus-visible,
+.pgs-close:hover,
+.pgs-close:focus-visible,
+.pulse-dash-customize-close:hover,
+.pulse-dash-customize-close:focus-visible,
+.pulse-dash-customize-close.ant-btn:hover,
+.pulse-dash-customize-close.ant-btn:focus-visible,
+.pulse-shell .ant-drawer-close:hover,
+.pulse-shell .ant-drawer-close:focus,
+.pulse-shell .ant-drawer-close:focus-visible,
+.pulse-shell .ant-modal-close:hover,
+.pulse-shell .ant-modal-close:focus,
+.pulse-shell .ant-modal-close:focus-visible,
+.pulse-file-view-modal .ant-modal-close:hover,
+.pulse-file-view-modal .ant-modal-close:focus-visible,
+.pulse-notify .ant-notification-notice-close:hover,
+.pulse-notify .ant-notification-notice-close:focus-visible {
+  color: #dc2626 !important;
+  background: #fef2f2 !important;
+  outline: none;
+}
+
+.ob-drawer-close:hover,
+.ob-drawer-close:focus-visible,
+.pulse-leave-drawer-close:hover,
+.pulse-leave-drawer-close:focus-visible,
+.pulse-org-slide-close:hover,
+.pulse-org-slide-close:focus-visible {
+  box-shadow: 0 2px 10px rgba(220, 38, 38, 0.18) !important;
+}
+
+.ms-more-close:hover,
+.ms-more-close:focus-visible {
+  box-shadow: inset 0 0 0 1px #fecaca !important;
+}
+
+/* Dark close chips (e.g. smart chat) — solid red fill */
+.psc-close:hover,
+.psc-close:focus-visible {
+  background: #dc2626 !important;
+  color: #fff !important;
+  outline: none;
+}

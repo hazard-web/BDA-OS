@@ -156,7 +156,7 @@
   border-radius: 12px;
   background: #fff;
   border: 1px solid #e5e7eb;
-  color: #1a5f4a;
+  color: var(--pulse-primary);
   font-size: 22px;
 }
 
@@ -199,14 +199,14 @@
 }
 
 .pulse-file-view-download.ant-btn-primary {
-  background: #1a5f4a !important;
-  border-color: #1a5f4a !important;
+  background: var(--pulse-primary) !important;
+  border-color: var(--pulse-primary) !important;
 }
 
 .pulse-file-view-download.ant-btn-primary:hover,
 .pulse-file-view-download.ant-btn-primary:focus {
-  background: #164f3e !important;
-  border-color: #164f3e !important;
+  background: var(--pulse-primary-hover) !important;
+  border-color: var(--pulse-primary-hover) !important;
   color: #fff !important;
 }
 

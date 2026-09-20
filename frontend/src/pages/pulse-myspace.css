@@ -15,7 +15,7 @@
   --ms-line: #e6e9ef;
   --ms-green: #1aa05a;
   --ms-red: #e24c4c;
-  --ms-orange: #e08a2c;
+  --ms-orange: #E88A2D;
   --ms-pink: #ee8b8b;
   --ms-sidebar: 88px;
   --ms-top: 48px;
@@ -472,6 +472,60 @@
   min-height: 88px;
   overflow: hidden;
   padding: 16px 18px;
+  isolation: isolate;
+}
+
+/* Check-in-style alpine band on the right — full height, soft into clouds */
+.ms-hello-alpine {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  top: -1px;
+  width: min(52%, 360px);
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 0 20px 20px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.28) 22%, #000 52%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.28) 22%, #000 52%);
+}
+
+.ms-hello-alpine-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: 70% 55%;
+  display: block;
+  opacity: 0.94;
+  filter: none;
+  image-rendering: auto;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.ms-hello-alpine-haze {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.55) 38%,
+    rgba(255, 255, 255, 0.12) 72%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+}
+
+/* Keep sky/clouds clear of the white wash so they match Check-in */
+.ms-hello .ms-sky {
+  z-index: 2;
+}
+
+.ms-hello .ms-cloud {
+  fill: rgba(255, 255, 255, 0.92);
+  opacity: 1;
 }
 
 .ms-hello-logo {
@@ -526,7 +580,7 @@
 
 .ms-hello-name {
   margin-top: 4px;
-  color: #142019;
+  color: #183B35;
   font-family: Fraunces, Georgia, serif;
   font-size: 28px;
   font-style: normal;
@@ -553,6 +607,7 @@
   width: min(280px, 46%);
   overflow: hidden;
   pointer-events: none;
+  z-index: 2;
 }
 
 .ms-hello.is-morning .ms-sky {
@@ -567,23 +622,24 @@
   background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(203, 210, 220, 0.35) 46%, rgba(164, 176, 192, 0.55) 100%);
 }
 
-.ms-sky-sun,
-.ms-sky-moon {
+.ms-sky > .ms-sky-sun,
+.ms-sky > .ms-sky-moon {
   position: absolute;
   right: 22px;
   top: 50%;
   width: 60px;
   height: 60px;
   transform: translateY(-50%);
+  display: block;
 }
 
-.ms-sky-sun {
+.ms-sky > .ms-sky-sun {
   color: #f3b133;
   filter: drop-shadow(0 2px 6px rgba(243, 177, 51, 0.35));
   animation: ms-sun-glow 3.6s ease-in-out infinite;
 }
 
-.ms-sky-moon {
+.ms-sky > .ms-sky-moon {
   color: #5b6570;
   fill: currentColor;
   filter: drop-shadow(0 2px 6px rgba(40, 48, 58, 0.18));
@@ -598,6 +654,122 @@
 @keyframes ms-moon-glow {
   0%, 100% { opacity: 0.82; }
   50% { opacity: 1; }
+}
+
+.ms-sky-mark {
+  position: absolute;
+  right: 20px;
+  top: 42%;
+  width: 40px;
+  height: 40px;
+  transform: translateY(-50%);
+}
+
+.ms-sky-mark.is-sun {
+  color: #f0a820;
+  filter: drop-shadow(0 2px 8px rgba(240, 168, 32, 0.4));
+  animation: ms-sun-bob 4.2s ease-in-out infinite;
+}
+
+.ms-sky-mark.is-moon {
+  color: #5b6570;
+  filter: drop-shadow(0 2px 6px rgba(40, 48, 58, 0.18));
+  animation: ms-moon-bob 6s ease-in-out infinite;
+}
+
+.ms-sky-mark .ms-sky-sun,
+.ms-sky-mark .ms-sky-moon {
+  position: static;
+  right: auto;
+  top: auto;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  animation: none;
+  filter: none;
+}
+
+.ms-sky-mark.is-sun .ms-sky-sun {
+  color: inherit;
+  filter: inherit;
+}
+
+.ms-sky-mark.is-moon .ms-sky-moon {
+  color: inherit;
+  fill: currentColor;
+  filter: inherit;
+}
+
+.ms-sky-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+  box-shadow: 0 0 4px currentColor;
+  animation: ms-star-twinkle 2.8s ease-in-out infinite;
+}
+
+.ms-sky-star.is-a {
+  top: 2px;
+  right: -6px;
+  animation-delay: 0.4s;
+}
+
+.ms-sky-star.is-b {
+  top: 14px;
+  right: -14px;
+  width: 2px;
+  height: 2px;
+  opacity: 0.4;
+  animation-delay: 1.2s;
+}
+
+.ms-sky-peaks {
+  position: absolute;
+  right: 52px;
+  bottom: -2px;
+  width: 176px;
+  height: 64px;
+  opacity: 0.55;
+  animation: ms-peak-drift 18s ease-in-out infinite;
+}
+
+.ms-sky-peak {
+  fill: rgba(140, 156, 138, 0.55);
+}
+
+.ms-sky-peak.is-mid {
+  fill: rgba(120, 138, 118, 0.62);
+}
+
+.ms-sky-peak.is-near {
+  fill: rgba(100, 118, 98, 0.7);
+}
+
+.ms-hello.is-evening .ms-sky-peak.is-far { fill: rgba(170, 178, 186, 0.5); }
+.ms-hello.is-evening .ms-sky-peak.is-mid { fill: rgba(148, 156, 164, 0.58); }
+.ms-hello.is-evening .ms-sky-peak.is-near { fill: rgba(124, 132, 140, 0.66); }
+
+@keyframes ms-sun-bob {
+  0%, 100% { transform: translateY(-50%) scale(1); }
+  50% { transform: translateY(calc(-50% - 5px)) scale(1.04); }
+}
+
+@keyframes ms-moon-bob {
+  0%, 100% { transform: translateY(-50%) rotate(-2deg); }
+  50% { transform: translateY(calc(-50% - 4px)) rotate(3deg); }
+}
+
+@keyframes ms-star-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 0.9; transform: scale(1.15); }
+}
+
+@keyframes ms-peak-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-8px, -2px, 0); }
 }
 
 .ms-cloud {
@@ -639,15 +811,27 @@
   }
 }
 
+@keyframes ms-cloud-drift-slow {
+  from { transform: translate3d(-110%, 2px, 0); }
+  to { transform: translate3d(320%, -3px, 0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ms-cloud,
-  .ms-sky-sun,
-  .ms-sky-moon {
+  .ms-sky > .ms-sky-sun,
+  .ms-sky > .ms-sky-moon,
+  .ms-sky-mark,
+  .ms-sky-peaks,
+  .ms-sky-star {
     animation: none;
   }
 
   .ms-cloud {
     transform: translateX(40%);
+  }
+
+  .ms-sky-star {
+    opacity: 0.55;
   }
 }
 
@@ -849,8 +1033,8 @@
 .ms-day.is-today .ms-day-dot {
   width: 9px;
   height: 9px;
-  background: #1a5f4a;
-  box-shadow: 0 0 0 3px rgba(26, 95, 74, 0.22);
+  background: var(--pulse-primary);
+  box-shadow: 0 0 0 3px rgba(var(--pulse-primary-rgb), 0.22);
 }
 
 .ms-day-label {
@@ -885,7 +1069,7 @@
   min-width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: #1a5f4a;
+  background: var(--pulse-primary);
   color: #fff;
   box-shadow: none;
 }
@@ -908,7 +1092,7 @@
 }
 
 .ms-day.is-weekend small {
-  color: #e08a2c;
+  color: #E88A2D;
 }
 
 .ms-day.is-absent small {
@@ -916,7 +1100,7 @@
 }
 
 .ms-day.is-present small {
-  color: #1a5f4a;
+  color: var(--pulse-primary);
 }
 
 .ms-day.is-leave small {
@@ -1014,145 +1198,220 @@
   background: #f3f4f6;
 }
 
-.ms-more-scrim {
+.ms-more-root {
   position: fixed;
-  top: var(--ms-top);
-  left: var(--ms-sidebar);
+  inset: 0;
+  z-index: 1400;
+  pointer-events: none;
+}
+
+.ms-more-scrim {
+  position: absolute;
+  top: 64px;
+  left: var(--pulse-fd-w, 88px);
   right: 0;
-  bottom: var(--ms-chat);
-  z-index: 24;
+  bottom: 0;
   margin: 0;
   padding: 0;
   border: 0;
-  background: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.18);
   cursor: pointer;
+  pointer-events: auto;
+}
+
+.ms-more-clip {
+  position: absolute;
+  top: 64px;
+  left: var(--pulse-fd-w, 88px);
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ms-more-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(340px, 100%);
+  overflow: visible;
+  pointer-events: none;
 }
 
 .ms-more {
-  position: fixed;
-  top: var(--ms-top);
-  left: var(--ms-sidebar);
-  bottom: var(--ms-chat);
-  z-index: 25;
+  position: relative;
+  top: auto;
+  left: auto;
+  bottom: auto;
   display: flex;
   flex-direction: column;
-  width: min(320px, calc(100vw - var(--ms-sidebar)));
-  padding: 14px 12px 12px;
-  overflow: auto;
-  background: #f4f5f7;
-  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.14);
-  font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
-}
-
-.ms-more-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: #fff;
-  color: #8b939e;
-  box-shadow: 0 0 0 1px #e6e9ee;
-}
-
-.ms-more-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: #1f2933;
-  font: inherit;
-  font-size: 13.5px;
-  outline: none;
-}
-
-.ms-more-search input::placeholder {
-  color: #9aa3af;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: auto;
+  background:
+    radial-gradient(ellipse 90% 40% at 0% 0%, rgba(232, 241, 238, 0.95) 0%, transparent 55%),
+    linear-gradient(180deg, #fbfbfa 0%, #f0f2ef 100%);
+  box-shadow: 8px 0 28px rgba(24, 59, 53, 0.12);
+  font-family: Figtree, 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
 }
 
 .ms-more-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 16px 4px 10px;
-}
-
-.ms-more-head h2 {
+  justify-content: flex-end;
+  flex: 0 0 auto;
   margin: 0;
-  color: #30353c;
-  font-size: 15px;
-  font-weight: 800;
+  padding: 8px 10px 0;
+  border: 0;
+  background: transparent;
 }
 
-.ms-more-head button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.ms-more-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
   margin: 0;
   padding: 0;
   border: 0;
-  background: transparent;
-  color: #1a8cff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--pulse-muted, #6b7280);
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--pulse-border, #d9dfc9);
+}
+
+.ms-more-close:hover,
+.ms-more-close:focus-visible {
+  background: #fef2f2;
+  color: #dc2626;
+  outline: none;
+  box-shadow: inset 0 0 0 1px #fecaca;
+}
+
+.ms-more-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px 12px;
 }
 
 .ms-more-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
+  background: transparent;
+  box-shadow: none;
 }
 
-.ms-more-list button {
+.ms-more-list li {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.ms-more-cta {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 6px;
   width: 100%;
-  min-height: 48px;
+  height: 100%;
+  min-height: 0;
   margin: 0;
-  padding: 10px 14px;
+  padding: 8px 6px;
   border: 0;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-  color: #30353c;
+  border-radius: 12px;
+  background: var(--pulse-card, #fff);
+  color: var(--pulse-heading, #35421f);
   font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--pulse-border, #d9dfc9);
+  transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.ms-more-list button span {
+.ms-more-cta-ico {
   display: grid;
   place-items: center;
-  width: 22px;
-  color: #30353c;
+  width: clamp(28px, 5.6vh, 40px);
+  height: clamp(28px, 5.6vh, 40px);
+  border-radius: 11px;
+  background: #f3f4f6;
+  color: #4b5563;
+  will-change: transform;
 }
 
-.ms-more-list button:hover,
-.ms-more-list button:focus-visible {
-  background: #f8fafc;
+.ms-more-cta-ico.is-violet { background: #ede9fe; color: #6d28d9; }
+.ms-more-cta-ico.is-sky { background: #e0f2fe; color: #0369a1; }
+.ms-more-cta-ico.is-amber { background: #fef3c7; color: #b45309; }
+.ms-more-cta-ico.is-rose { background: #ffe4e6; color: #be123c; }
+.ms-more-cta-ico.is-orange { background: #ffedd5; color: #c2410c; }
+.ms-more-cta-ico.is-indigo { background: #e0e7ff; color: #4338ca; }
+.ms-more-cta-ico.is-cyan { background: #ecfeff; color: #0e7490; }
+.ms-more-cta-ico.is-blue { background: #dbeafe; color: #1d4ed8; }
+.ms-more-cta-ico.is-emerald { background: #ecfdf5; color: #047857; }
+.ms-more-cta-ico.is-slate { background: #f1f5f9; color: #334155; }
+
+.ms-more-cta-label {
+  color: var(--pulse-heading, #35421f);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  max-width: 100%;
+}
+
+.ms-more-cta:hover,
+.ms-more-cta:focus-visible {
+  background: var(--pulse-card, #fff);
   outline: none;
+  box-shadow: inset 0 0 0 1px var(--pulse-border, #d9dfc9);
 }
 
-.ms-more-empty {
-  padding: 18px 8px;
-  color: #6b7280;
-  font-size: 13px;
-  text-align: center;
-}
+.ms-more-cta:hover .ms-more-cta-ico.is-violet,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-violet { background: #6d28d9; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-sky,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-sky { background: #0369a1; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-amber,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-amber { background: #b45309; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-rose,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-rose { background: #be123c; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-orange,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-orange { background: #c2410c; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-indigo,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-indigo { background: #4338ca; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-cyan,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-cyan { background: #0e7490; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-blue,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-blue { background: #1d4ed8; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-emerald,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-emerald { background: #047857; color: #fff; }
+.ms-more-cta:hover .ms-more-cta-ico.is-slate,
+.ms-more-cta:focus-visible .ms-more-cta-ico.is-slate { background: #334155; color: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
   .ms-more {
     transform: none;
+  }
+
+  .ms-more-cta,
+  .ms-more-cta-ico {
+    transition: none;
   }
 }
 

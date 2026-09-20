@@ -603,6 +603,289 @@ router.get('/', auth, requireAdmin, async (req, res) => {
   }
 })
 
+router.post('/bulk-onboard', auth, requireAdmin, async (req, res) => {
+  try {
+    const rawEmails = Array.isArray(req.body?.emails) ? req.body.emails : []
+    const emails = []
+    const seen = new Set()
+    for (const item of rawEmails) {
+      const email = cleanStr(item).toLowerCase()
+      if (!email || !email.includes('@') || !email.includes('.')) continue
+      if (seen.has(email)) continue
+      seen.add(email)
+      emails.push(email)
+    }
+    if (!emails.length) {
+      return res.status(400).json({ success: false, message: 'Add at least one personal email' })
+    }
+    if (emails.length > 50) {
+      return res.status(400).json({ success: false, message: 'You can invite up to 50 emails at once' })
+    }
+
+    const organizationId = orgIdOf(req.user)
+    const name = actorName(req.user)
+    const shared = {
+      department: cleanStr(req.body?.department),
+      sourceOfHire: cleanStr(req.body?.sourceOfHire),
+      workLocation: cleanStr(req.body?.workLocation),
+      title: cleanStr(req.body?.title),
+      tentativeJoiningDate: req.body?.tentativeJoiningDate
+        ? new Date(req.body.tentativeJoiningDate)
+        : null,
+    }
+    const firstName = cleanStr(req.body?.firstName)
+    const lastName = cleanStr(req.body?.lastName)
+    const singleOfficial =
+      emails.length === 1 ? completeCompanyEmail(req.body?.officialEmail) : ''
+
+    const results = []
+    let sent = 0
+    let failed = 0
+    let skipped = 0
+
+    for (const email of emails) {
+      try {
+        let row = await Candidate.findOne({ organizationId, email })
+        if (row?.employeeSubmittedAt) {
+          skipped += 1
+          results.push({
+            email,
+            ok: false,
+            skipped: true,
+            message: 'Already submitted details',
+          })
+          continue
+        }
+        if (!row) {
+          row = await Candidate.create({
+            ...shared,
+            firstName: emails.length === 1 ? firstName : '',
+            lastName: emails.length === 1 ? lastName : '',
+            email,
+            officialEmail: singleOfficial || '',
+            status: 'Draft',
+            organizationId,
+            candidateId: await nextCandidateId(organizationId),
+            addedBy: req.user._id,
+            addedByName: name,
+            modifiedBy: req.user._id,
+            modifiedByName: name,
+          })
+        } else {
+          Object.assign(row, {
+            department: shared.department || row.department,
+            sourceOfHire: shared.sourceOfHire || row.sourceOfHire,
+            workLocation: shared.workLocation || row.workLocation,
+            title: shared.title || row.title,
+            tentativeJoiningDate: shared.tentativeJoiningDate || row.tentativeJoiningDate,
+          })
+          if (emails.length === 1) {
+            if (firstName) row.firstName = firstName
+            if (lastName) row.lastName = lastName
+            if (singleOfficial) row.officialEmail = singleOfficial
+          }
+        }
+
+        issueOnboardingToken(row)
+        const onboardUrl = buildCandidateOnboardLink(row.onboardingToken)
+        const candidateName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim()
+        let emailSent = true
+        let emailError = ''
+        try {
+          await sendCandidateOnboardingEmail({
+            to: row.email,
+            onboardUrl,
+            companyName: req.user.companyName,
+            candidateName,
+            invitedByName: name,
+          })
+        } catch (emailErr) {
+          emailSent = false
+          emailError = emailErr.message || 'Email provider rejected the message'
+        }
+
+        if (emailSent) {
+          row.onboardingEmailSentAt = new Date()
+          if (row.status === 'Draft' || !row.status) row.status = 'Not started'
+          sent += 1
+        } else {
+          failed += 1
+        }
+        row.modifiedBy = req.user._id
+        row.modifiedByName = name
+        await row.save()
+        results.push({
+          email,
+          id: String(row._id),
+          ok: emailSent,
+          emailSent,
+          skipped: false,
+          message: emailSent
+            ? `Details form sent to ${row.email}`
+            : `Saved, but email failed${emailError ? `: ${emailError}` : ''}`,
+        })
+      } catch (err) {
+        failed += 1
+        results.push({
+          email,
+          ok: false,
+          skipped: false,
+          message: err.message || 'Failed to invite',
+        })
+      }
+    }
+
+    res.json({
+      success: true,
+      sent,
+      failed,
+      skipped,
+      results,
+      message: `Sent ${sent}, failed ${failed}, skipped ${skipped}`,
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to send emails' })
+  }
+})
+
+router.post('/bulk-send', auth, requireAdmin, async (req, res) => {
+  try {
+    const type = String(req.body?.type || '').trim()
+    if (type !== 'onboarding' && type !== 'invite') {
+      return res.status(400).json({
+        success: false,
+        message: 'type must be "onboarding" or "invite"',
+      })
+    }
+    const rawIds = Array.isArray(req.body?.ids) ? req.body.ids : []
+    const ids = [...new Set(rawIds.map((id) => String(id || '').trim()).filter(isId))]
+    if (!ids.length) {
+      return res.status(400).json({ success: false, message: 'Select at least one employee' })
+    }
+    if (ids.length > 50) {
+      return res.status(400).json({ success: false, message: 'You can email up to 50 employees at once' })
+    }
+
+    const organizationId = orgIdOf(req.user)
+    const rows = await Candidate.find({ _id: { $in: ids }, organizationId })
+    const byId = new Map(rows.map((row) => [String(row._id), row]))
+    const results = []
+    let sent = 0
+    let failed = 0
+    let skipped = 0
+
+    for (const id of ids) {
+      const row = byId.get(id)
+      if (!row) {
+        skipped += 1
+        results.push({ id, ok: false, skipped: true, message: 'Employee not found' })
+        continue
+      }
+
+      try {
+        if (type === 'onboarding') {
+          if (row.employeeSubmittedAt) {
+            skipped += 1
+            results.push({
+              id,
+              ok: false,
+              skipped: true,
+              message: 'Already submitted details — send BDA OS invite instead',
+            })
+            continue
+          }
+          requirePersonalEmail(row)
+          issueOnboardingToken(row)
+          const onboardUrl = buildCandidateOnboardLink(row.onboardingToken)
+          const candidateName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim()
+          let emailSent = true
+          let emailError = ''
+          try {
+            await sendCandidateOnboardingEmail({
+              to: row.email,
+              onboardUrl,
+              companyName: req.user.companyName,
+              candidateName,
+              invitedByName: actorName(req.user),
+            })
+          } catch (emailErr) {
+            emailSent = false
+            emailError = emailErr.message || 'Email provider rejected the message'
+          }
+          if (emailSent) {
+            row.onboardingEmailSentAt = new Date()
+            if (row.status === 'Draft' || !row.status) row.status = 'Not started'
+            sent += 1
+          } else {
+            failed += 1
+          }
+          row.modifiedBy = req.user._id
+          row.modifiedByName = actorName(req.user)
+          await row.save()
+          results.push({
+            id,
+            ok: emailSent,
+            emailSent,
+            skipped: false,
+            message: emailSent
+              ? `Details form sent to ${row.email}`
+              : `Saved, but email failed${emailError ? `: ${emailError}` : ''}`,
+          })
+          continue
+        }
+
+        // type === 'invite'
+        if (!row.employeeSubmittedAt) {
+          skipped += 1
+          results.push({
+            id,
+            ok: false,
+            skipped: true,
+            message: 'Waiting for employee to submit personal details',
+          })
+          continue
+        }
+        requireAdminHireFields(row)
+        const inviteResult = await sendPulseInviteForCandidate(row)
+        if (inviteResult.emailSent) {
+          sent += 1
+        } else {
+          failed += 1
+        }
+        results.push({
+          id,
+          ok: Boolean(inviteResult.emailSent),
+          emailSent: Boolean(inviteResult.emailSent),
+          skipped: false,
+          message: inviteResult.emailSent
+            ? `BDA OS invite sent to ${inviteResult.officialEmail}`
+            : `Invite created, but email failed${inviteResult.emailError ? `: ${inviteResult.emailError}` : ''}`,
+        })
+      } catch (err) {
+        failed += 1
+        results.push({
+          id,
+          ok: false,
+          skipped: false,
+          message: err.message || 'Failed to send',
+        })
+      }
+    }
+
+    res.json({
+      success: true,
+      type,
+      sent,
+      failed,
+      skipped,
+      results,
+      message: `Sent ${sent}, failed ${failed}, skipped ${skipped}`,
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to send emails' })
+  }
+})
+
 router.post('/:id/send-onboarding', auth, requireAdmin, async (req, res) => {
   try {
     if (!isId(req.params.id)) {

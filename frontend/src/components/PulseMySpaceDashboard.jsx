@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import {
   CloseOutlined,
-  FileOutlined,
   HolderOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -18,13 +17,19 @@ import {
 } from 'antd'
 import { DRAG_THRESHOLD, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
 import { isPulseFileRow } from '../utils/pulseOpenFile'
+import PulseFileTypeIcon from './PulseFileTypeIcon'
 import PulseFileViewModal from './PulseFileViewModal'
 import api from '../api'
 
 const STORAGE_KEY = 'pulseMySpaceDashWidgets'
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const ROLLING_3_KEYS = new Set(['announcements', 'holidays'])
 const CURRENT_MONTH_KEYS = new Set(['birthday', 'workAnniv', 'weddingAnniv'])
+
+function dayKeyLocal(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function parseItemDate(on, now) {
   if (!on) return null
@@ -47,6 +52,21 @@ function inRollingMonths(date, now, span, recurring) {
   return date >= start && date <= end
 }
 
+function celebrationSort(rows, now = new Date()) {
+  const today = dayKeyLocal(now)
+  return [...rows].sort((a, b) => {
+    const aOn = a.on === 'today' ? today : String(a.on || '')
+    const bOn = b.on === 'today' ? today : String(b.on || '')
+    const aToday = a.today || aOn === today ? 0 : 1
+    const bToday = b.today || bOn === today ? 0 : 1
+    if (aToday !== bToday) return aToday - bToday
+    const aUp = aOn >= today ? 0 : 1
+    const bUp = bOn >= today ? 0 : 1
+    if (aUp !== bUp) return aUp - bUp
+    return aOn.localeCompare(bOn)
+  })
+}
+
 export function filterWidgetData(source, now = new Date()) {
   const next = { ...source }
   for (const key of Object.keys(source)) {
@@ -59,25 +79,41 @@ export function filterWidgetData(source, now = new Date()) {
         return d ? inRollingMonths(d, now, 3, recurring) : false
       })
     } else if (CURRENT_MONTH_KEYS.has(key)) {
-      next[key] = rows.filter((row) => {
-        const d = parseItemDate(row.on, now)
-        return d ? inCurrentMonth(d, now) : false
-      })
+      next[key] = celebrationSort(
+        rows.filter((row) => {
+          const d = parseItemDate(row.on, now)
+          return d ? inCurrentMonth(d, now) : false
+        }),
+        now,
+      )
     }
   }
   return next
 }
 
-export const DEMO = {
+function monthDayKey(now, day) {
+  const safe = Math.min(Math.max(1, day), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(safe).padStart(2, '0')}`
+}
+
+function monthDayLabel(now, day) {
+  const safe = Math.min(Math.max(1, day), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())
+  return `${safe} ${MONTH_SHORT[now.getMonth()]}`
+}
+
+/** Sample rows stay in the current month so widgets never look empty in demo mode. */
+export function buildDemo(now = new Date()) {
+  const todayDay = now.getDate()
+  const d = (day) => monthDayKey(now, day)
+  const label = (day) => monthDayLabel(now, day)
+  return {
   birthday: [
-    { id: 'b1', title: 'Priya Sharma', meta: 'Today · Design', on: 'today' },
-    { id: 'b2', title: 'Amit Verma', meta: '22 Aug · Engineering', on: '2026-08-22' },
-    { id: 'b3', title: 'Neha Kapoor', meta: '24 Aug · People', on: '2026-08-24' },
-    { id: 'b4', title: 'Karan Joshi', meta: '28 Aug · Sales', on: '2026-08-28' },
-    { id: 'b5', title: 'Sara Ali', meta: '1 Sep · Finance', on: '2026-09-01' },
-    { id: 'b6', title: 'Vikram Rao', meta: '4 Sep · Ops', on: '2026-09-04' },
-    { id: 'b7', title: 'Leela Menon', meta: '18 Oct · Product', on: '2026-10-18' },
-    { id: 'b8', title: 'Arjun Sethi', meta: '9 Nov · Engineering', on: '2026-11-09' },
+    { id: 'b1', title: 'Priya Sharma', meta: 'Design', on: 'today', when: 'Today', today: true },
+    { id: 'b2', title: 'Sara Ali', meta: 'Finance', on: d(Math.max(1, todayDay - 8)), when: label(Math.max(1, todayDay - 8)) },
+    { id: 'b3', title: 'Vikram Rao', meta: 'Ops', on: d(Math.max(2, todayDay - 4)), when: label(Math.max(2, todayDay - 4)) },
+    { id: 'b4', title: 'Neha Kapoor', meta: 'People', on: d(Math.min(28, todayDay + 3)), when: label(Math.min(28, todayDay + 3)) },
+    { id: 'b5', title: 'Amit Verma', meta: 'Engineering', on: d(Math.min(28, todayDay + 7)), when: label(Math.min(28, todayDay + 7)) },
+    { id: 'b6', title: 'Karan Joshi', meta: 'Sales', on: d(Math.min(28, todayDay + 11)), when: label(Math.min(28, todayDay + 11)) },
   ],
   newHires: [
     { id: 'n1', title: 'Ananya Gupta', meta: 'Joined 11 Aug · Product' },
@@ -91,7 +127,7 @@ export const DEMO = {
     { id: 'f2', title: 'Leave Tracker', meta: 'Module', to: 'leave' },
     { id: 'f3', title: 'Hours', meta: 'Module', to: 'hours' },
     { id: 'f4', title: 'Calendar', meta: 'You', to: 'calendar' },
-    { id: 'f5', title: 'Overview', meta: 'Check-in', to: 'overview' },
+    { id: 'f5', title: 'Dashboard', meta: 'Check-in', to: 'overview' },
   ],
   quickLinks: [
     { id: 'ql1', title: 'Apply leave', meta: 'Leave Tracker', to: 'leave' },
@@ -99,7 +135,7 @@ export const DEMO = {
     { id: 'ql3', title: 'Holidays', meta: 'This year', to: 'holidays' },
     { id: 'ql4', title: 'Attendance', meta: 'You', to: 'attendance' },
     { id: 'ql5', title: 'Hours', meta: 'Logged from check-in', to: 'hours' },
-    { id: 'ql6', title: 'Overview', meta: 'Check-in', to: 'overview' },
+    { id: 'ql6', title: 'Dashboard', meta: 'Check-in', to: 'overview' },
   ],
   announcements: [
     { id: 'a1', title: 'Independence Day — office closed', meta: '15 Aug · All hands', on: '2026-08-15' },
@@ -123,7 +159,7 @@ export const DEMO = {
     { id: 'at2', title: 'Month to date', meta: '96% present · 18 of 19 days', to: 'attendance' },
   ],
   hours: [
-    { id: 'hr1', title: 'This week', meta: '32.5 h of 40 h', to: 'hours' },
+    { id: 'hr1', title: 'This week', meta: '32.5 h of 45 h', to: 'hours' },
     { id: 'hr2', title: 'Today', meta: '7.2 h logged', to: 'hours' },
   ],
   holidays: [
@@ -153,21 +189,21 @@ export const DEMO = {
     { id: 'file7', title: 'Holiday_Calendar_2026.xlsx', meta: 'Sheet · 44 KB', section: 'org', url: '#' },
     { id: 'file8', title: 'IT_Asset_Policy.pdf', meta: 'PDF · 620 KB', section: 'org', url: '#' },
     { id: 'file9', title: 'Salary_Structure.pdf', meta: 'PDF · 190 KB', section: 'org', url: '#' },
-    { id: 'file5', title: 'ID_Proof_Scan.pdf', meta: 'PDF · 2.4 MB', section: 'employee' },
-    { id: 'file6', title: 'Bank_Mandate.pdf', meta: 'PDF · 310 KB', section: 'employee' },
+    { id: 'file5b', title: 'ID_Proof_Scan.pdf', meta: 'PDF · 2.4 MB', section: 'employee' },
+    { id: 'file6b', title: 'Bank_Mandate.pdf', meta: 'PDF · 310 KB', section: 'employee' },
     { id: 'file10', title: 'Form_16_FY25.pdf', meta: 'PDF · 1.8 MB', section: 'employee' },
     { id: 'file11', title: 'Address_Proof.jpg', meta: 'Image · 840 KB', section: 'employee' },
   ],
   workAnniv: [
-    { id: 'w1', title: 'Rahul Iyer · 4 years', meta: '18 Aug · Engineering', on: '2026-08-18' },
-    { id: 'w2', title: 'Asha Mehta · 2 years', meta: '21 Aug · People', on: '2026-08-21' },
-    { id: 'w3', title: 'Suresh Nair · 7 years', meta: '2 Sep · Ops', on: '2026-09-02' },
-    { id: 'w4', title: 'Fatima Noor · 1 year', meta: '9 Sep · Design', on: '2026-09-09' },
+    { id: 'w1', title: 'Suresh Nair', meta: '7 years · Ops', on: d(Math.max(1, todayDay - 6)), when: label(Math.max(1, todayDay - 6)), years: 7 },
+    { id: 'w2', title: 'Fatima Noor', meta: '1 year · Design', on: d(Math.max(2, todayDay - 2)), when: label(Math.max(2, todayDay - 2)), years: 1 },
+    { id: 'w3', title: 'Rahul Iyer', meta: '4 years · Engineering', on: 'today', when: 'Today', today: true, years: 4 },
+    { id: 'w4', title: 'Asha Mehta', meta: '2 years · People', on: d(Math.min(28, todayDay + 5)), when: label(Math.min(28, todayDay + 5)), years: 2 },
   ],
   weddingAnniv: [
-    { id: 'wa1', title: 'Deepak & Riya', meta: '20 Aug', on: '2026-08-20' },
-    { id: 'wa2', title: 'Pooja & Arjun', meta: '27 Aug', on: '2026-08-27' },
-    { id: 'wa3', title: 'Nikhil & Sana', meta: '3 Sep', on: '2026-09-03' },
+    { id: 'wa1', title: 'Nikhil & Sana', meta: 'Wedding', on: d(Math.max(1, todayDay - 5)), when: label(Math.max(1, todayDay - 5)) },
+    { id: 'wa2', title: 'Deepak & Riya', meta: 'Wedding', on: d(Math.min(28, todayDay + 4)), when: label(Math.min(28, todayDay + 4)) },
+    { id: 'wa3', title: 'Pooja & Arjun', meta: 'Wedding', on: d(Math.min(28, todayDay + 9)), when: label(Math.min(28, todayDay + 9)) },
   ],
   engagement: [
     { id: 'e1', title: 'BDA OS check · August', meta: 'Due 31 Aug' },
@@ -175,10 +211,13 @@ export const DEMO = {
     { id: 'e3', title: 'Office experience feedback', meta: 'Due 12 Sep' },
     { id: 'e4', title: 'Benefits satisfaction', meta: 'Due 20 Sep' },
   ],
+  }
 }
 
+export const DEMO = buildDemo()
+
 const MY_WIDGETS = [
-  { id: 'birthday', label: 'Birthday', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
+  { id: 'birthday', label: 'Birthdays', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
   { id: 'favorites', label: 'Favorites', dataKey: 'favorites', empty: 'No favorites yet', addable: true, tone: 'green' },
   { id: 'quickLinks', label: 'Quick Links', dataKey: 'quickLinks', empty: 'No quick links', addable: true, tone: 'teal' },
   { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No Files Found', showTotal: true, fileTabs: true, tone: 'slate' },
@@ -186,8 +225,8 @@ const MY_WIDGETS = [
   { id: 'attendance', label: 'Attendance', dataKey: 'attendance', empty: 'No attendance yet', tone: 'green' },
   { id: 'hours', label: 'Hours', dataKey: 'hours', empty: 'No hours logged yet', tone: 'teal' },
   { id: 'tasks', label: 'My Pending Tasks', dataKey: 'tasks', empty: 'There are no tasks available', badge: true, tone: 'green' },
-  { id: 'workAnniv', label: 'Work Anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
-  { id: 'weddingAnniv', label: 'Wedding Anniversary', dataKey: 'weddingAnniv', empty: 'No wedding anniversaries this month', showAvatar: true, tone: 'rose' },
+  { id: 'workAnniv', label: 'Work anniversaries', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
+  { id: 'weddingAnniv', label: 'Wedding anniversaries', dataKey: 'weddingAnniv', empty: 'No wedding anniversaries this month', showAvatar: true, tone: 'rose' },
   { id: 'engagement', label: 'Employee Engagement', dataKey: 'engagement', empty: 'No pending surveys', badge: true, tone: 'blue' },
 ]
 
@@ -280,11 +319,13 @@ export function DashListWidget({
   onGripPointerDown,
   onRow,
   index = 0,
+  loading = false,
 }) {
   const visibleItems = fileTabs
     ? items.filter((item) => (item.section || 'org') === fileTab)
     : items
   const total = visibleItems.length
+  const todayKey = dayKeyLocal()
 
   if (isPlaceholder) {
     return (
@@ -327,6 +368,8 @@ export function DashListWidget({
         <span className="pulse-dash-files-count">{total}</span>
       </span>
     )
+  } else if (showAvatar && total > 0) {
+    headExtra = <span className="pulse-dash-count">{total}</span>
   }
 
   return (
@@ -338,7 +381,9 @@ export function DashListWidget({
         floating ? 'is-floating' : '',
         scrollable ? 'is-scroll' : '',
         fileTabs ? 'is-files' : '',
+        showAvatar ? 'is-people' : '',
         total === 0 ? 'is-empty' : '',
+        loading ? 'is-loading' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -381,26 +426,35 @@ export function DashListWidget({
         </div>
       ) : null}
 
-      {total === 0 ? (
-        <div className={`pulse-dash-empty${fileTabs ? ' is-files' : ''}`}>
-          {fileTabs ? (
-            <p className="pulse-dash-empty-text">{empty || 'No Files Found'}</p>
+      {loading && total === 0 ? (
+        <div className={`pulse-dash-empty${fileTabs || showAvatar ? ' is-files' : ''}`}>
+          <p className="pulse-dash-empty-text">Loading…</p>
+        </div>
+      ) : total === 0 ? (
+        <div className={`pulse-dash-empty${fileTabs || showAvatar ? ' is-files' : ''}`}>
+          {fileTabs || showAvatar ? (
+            <p className="pulse-dash-empty-text">{empty || (fileTabs ? 'No Files Found' : 'No data')}</p>
           ) : (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty || 'No data'} />
           )}
         </div>
       ) : (
-        <div className={fileTabs ? 'pulse-dash-files-body' : undefined}>
+        <div className={fileTabs ? 'pulse-dash-files-body' : 'pulse-dash-body'}>
           <ul className="pulse-dash-rows">
             {visibleItems.map((item) => {
-              const clickable = (Boolean(item.to) || Boolean(item.url) || Boolean(item.openPath))
-                && typeof onRow === 'function'
-                && !floating
+              const clickable = typeof onRow === 'function' && !floating
+              const isToday = Boolean(
+                item.today
+                || item.on === 'today'
+                || item.on === todayKey
+                || item.when === 'Today',
+              )
+              const when = item.when || (isToday ? 'Today' : null)
               const body = (
                 <>
                   {fileTabs ? (
                     <span className="pulse-dash-file-ico" aria-hidden="true">
-                      <FileOutlined />
+                      <PulseFileTypeIcon row={item} size={28} />
                     </span>
                   ) : showAvatar ? (
                     <span className="pulse-dash-avatar" aria-hidden="true">
@@ -411,13 +465,19 @@ export function DashListWidget({
                     <p className="pulse-dash-row-title">{item.title}</p>
                     {item.meta ? <p className="pulse-dash-row-meta">{item.meta}</p> : null}
                   </div>
+                  {showAvatar && when ? (
+                    <span className={`pulse-dash-when${isToday ? ' is-today' : ''}`}>{when}</span>
+                  ) : null}
                   {fileTabs ? (
                     <span className="pulse-dash-file-view">View</span>
                   ) : null}
                 </>
               )
               return (
-                <li key={item.id} className={`pulse-dash-row${clickable ? ' is-link' : ''}`}>
+                <li
+                  key={item.id}
+                  className={`pulse-dash-row${clickable ? ' is-link' : ''}${showAvatar && isToday ? ' is-today' : ''}`}
+                >
                   {clickable ? (
                     <button
                       type="button"
@@ -639,9 +699,9 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
   }, [useSample, tick])
 
   const data = useMemo(() => {
-    if (useSample) return filterWidgetData(DEMO)
-    return liveData || EMPTY_DASH
-  }, [useSample, liveData])
+    if (useSample) return filterWidgetData(buildDemo())
+    return liveData
+  }, [useSample, liveData, tick])
 
   const openRow = useCallback((item) => {
     if (isPulseFileRow(item)) {
@@ -856,7 +916,8 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
           </div>
         ) : (
           visibleWidgets.map((widget, index) => {
-            const items = data[widget.dataKey] || []
+            const source = data || EMPTY_DASH
+            const items = source[widget.dataKey] || []
             const isSlot = draggingId === widget.id
             return (
               <DashListWidget
@@ -865,6 +926,7 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
                 title={widget.label}
                 items={items}
                 empty={widget.empty}
+                loading={!useSample && data == null}
                 addable={widget.addable}
                 onAdd={() => soon(widget.label)}
                 badgeCount={widget.badge ? items.length : undefined}
@@ -901,10 +963,10 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
             >
               <DashListWidget
                 title={dragWidget.label}
-                items={data[dragWidget.dataKey] || []}
+                items={(data || EMPTY_DASH)[dragWidget.dataKey] || []}
                 empty={dragWidget.empty}
                 addable={dragWidget.addable}
-                badgeCount={dragWidget.badge ? (data[dragWidget.dataKey] || []).length : undefined}
+                badgeCount={dragWidget.badge ? ((data || EMPTY_DASH)[dragWidget.dataKey] || []).length : undefined}
                 showTotal={dragWidget.showTotal}
                 showAvatar={dragWidget.showAvatar}
                 scrollable={dragWidget.scrollable}

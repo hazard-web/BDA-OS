@@ -53,6 +53,12 @@ const userSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  /** Employee personal mobile — not the organization company phone. */
+  mobilePhone: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   companyEmail: {
     type: String,
     trim: true,
@@ -125,6 +131,16 @@ const userSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
+  /** Standing monthly net pay — carries forward until hike / promotion update. */
+  pulseNetPay: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  pulseNetPayUpdatedAt: {
+    type: Date,
+    default: null,
+  },
   displayName: {
     type: String,
     trim: true,
@@ -174,7 +190,7 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpires: Date,
   defaultWorkDays: {
     type: [Number],
-    default: [1, 2, 3, 4, 5], // 0=Sun 1=Mon … 6=Sat; default Mon-Fri
+    default: [1, 2, 3, 4, 5, 6], // 0=Sun 1=Mon … 6=Sat; default Mon–Sat
   },
   createdAt: {
     type: Date,

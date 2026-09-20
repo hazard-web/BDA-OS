@@ -12,6 +12,7 @@ const Announcement = require('../models/Announcement');
 const AssignedTask = require('../models/AssignedTask');
 const { logActivity } = require('../utils/logger');
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth');
+const { personName } = require('../utils/pulsePerson');
 const { sendLeaveRequestEmail } = require('../utils/emailService');
 const { uploadBase64 } = require('../utils/cloudinary');
 const { getProductionBaseUrl } = require('../utils/urlHelper');
@@ -33,6 +34,19 @@ const {
 } = require('../utils/pulseTrustedTime');
 
 const PULSE_CASUAL_ANNUAL = 18;
+const PULSE_WORK_DAYS = [1, 2, 3, 4, 5, 6]; // Mon–Sat
+
+function pulseWorkDaysOf(user) {
+  const days = Array.isArray(user?.defaultWorkDays)
+    ? [...new Set(user.defaultWorkDays.map(Number).filter((d) => d >= 0 && d <= 6))]
+    : [];
+  if (!days.length) return [...PULSE_WORK_DAYS];
+  // Stored Mon–Fri hid Saturday’s timer; Pulse week matches timesheets (Mon–Sat).
+  if (!days.includes(6) && days.includes(1) && days.includes(5) && !days.includes(0)) {
+    return [...days, 6];
+  }
+  return days;
+}
 
 async function linkedStaff(user) {
   return Staff.findOne({
@@ -42,14 +56,70 @@ async function linkedStaff(user) {
 }
 
 function casualLeaveBalance(staff) {
-  const remaining = staff?.leaveBalance?.casual != null
-    ? Number(staff.leaveBalance.casual)
-    : PULSE_CASUAL_ANNUAL;
+  const total = PULSE_CASUAL_ANNUAL;
+  const raw = staff?.leaveBalance?.casual;
+  // Schema used to default casual to 0, which reads as "fully used". Treat
+  // nullish / NaN as a full allotment; real remaining is synced from leave requests.
+  if (raw == null || Number.isNaN(Number(raw))) {
+    return {
+      name: 'Casual',
+      used: 0,
+      total,
+      remaining: total,
+      color: '#1A5F4A',
+    };
+  }
+  const remaining = Math.max(0, Number(raw));
   return {
     name: 'Casual',
-    used: Math.max(0, PULSE_CASUAL_ANNUAL - remaining),
+    used: Math.max(0, total - remaining),
+    total,
+    remaining,
+    color: '#1A5F4A',
+  };
+}
+
+/** Source of truth: sum Pending + Approved casual days this year, then sync staff.leaveBalance. */
+async function loadCasualLeaveBalance(staff) {
+  if (!staff?._id) return casualLeaveBalance(null);
+  const year = new Date().getFullYear();
+  const from = new Date(`${year}-01-01T00:00:00`);
+  const to = new Date(`${year}-12-31T23:59:59`);
+  const leaves = await LeaveRequest.find({
+    staff: staff._id,
+    type: 'Casual',
+    status: { $in: ['Pending', 'Approved'] },
+    startDate: { $lte: to },
+    endDate: { $gte: from },
+  })
+    .select('startDate endDate')
+    .lean();
+  const used = Math.min(
+    PULSE_CASUAL_ANNUAL,
+    Math.max(
+      0,
+      leaves.reduce((sum, row) => sum + leaveDurationDays(row.startDate, row.endDate), 0),
+    ),
+  );
+  const remaining = Math.max(0, PULSE_CASUAL_ANNUAL - used);
+  const stored = staff.leaveBalance?.casual;
+  if (stored == null || Number(stored) !== remaining) {
+    try {
+      await Staff.updateOne(
+        { _id: staff._id },
+        { $set: { 'leaveBalance.casual': remaining } },
+      );
+      if (!staff.leaveBalance) staff.leaveBalance = {};
+      staff.leaveBalance.casual = remaining;
+    } catch {
+      /* non-fatal — response still uses computed remaining */
+    }
+  }
+  return {
+    name: 'Casual',
+    used,
     total: PULSE_CASUAL_ANNUAL,
-    remaining: Math.max(0, remaining),
+    remaining,
     color: '#1A5F4A',
   };
 }
@@ -135,7 +205,7 @@ async function getOrCreateDay(userId, email, date) {
 }
 
 function firstCheckInAt(plain) {
-  const event = (plain.events || []).find((item) => item.type === 'CHECK_IN' || item.type === 'RESUME');
+  const event = (plain.events || []).find((item) => item.type === 'CHECK_IN');
   if (event?.at) return event.at;
   const session = (plain.sessions || []).find((item) => item.checkInAt);
   return session?.checkInAt || null;
@@ -434,13 +504,9 @@ router.get('/admin/presence', auth, async (req, res) => {
     const active = [];
     const inactive = [];
     members.forEach((member) => {
-      const parts = [member.firstName, member.lastName].filter(Boolean);
-      const name = parts.length
-        ? parts.join(' ')
-        : (member.displayName || String(member.email || '').split('@')[0] || 'Employee');
       const row = {
         id: String(member._id),
-        name,
+        name: personName(member),
         email: member.email || '',
       };
       if (statusByUser.get(String(member._id)) === 'active') active.push(row);
@@ -571,7 +637,6 @@ router.get('/admin/days', auth, async (req, res) => {
 
     const personById = new Map(
       members.map((person) => {
-        const parts = [person.firstName, person.lastName].filter(Boolean);
         const email = String(person.email || '').toLowerCase();
         const httpsAvatar = safeListAvatarUrl(person.avatarUrl);
         const useProxy =
@@ -580,9 +645,7 @@ router.get('/admin/days', auth, async (req, res) => {
         return [
           String(person._id),
           {
-            name: parts.length
-              ? parts.join(' ')
-              : (person.displayName || String(person.email || '').split('@')[0] || 'Employee'),
+            name: personName(person),
             email: person.email || '',
             avatarUrl: httpsAvatar,
             avatarUserId: useProxy ? String(person._id) : '',
@@ -714,10 +777,7 @@ router.get('/admin/days/detail', auth, async (req, res) => {
       .select('user date status totalActiveMs targetHours anomaly events sessions taskEntries timesheetSubmitted timesheetSubmittedAt lastHeartbeatAt')
       .lean();
 
-    const parts = [member.firstName, member.lastName].filter(Boolean);
-    const name = parts.length
-      ? parts.join(' ')
-      : (member.displayName || String(member.email || '').split('@')[0] || 'Employee');
+    const name = personName(member);
 
     const httpsAvatar = safeListAvatarUrl(member.avatarUrl);
     let avatarUserId = '';
@@ -1142,9 +1202,7 @@ router.get('/week', auth, async (req, res) => {
     })
       .sort({ date: 1 })
       .lean();
-    const workDays = Array.isArray(req.user.defaultWorkDays) && req.user.defaultWorkDays.length
-      ? req.user.defaultWorkDays
-      : [1, 2, 3, 4, 5];
+    const workDays = pulseWorkDaysOf(req.user);
     res.json({
       success: true,
       data: {
@@ -1169,9 +1227,7 @@ router.get('/overview', auth, async (req, res) => {
     const end = weekFrom <= weekTo ? weekTo : weekFrom;
     const monthFrom = `${today.slice(0, 7)}-01`;
     const orgId = orgIdOf(req.user);
-    const workDays = Array.isArray(req.user.defaultWorkDays) && req.user.defaultWorkDays.length
-      ? req.user.defaultWorkDays
-      : [1, 2, 3, 4, 5];
+    const workDays = pulseWorkDaysOf(req.user);
     const workDaySet = new Set(workDays.map((d) => Number(d)));
 
     const [weekDocs, monthDocs, policy, staff, announcements] = await Promise.all([
@@ -1216,7 +1272,7 @@ router.get('/overview', auth, async (req, res) => {
     let approvals = [];
     let leaveByDate = {};
 
-    leaveBalances = [casualLeaveBalance(staff)];
+    leaveBalances = [await loadCasualLeaveBalance(staff)];
 
     if (staff) {
       const leaveFrom = start < monthFrom ? start : monthFrom
@@ -1336,9 +1392,7 @@ router.get('/overview', auth, async (req, res) => {
           createdAt: row.createdAt,
         })),
         profile: {
-          name: [req.user.firstName, req.user.lastName].filter(Boolean).join(' ')
-            || req.user.displayName
-            || String(req.user.email || '').split('@')[0],
+          name: personName(req.user),
           email: req.user.email,
           company: req.user.companyName || '',
           role: req.user.role || 'admin',
@@ -1493,13 +1547,34 @@ function staffLabel(row) {
   return firstName('', row?.email);
 }
 
-function yearsOfService(join, now) {
+/** Milestone years for the anniversary being celebrated this calendar year. */
+function anniversaryYears(join, now) {
   if (!join || Number.isNaN(join.getTime())) return 0;
-  let years = now.getFullYear() - join.getFullYear();
-  const passed = now.getMonth() > join.getMonth()
-    || (now.getMonth() === join.getMonth() && now.getDate() >= join.getDate());
-  if (!passed) years -= 1;
-  return Math.max(0, years);
+  return Math.max(0, now.getFullYear() - join.getFullYear());
+}
+
+/** Safe local Y-M-D parts from Date or ISO / date-only string (avoids UTC day shift). */
+function calendarParts(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return { year: Number(match[1]), month: Number(match[2]) - 1, day: Number(match[3]) };
+  }
+  const dt = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  return { year: dt.getFullYear(), month: dt.getMonth(), day: dt.getDate() };
+}
+
+function celebrationSort(today) {
+  return (a, b) => {
+    const aToday = a.on === today || a.today ? 0 : 1;
+    const bToday = b.on === today || b.today ? 0 : 1;
+    if (aToday !== bToday) return aToday - bToday;
+    const aUpcoming = String(a.on || '') >= today ? 0 : 1;
+    const bUpcoming = String(b.on || '') >= today ? 0 : 1;
+    if (aUpcoming !== bUpcoming) return aUpcoming - bUpcoming;
+    return String(a.on || '').localeCompare(String(b.on || ''));
+  };
 }
 
 function firstName(value, email) {
@@ -1537,28 +1612,31 @@ router.get('/calendar', auth, async (req, res) => {
     const { month, from, to } = monthBounds(req.query.month);
     const today = todayKey();
     const orgId = orgIdOf(req.user);
-    const workDays = Array.isArray(req.user.defaultWorkDays) && req.user.defaultWorkDays.length
-      ? req.user.defaultWorkDays
-      : [1, 2, 3, 4, 5];
+    const workDays = pulseWorkDaysOf(req.user);
     const workDaySet = new Set(workDays.map((d) => Number(d)));
 
     const [policy, myDays, leaves] = await Promise.all([
-      LeavePolicy.findOne({ user: orgId }).lean(),
+      orgId
+        ? LeavePolicy.findOne({ user: orgId }).lean().catch(() => null)
+        : Promise.resolve(null),
       PulseWorkDay.find({
         user: req.user._id,
         date: { $gte: from, $lte: to },
       })
         .sort({ date: 1 })
         .lean(),
-      LeaveRequest.find({
-        admin: orgId,
-        status: 'Approved',
-        startDate: { $lte: new Date(`${to}T23:59:59`) },
-        endDate: { $gte: new Date(`${from}T00:00:00`) },
-      })
-        .populate('staff', 'fullName email')
-        .sort({ startDate: 1 })
-        .lean(),
+      orgId
+        ? LeaveRequest.find({
+            admin: orgId,
+            status: 'Approved',
+            startDate: { $lte: new Date(`${to}T23:59:59`) },
+            endDate: { $gte: new Date(`${from}T00:00:00`) },
+          })
+            .populate('staff', 'fullName email')
+            .sort({ startDate: 1 })
+            .lean()
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const holidays = collectHolidays(from, to, policy?.holidays);
@@ -1583,7 +1661,7 @@ router.get('/calendar', auth, async (req, res) => {
 
     const leaveDates = [...new Set(teamLeave.flatMap((row) => row.days))];
     const myLeave = new Set();
-    const staff = await linkedStaff(req.user);
+    const staff = await linkedStaff(req.user).catch(() => null);
     if (staff) {
       leaves.forEach((row) => {
         if (String(row.staff?._id || row.staff) === String(staff._id)) {
@@ -1644,9 +1722,7 @@ router.get('/dashboard', auth, async (req, res) => {
     const monthFrom = `${today.slice(0, 7)}-01`;
     const yearFrom = `${now.getFullYear()}-01-01`;
     const holidayWindow = rollingHolidayWindow(now);
-    const workDays = Array.isArray(req.user.defaultWorkDays) && req.user.defaultWorkDays.length
-      ? req.user.defaultWorkDays
-      : [1, 2, 3, 4, 5];
+    const workDays = pulseWorkDaysOf(req.user);
     const workDaySet = new Set(workDays.map((d) => Number(d)));
     const staff = await linkedStaff(req.user);
     const pendingQuery = isPulseAdmin(req.user)
@@ -1739,7 +1815,7 @@ router.get('/dashboard', auth, async (req, res) => {
       }
     });
 
-    const casual = casualLeaveBalance(staff);
+    const casual = await loadCasualLeaveBalance(staff);
     let weekPresent = 0;
     let weekAbsent = 0;
     enumerateKeys(weekFrom, weekTo).forEach((key) => {
@@ -1782,47 +1858,54 @@ router.get('/dashboard', auth, async (req, res) => {
     orgPeople.forEach((person) => {
       const name = staffLabel(person);
       const dept = person.department || 'Team';
-      if (person.dob) {
-        const dob = new Date(person.dob);
-        if (!Number.isNaN(dob.getTime()) && dob.getMonth() === thisMonth) {
-          const on = `${now.getFullYear()}-${String(dob.getMonth() + 1).padStart(2, '0')}-${String(dob.getDate()).padStart(2, '0')}`;
-          const isTodayBday = on === today;
-          birthday.push(dashRow(
-            `b-${person._id}`,
+      const dobParts = calendarParts(person.dob);
+      if (dobParts && dobParts.month === thisMonth) {
+        const on = `${now.getFullYear()}-${String(dobParts.month + 1).padStart(2, '0')}-${String(dobParts.day).padStart(2, '0')}`;
+        const isTodayBday = on === today;
+        birthday.push(dashRow(
+          `b-${person._id}`,
+          name,
+          dept,
+          {
+            on,
+            when: isTodayBday ? 'Today' : `${dobParts.day} ${MONTH_LABELS[dobParts.month]}`,
+            today: isTodayBday,
+          },
+        ));
+      }
+      const joinParts = calendarParts(person.joiningDate);
+      if (joinParts) {
+        const join = new Date(joinParts.year, joinParts.month, joinParts.day);
+        const joinKey = dateToKey(join);
+        if (join >= hireCutoff && joinKey <= today) {
+          newHires.push(dashRow(
+            `n-${person._id}`,
             name,
-            `${isTodayBday ? 'Today' : `${dob.getDate()} ${MONTH_LABELS[dob.getMonth()]}`} · ${dept}`,
-            { on },
+            `Joined ${joinParts.day} ${MONTH_LABELS[joinParts.month]} · ${dept}`,
           ));
         }
-      }
-      if (person.joiningDate) {
-        const join = new Date(person.joiningDate);
-        if (!Number.isNaN(join.getTime())) {
-          const joinKey = dateToKey(join);
-          if (join >= hireCutoff && joinKey <= today) {
-            newHires.push(dashRow(
-              `n-${person._id}`,
+        if (joinParts.month === thisMonth) {
+          const years = anniversaryYears(join, now);
+          if (years >= 1) {
+            const on = `${now.getFullYear()}-${String(joinParts.month + 1).padStart(2, '0')}-${String(joinParts.day).padStart(2, '0')}`;
+            const isTodayAnniv = on === today;
+            workAnniv.push(dashRow(
+              `w-${person._id}`,
               name,
-              `Joined ${join.getDate()} ${MONTH_LABELS[join.getMonth()]} · ${dept}`,
+              `${years} year${years === 1 ? '' : 's'} · ${dept}`,
+              {
+                on,
+                when: isTodayAnniv ? 'Today' : `${joinParts.day} ${MONTH_LABELS[joinParts.month]}`,
+                today: isTodayAnniv,
+                years,
+              },
             ));
-          }
-          if (join.getMonth() === thisMonth) {
-            const years = yearsOfService(join, now);
-            if (years >= 1) {
-              const on = `${now.getFullYear()}-${String(join.getMonth() + 1).padStart(2, '0')}-${String(join.getDate()).padStart(2, '0')}`;
-              workAnniv.push(dashRow(
-                `w-${person._id}`,
-                `${name} · ${years} year${years === 1 ? '' : 's'}`,
-                `${join.getDate()} ${MONTH_LABELS[join.getMonth()]} · ${dept}`,
-                { on },
-              ));
-            }
           }
         }
       }
     });
-    birthday.sort((a, b) => String(a.on).localeCompare(String(b.on)));
-    workAnniv.sort((a, b) => String(a.on).localeCompare(String(b.on)));
+    birthday.sort(celebrationSort(today));
+    workAnniv.sort(celebrationSort(today));
     newHires.sort((a, b) => String(a.meta).localeCompare(String(b.meta)));
 
     const tasks = [
@@ -1962,7 +2045,7 @@ router.get('/leaves', auth, async (req, res) => {
           ? { name: row.attachment.name, url: row.attachment.url || '', size: row.attachment.size || 0 }
           : null,
       })),
-      casual: casualLeaveBalance(staff),
+      casual: await loadCasualLeaveBalance(staff),
       notifyEmails: LEAVE_NOTIFY_EMAILS,
     });
   } catch (err) {
@@ -1996,7 +2079,7 @@ router.post('/leaves/apply', auth, async (req, res) => {
     }
     const days = leaveDurationDays(startDate, endDate);
     if (type === 'Casual') {
-      const balance = casualLeaveBalance(staff);
+      const balance = await loadCasualLeaveBalance(staff);
       if (days > balance.remaining) {
         return res.status(400).json({
           success: false,
@@ -2039,6 +2122,12 @@ router.post('/leaves/apply', auth, async (req, res) => {
       attachment: savedAttachment || undefined,
     });
 
+    // Casual/Sick days are reserved via Pending leave rows; loadCasualLeaveBalance
+    // recomputes remaining from those requests (no separate deduct needed for Casual).
+    if (type === 'Sick') {
+      await adjustLeaveBalance(staff._id, type, days, 'deduct');
+    }
+
     // A mail failure must not lose a saved request, so report it instead of throwing.
     let notified = false;
     const employeeName = staff.fullName || [req.user.firstName, req.user.lastName].filter(Boolean).join(' ');
@@ -2075,6 +2164,7 @@ router.post('/leaves/apply', auth, async (req, res) => {
       message: 'Leave request submitted',
       notified,
       notifyEmail,
+      casual: await loadCasualLeaveBalance(staff),
       data: {
         id: String(leave._id),
         type: leave.type,
@@ -2131,9 +2221,12 @@ router.post('/leaves/import', auth, async (req, res) => {
     }
 
     const casualLeft = new Map();
-    const remainingFor = (staff) => {
+    const remainingFor = async (staff) => {
       const key = String(staff._id);
-      if (!casualLeft.has(key)) casualLeft.set(key, casualLeaveBalance(staff).remaining);
+      if (!casualLeft.has(key)) {
+        const bal = await loadCasualLeaveBalance(staff);
+        casualLeft.set(key, bal.remaining);
+      }
       return casualLeft.get(key);
     };
 
@@ -2170,8 +2263,9 @@ router.post('/leaves/import', auth, async (req, res) => {
       if (!errors.length && endDate < startDate) errors.push('To cannot be earlier than From');
 
       const days = errors.length ? 0 : leaveDurationDays(startDate, endDate);
-      if (!errors.length && type === 'Casual' && days > remainingFor(target)) {
-        errors.push(`Only ${remainingFor(target)} casual day(s) left this year`);
+      if (!errors.length && type === 'Casual') {
+        const left = await remainingFor(target);
+        if (days > left) errors.push(`Only ${left} casual day(s) left this year`);
       }
 
       if (errors.length) {
@@ -2188,7 +2282,12 @@ router.post('/leaves/import', auth, async (req, res) => {
         reason: String(row?.reason || '').trim() || 'Imported leave',
         status: 'Pending',
       });
-      if (type === 'Casual') casualLeft.set(String(target._id), remainingFor(target) - days);
+      if (type === 'Casual') {
+        // Remaining comes from Pending/Approved rows via loadCasualLeaveBalance
+        casualLeft.set(String(target._id), (await remainingFor(target)) - days);
+      } else if (type === 'Sick') {
+        await adjustLeaveBalance(target._id, type, days, 'deduct');
+      }
       added.push({
         rowNo,
         id: String(leave._id),
@@ -2280,10 +2379,20 @@ router.post('/leaves/:id/respond', auth, async (req, res) => {
     await leave.save();
 
     const days = leaveDurationDays(leave.startDate, leave.endDate);
-    if (status === 'Approved' && prevStatus !== 'Approved') {
-      await adjustLeaveBalance(leave.staff, leave.type, days, 'deduct');
-    } else if (status !== 'Approved' && prevStatus === 'Approved') {
-      await adjustLeaveBalance(leave.staff, leave.type, days, 'restore');
+    // Casual remaining is derived from Pending + Approved requests.
+    // Sick (and undo paths) still adjust the stored sick balance.
+    if (leave.type !== 'Casual') {
+      if (status === 'Rejected' && prevStatus === 'Pending') {
+        await adjustLeaveBalance(leave.staff, leave.type, days, 'restore');
+      } else if (status === 'Approved' && prevStatus === 'Rejected') {
+        await adjustLeaveBalance(leave.staff, leave.type, days, 'deduct');
+      } else if (status !== 'Approved' && prevStatus === 'Approved') {
+        await adjustLeaveBalance(leave.staff, leave.type, days, 'restore');
+      }
+    } else {
+      // Keep leaveBalance.casual aligned after status change
+      const staffDoc = await Staff.findById(leave.staff);
+      if (staffDoc) await loadCasualLeaveBalance(staffDoc);
     }
 
     await logActivity(

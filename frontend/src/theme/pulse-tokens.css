@@ -1,0 +1,81 @@
+/**
+ * Pulse / BDA OS color system
+ * Prefer these tokens over new hardcoded hex in Pulse UI.
+ *
+ * Sidebar            #556B2F
+ * Primary CTA        #465A27
+ * Table main header  #556B2F
+ * Table sub-header   #E5EBD6
+ * CTA hover          #3F5123
+ * Primary text       #35421F
+ * Secondary text     #6B7280
+ * Page background    #FAFBF7
+ * Cards              #FFFFFF
+ * Borders            #D9DFC9
+ */
+
+:root {
+  /* Primary CTA / action — darker olive, not chrome */
+  --pulse-primary: #465a27;
+  --pulse-primary-hover: #3f5123;
+  --pulse-primary-active: #35421f;
+  --pulse-cta-fg: #ffffff;
+
+  /* Headings + body */
+  --pulse-heading: #35421f;
+  --pulse-text: #35421f;
+  --pulse-muted: #6b7280;
+
+  /* Soft olive surfaces (table sub-header / chips) */
+  --pulse-soft: #e5ebd6;
+
+  /* Borders */
+  --pulse-border: #d9dfc9;
+  --pulse-border-accent: #556b2f;
+
+  /* Accent orange — highlights, and Check out (not Check in / Save) */
+  --pulse-orange: #e88a2d;
+  --pulse-orange-hover: #d97820;
+  --pulse-orange-active: #c56a18;
+
+  /* Heat calendar activity hue (distinct from empty + primary CTA) */
+  --pulse-heat: #6b8f3c;
+  --pulse-heat-bright: #8aaa4a;
+
+  /* Secondary action chip */
+  --pulse-secondary-bg: #ffffff;
+  --pulse-secondary-border: #d9dfc9;
+  --pulse-secondary-fg: #465a27;
+  --pulse-secondary-hover: #e5ebd6;
+
+  /* Chrome — header + left rail */
+  --pulse-chrome: #556b2f;
+  --pulse-chrome-deep: #3f5123;
+  --pulse-chrome-fg: #fafbf7;
+  --pulse-chrome-muted: rgba(250, 251, 247, 0.72);
+  --pulse-chrome-line: rgba(217, 223, 201, 0.32);
+
+  /* Surfaces */
+  --pulse-page: #fafbf7;
+  --pulse-card: #ffffff;
+
+  /* Content table headers */
+  --pulse-table-head: #556b2f;
+  --pulse-table-head-fg: #ffffff;
+  --pulse-table-subhead: #e5ebd6;
+  --pulse-table-subhead-fg: #35421f;
+
+  /* RGB helpers for shadows / translucent fills */
+  --pulse-primary-rgb: 70, 90, 39;
+  --pulse-chrome-rgb: 85, 107, 47;
+  --pulse-orange-rgb: 232, 138, 45;
+  --pulse-heading-rgb: 53, 66, 31;
+}
+
+/* Align legacy portal tokens with Pulse where they are still referenced */
+:root {
+  --primary: var(--pulse-primary);
+  --bda-green: var(--pulse-chrome);
+  --primary-hover: var(--pulse-primary-hover);
+  --primary-tint: var(--pulse-soft);
+}

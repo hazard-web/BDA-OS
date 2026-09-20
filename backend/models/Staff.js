@@ -128,8 +128,8 @@ const staffSchema = new mongoose.Schema(
       }, // Represents Monthly Stipend for Interns
     },
     leaveBalance: {
-      casual: { type: Number, default: 0 },
-      sick: { type: Number, default: 0 }
+      casual: { type: Number, default: 18 },
+      sick: { type: Number, default: 12 }
     },
     internLeaveQuota: {
       type: Number,
