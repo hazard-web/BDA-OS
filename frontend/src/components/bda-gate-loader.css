@@ -1,5 +1,5 @@
 .bda-gate {
-  --bda-green: #1a5f4a;
+  --bda-green: var(--pulse-primary);
   position: fixed;
   inset: 0;
   z-index: 8000;
@@ -9,6 +9,15 @@
   box-sizing: border-box;
   background: #fcfcfa;
   animation: bda-gate-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Content-pane only — header + dock stay visible during shell navigations */
+.bda-gate.bda-gate--pane {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  padding: 0;
+  border-radius: inherit;
 }
 
 .bda-gate-stage {

@@ -16,7 +16,7 @@ import '../components/pulse-onboarding.css'
 function Peak() {
   return (
     <div className="ob-public-scene" aria-hidden="true">
-      <img className="ob-public-photo" src="/pulse-overview-peak.jpg" alt="" />
+      <img className="ob-public-photo" src="/pulse-peak-bg.jpg" alt="" decoding="async" />
       <div className="ob-public-shade" />
     </div>
   )

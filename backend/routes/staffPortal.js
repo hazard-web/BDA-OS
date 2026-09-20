@@ -830,6 +830,21 @@ router.post('/me/documents/:type', authStaff, async (req, res) => {
 
     await req.staff.save();
 
+    // Keep Pulse User.avatarUrl in sync when the portal profile photo is uploaded.
+    if (type === 'profileImage' && documentUrl && /^https?:\/\//i.test(documentUrl)) {
+      try {
+        const email = String(req.staff.email || '').toLowerCase().trim();
+        if (email) {
+          await User.updateOne(
+            { email },
+            { $set: { avatarUrl: documentUrl } },
+          );
+        }
+      } catch (syncErr) {
+        console.error('Profile image → User.avatarUrl sync failed:', syncErr?.message || syncErr);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Document uploaded successfully',

@@ -5,10 +5,17 @@ import PulseAuthSync from './components/PulseAuthSync'
 import PulseLoading from './components/PulseLoading'
 import PulseCheckInHeartbeat from './components/PulseCheckInHeartbeat'
 import PulseForceExitGuard from './components/PulseForceExitGuard'
+import PulseToastProvider from './components/PulseToastProvider'
 import { useAuth } from './context/AuthContext'
 import { lockPulsePageZoom } from './utils/pulsePageZoom'
 import { closePulseAuxiliaryTab } from './utils/pulseAuthSync'
-import { isPulseAuxiliaryTab, isPulseOpenPath, PULSE_SHELL_PATHS } from './utils/pulseOpenPage'
+import {
+  capturePulseAuxiliaryFromSearch,
+  isPulseAuxiliaryTab,
+  isPulseOpenPath,
+  isPulseShellPath,
+  PULSE_SHELL_PATHS,
+} from './utils/pulseOpenPage'
 import { APP_BASE, APP_NOTES, APP_TIMER, PULSE_HOME, isAppPath, toAppPath } from './utils/pulseEntry'
 
 import Login from './pages/Login'
@@ -37,8 +44,15 @@ import AccountPortal from './pages/AccountPortal'
 function ProtectedRoute({ children }) {
   const { user, loading, exitBusy } = useAuth()
   const location = useLocation()
+
+  useEffect(() => {
+    capturePulseAuxiliaryFromSearch(location.search)
+  }, [location.search])
+
   if (loading) {
-    if (isPulseOpenPath(location.pathname, location.search)) return children
+    if (isPulseOpenPath(location.pathname, location.search) || isPulseShellPath(location.pathname)) {
+      return children
+    }
     if (isAppPath(location.pathname)) {
       return <PulseLoading />
     }
@@ -48,7 +62,7 @@ function ProtectedRoute({ children }) {
     if (exitBusy) return <PulseLoading label="Signing out" />
     if (isPulseAuxiliaryTab(location.pathname)) {
       closePulseAuxiliaryTab()
-      return <div style={{ minHeight: '100vh', background: '#fcfcfa' }} aria-hidden="true" />
+      return <PulseLoading label="Signing out" />
     }
     return <Navigate to="/login" replace />
   }
@@ -74,7 +88,7 @@ function PulsePageZoomLock() {
 
 export default function App() {
   return (
-    <>
+    <PulseToastProvider>
       <DocumentTitle />
       <PulseAuthSync />
       <PulseCheckInHeartbeat />
@@ -186,6 +200,6 @@ export default function App() {
         <Route path="/" element={<Navigate to={APP_BASE} replace />} />
         <Route path="*" element={<Navigate to={APP_BASE} replace />} />
       </Routes>
-    </>
+    </PulseToastProvider>
   )
 }

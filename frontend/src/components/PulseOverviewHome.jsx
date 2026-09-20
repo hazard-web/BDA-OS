@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
-import { CloseOutlined, HolderOutlined, ReloadOutlined, SlidersOutlined } from '@ant-design/icons'
-import { Circle, Pause } from '@phosphor-icons/react'
-import { Avatar, Button, Card, Popover, Switch, Typography } from 'antd'
+import { CloseOutlined, HolderOutlined, LoginOutlined, LogoutOutlined, ReloadOutlined, SlidersOutlined } from '@ant-design/icons'
+import { Pause } from '@phosphor-icons/react'
+import { Button, Card, ConfigProvider, Popover, Switch, Typography } from 'antd'
 import api from '../api'
-import PulseGreetingBanner, { periodForHour, PulseSkyWash } from './PulseGreetingBanner'
+import PulseGreetingBanner, { greetingTitle, periodForHour, PulsePeriodMark } from './PulseGreetingBanner'
 import PulseWorkSchedule from './PulseWorkSchedule'
 import PulseMySpaceCalendar from './PulseMySpaceCalendar'
 import PulseCheckinBuddy from './PulseCheckinBuddy'
+import PulseUserAvatar from './PulseUserAvatar'
 import {
   DashListWidget,
-  DEMO as DASH_WIDGET_DEMO,
+  buildDemo,
   EMPTY_DASH,
   filterWidgetData,
 } from './PulseMySpaceDashboard'
@@ -31,13 +32,13 @@ const PINNED_TILES = [
 
 const CORE_TILES = [
   { id: 'portrait', label: 'Profile' },
-  { id: 'calendar', label: 'Calendar' },
+  { id: 'calendar', label: 'Hours logged' },
 ]
 
 const DASH_TILES = [
   { id: 'files', label: 'My Files', dataKey: 'files', empty: 'No Files Found', showTotal: true, fileTabs: true, tone: 'slate' },
-  { id: 'birthday', label: 'Birthday', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
-  { id: 'workAnniv', label: 'Work anniversary', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
+  { id: 'birthday', label: 'Birthdays', dataKey: 'birthday', empty: 'No birthdays this month', showAvatar: true, tone: 'amber' },
+  { id: 'workAnniv', label: 'Work anniversaries', dataKey: 'workAnniv', empty: 'No work anniversaries this month', showAvatar: true, tone: 'green' },
 ]
 
 const MOVABLE_TILES = [...CORE_TILES, ...DASH_TILES]
@@ -51,7 +52,15 @@ const DEFAULT_ENABLED = Object.fromEntries(MOVABLE_TILES.map((tile) => [tile.id,
 export function PulseStripBackdrop() {
   return (
     <div className="pulse-strip-scene" aria-hidden="true">
-      <img className="pulse-strip-photo" src="/pulse-overview-peak.jpg" alt="" />
+      <img
+        className="pulse-strip-photo"
+        src="/pulse-peak-wallpaper.jpg"
+        srcSet="/pulse-peak-wallpaper.jpg 2560w"
+        sizes="100vw"
+        alt=""
+        decoding="async"
+        fetchPriority="high"
+      />
       <div className="pulse-strip-shade" />
       <div className="pulse-aura-sheen" />
     </div>
@@ -332,7 +341,6 @@ function ElapsedFace({ seconds, mode }) {
       aria-live={mode === 'live' ? 'polite' : 'off'}
       aria-label={spoken}
     >
-      {mode === 'live' ? <Circle className="pulse-checkin-beat" weight="fill" size={10} aria-hidden="true" /> : null}
       {mode === 'paused' ? <Pause className="pulse-checkin-pause" weight="fill" size={18} aria-hidden="true" /> : null}
       <span>{hours}</span>
       <span className="pulse-checkin-colon" aria-hidden="true">:</span>
@@ -367,19 +375,24 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
     <Card
       className={`pulse-checkin-card is-${view.mode} is-${period}`}
       size="small"
+      bordered={false}
       aria-label={`${name}'s check-in`}
     >
-      <PulseSkyWash hour={hour} />
+      <div className="pulse-checkin-alpine" aria-hidden="true">
+        <img className="pulse-checkin-alpine-photo" src="/pulse-peak-bg.jpg" alt="" decoding="async" />
+        <div className="pulse-checkin-alpine-haze" />
+      </div>
+      <PulsePeriodMark hour={hour} />
       <PulseCheckinBuddy checkedIn={Boolean(checkedInAt)} />
       <div className="pulse-checkin-head">
-        <Avatar
+        <PulseUserAvatar
           size={40}
-          src={avatarUrl || undefined}
+          src={avatarUrl}
           className="pulse-avatar pulse-checkin-face"
-          referrerPolicy="no-referrer"
+          alt={name}
         >
           {initial}
-        </Avatar>
+        </PulseUserAvatar>
         <div className="pulse-checkin-who">
           <strong>{name}</strong>
           <span className={`pulse-checkin-status is-${view.mode}`}>{view.status}</span>
@@ -391,24 +404,28 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
       <div className="pulse-checkin-main">
         <div className="pulse-checkin-clock">
           <ElapsedFace seconds={elapsed} mode={view.mode} />
+          <span className="pulse-checkin-greet">{greetingTitle(period)}</span>
         </div>
         <div className="pulse-checkin-cta-wrap">
-          <Button
-            type="primary"
-            size="large"
-            block
-            loading={checkBusy}
-            disabled={checkBusy}
-            aria-busy={checkBusy}
-            className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}`}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation()
-              onCheckIn()
-            }}
-          >
-            {checkBusy ? view.busy : view.action}
-          </Button>
+          <ConfigProvider wave={{ disabled: true }}>
+            <Button
+              type="primary"
+              size="large"
+              block
+              aria-busy={checkBusy}
+              icon={view.mode === 'live' ? <LogoutOutlined /> : <LoginOutlined />}
+              className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                event.currentTarget.blur()
+                if (checkBusy) return
+                onCheckIn()
+              }}
+            >
+              {checkBusy ? view.busy : view.action}
+            </Button>
+          </ConfigProvider>
         </div>
       </div>
     </Card>
@@ -416,6 +433,36 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
 }
 
 /** Overview: greeting, week, check-in. Cards reorder like Dashboard. */
+function HoursLoggedCard({
+  sample,
+  weekDays,
+  checkedInAt,
+  floating,
+  onGripPointerDown,
+}) {
+  return (
+    <div className={`pulse-dash-card pulse-cal-widget-card is-hours${floating ? ' is-floating' : ''}`}>
+      <header className="pulse-dash-card-head">
+        <div className="pulse-dash-card-title-row">
+          <button
+            type="button"
+            className="pulse-dash-card-grip"
+            aria-label="Drag Hours logged"
+            onPointerDown={floating ? undefined : onGripPointerDown}
+            tabIndex={floating ? -1 : 0}
+          >
+            <HolderOutlined />
+          </button>
+          <h3 className="pulse-dash-card-title">Hours logged</h3>
+        </div>
+      </header>
+      <div className="pulse-cal-widget-body">
+        <PulseMySpaceCalendar compact sample={sample} weekDays={weekDays} checkedInAt={checkedInAt} />
+      </div>
+    </div>
+  )
+}
+
 function PulseOverviewHome({
   name,
   initial,
@@ -487,9 +534,9 @@ function PulseOverviewHome({
   }, [sample, tick])
 
   const dashData = useMemo(() => {
-    if (sample) return filterWidgetData(DASH_WIDGET_DEMO)
-    return liveData || EMPTY_DASH
-  }, [sample, liveData])
+    if (sample) return filterWidgetData(buildDemo())
+    return liveData
+  }, [sample, liveData, tick])
 
   const openDashRow = useCallback((item) => {
     if (isPulseFileRow(item)) {
@@ -676,13 +723,13 @@ function PulseOverviewHome({
     }
     if (id === 'calendar') {
       return (
-        <Card
-          className="pulse-cal-widget-card"
-          size="small"
-          title="Calendar"
-        >
-          <PulseMySpaceCalendar compact sample={sample} weekDays={weekDays} checkedInAt={checkedInAt} />
-        </Card>
+        <HoursLoggedCard
+          sample={sample}
+          weekDays={weekDays}
+          checkedInAt={checkedInAt}
+          floating={floating}
+          onGripPointerDown={floating ? undefined : (event) => startCardDrag('calendar', event)}
+        />
       )
     }
     const dash = DASH_BY_ID[id]
@@ -690,8 +737,9 @@ function PulseOverviewHome({
       return (
         <DashListWidget
           title={dash.label}
-          items={dashData[dash.dataKey] || []}
+          items={(dashData || EMPTY_DASH)[dash.dataKey] || []}
           empty={dash.empty}
+          loading={!sample && dashData == null}
           showAvatar={dash.showAvatar}
           showTotal={dash.showTotal}
           fileTabs={dash.fileTabs}
@@ -712,6 +760,7 @@ function PulseOverviewHome({
     const isSlot = !floating && draggingId === id
     const pinned = PINNED_IDS.includes(id)
     const isDash = Boolean(DASH_BY_ID[id])
+    const hasInnerGrip = isDash || id === 'calendar'
     return (
       <div
         key={floating ? `ghost-${id}` : id}
@@ -719,11 +768,11 @@ function PulseOverviewHome({
           if (el) cardRefs.current.set(id, el)
           else cardRefs.current.delete(id)
         }}
-        className={`pulse-ov-tile is-${id}${isDash ? ' is-dash' : ''}${pinned ? ' is-pinned' : ''}${floating ? ' is-floating' : ''}${isSlot ? ' is-slot' : ''}`}
+        className={`pulse-ov-tile is-${id}${isDash || id === 'calendar' ? ' is-dash' : ''}${id === 'calendar' ? ' is-hours' : ''}${pinned ? ' is-pinned' : ''}${floating ? ' is-floating' : ''}${isSlot ? ' is-slot' : ''}`}
         style={isSlot && ghost ? { minHeight: ghost.height } : undefined}
         aria-hidden={isSlot || floating ? true : undefined}
       >
-        {isSlot || pinned || isDash ? null : (
+        {isSlot || pinned || hasInnerGrip ? null : (
           <OvGrip label={labels[id]} floating={floating} onPointerDown={(event) => startCardDrag(id, event)} />
         )}
         <div className="pulse-ov-tile-inner">

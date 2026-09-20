@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   AppstoreOutlined,
@@ -7,44 +7,38 @@ import {
   BankOutlined,
   BookOutlined,
   CarryOutOutlined,
+  ClockCircleOutlined,
+  HomeOutlined,
   PlusOutlined,
   RiseOutlined,
   RocketOutlined,
-  SearchOutlined,
   UserAddOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import {
-  App,
-  Avatar,
   Button,
-  Drawer,
   Dropdown,
   Empty,
-  Input,
   Layout as AntLayout,
-  List,
   Popover,
   Tag,
-  Typography,
 } from 'antd'
 import api from '../api'
-import PeopleOsMark from '../components/PeopleOsMark'
 import PulseFloatingDock from '../components/PulseFloatingDock'
 import { usePulseWorkWeek } from '../components/PulseWorkSchedule'
 // Dashboard — parked on branch `pulse/company-later-services`
 // import PulseMySpaceDashboard from '../components/PulseMySpaceDashboard'
-import PulseOverviewHome, { PulseStripBackdrop } from '../components/PulseOverviewHome'
-import { periodForHour } from '../components/PulseGreetingBanner'
+import PulseOverviewHome from '../components/PulseOverviewHome'
 import PulseMySpaceCalendar from '../components/PulseMySpaceCalendar'
 import PulseLeaveTracker from '../components/PulseLeaveTracker'
-import { MORE_SERVICES } from '../components/PulseMoreLauncher'
+import PulseMoreLauncher, { MORE_SERVICES } from '../components/PulseMoreLauncher'
 import PulseSmartChat from '../components/PulseSmartChat'
 import PulseOrganization, { ORG_TABS } from '../components/PulseOrganization'
 import PulseAppearanceToggle from '../components/PulseAppearanceToggle'
 import { PulseHeaderNotifications, PulseHeaderSearch } from '../components/PulseHeaderTools'
 import PulseLiveModule from '../components/PulseLiveWorkspace'
 import PulseWelcomeCurtain from '../components/PulseWelcomeCurtain'
+import { pulseToast } from '../utils/pulseToast'
 import AppsFlyout from '../components/AppsFlyout'
 import AccountPortal from './AccountPortal'
 import { AuthLogoLoader, useAccountSignOut } from '../components/auth/AuthLogoLoader'
@@ -65,6 +59,7 @@ import {
 } from '../utils/pulseCheckIn'
 import { closeCheckInPip } from '../utils/pulseCheckInPip'
 import { prefetchPulseLocation } from '../utils/pulseLocation'
+import PulseUserAvatar from '../components/PulseUserAvatar'
 import './pulse-myspace.css'
 import './pulse-antd.css'
 import './pulse-overview-portal.css'
@@ -74,8 +69,7 @@ import './pulse-identity.css'
 const { Header, Sider, Content } = AntLayout
 
 const RAIL_TOP = [
-  { key: 'home', label: 'Home', Icon: PeopleOsMark },
-  { key: 'onboarding', label: 'Onboarding', Icon: RocketOutlined },
+  { key: 'home', label: 'Home', Icon: HomeOutlined },
   { key: 'leave', label: 'Leave & Attendance', Icon: CarryOutOutlined },
   { key: 'time', label: 'Timesheet', Icon: AuditOutlined },
   { key: 'performance', label: 'Performance', Icon: RiseOutlined },
@@ -84,22 +78,49 @@ const RAIL_TOP = [
 ]
 
 const SUB_TABS = [
-  { value: 'overview', label: 'Overview' },
+  { value: 'overview', label: 'Dashboard' },
   // Dashboard — parked on branch `pulse/company-later-services`
   // { value: 'dashboard', label: 'Dashboard' },
   { value: 'calendar', label: 'Calendar' },
 ]
 
-const LEAVE_TABS = [
-  { key: 'mydata', label: 'My Data' },
-  { key: 'team', label: 'Team' },
+const LEAVE_SHELL_SUB_TABS = [
+  { key: 'leave', label: 'Leave Request' },
   { key: 'attendance', label: 'Attendance' },
-  { key: 'holidays', label: 'Holidays', adminOnly: true },
 ]
 
-const LEAVE_MY_DATA_TABS = [
-  { key: 'requests', label: 'Leave Request' },
+/** Company More modules — single active label in pulse-sub (like Attendance chrome). */
+const COMPANY_SHELL_SUB_TABS = [
+  { id: 'onboarding', label: 'Onboarding' },
+  { id: 'people', label: 'People' },
+  { id: 'companyFiles', label: 'Files' },
+  { id: 'leaveTeam', label: 'Team leave' },
+  { id: 'leaveHolidays', label: 'Holidays' },
+  { id: 'attendance', label: 'Attendance' },
+  { id: 'companyTime', label: 'Timesheet' },
+  { id: 'companyPerformance', label: 'Performance' },
+  { id: 'companyPayroll', label: 'Payroll' },
+  { id: 'apps', label: 'App access' },
 ]
+
+function activeCompanyShellTab({ space, sub, leaveTab, showLeave }) {
+  return (
+    COMPANY_SHELL_SUB_TABS.find((item) => {
+      if (item.id === 'leaveTeam') return Boolean(showLeave && leaveTab === 'team')
+      if (item.id === 'leaveHolidays') return Boolean(showLeave && leaveTab === 'holidays')
+      if (space !== 'organization') return false
+      if (item.id === 'onboarding') return sub === 'onboarding'
+      if (item.id === 'people') return sub === 'people'
+      if (item.id === 'companyFiles') return sub === 'files'
+      if (item.id === 'attendance') return sub === 'attendance'
+      if (item.id === 'companyTime') return sub === 'time'
+      if (item.id === 'companyPerformance') return sub === 'performance'
+      if (item.id === 'companyPayroll') return sub === 'payroll'
+      if (item.id === 'apps') return sub === 'apps'
+      return false
+    }) || null
+  )
+}
 
 const SAMPLE_APPROVALS = [
   { key: '1', type: 'Leave', subject: 'Casual leave · 21 Aug', from: 'Asha Mehta', status: 'Pending', due: 'Today' },
@@ -116,9 +137,10 @@ const SAMPLE_TIMESHEET_ROWS = [
 ]
 
 const SAMPLE_LEAVE_BALANCES = [
-  { name: 'Casual', used: 0, total: 12, color: '#1A5F4A' },
-  { name: 'Sick', used: 0, total: 12, color: '#2563eb' },
+  { name: 'Casual', used: 0, total: 18, remaining: 18, color: '#556B2F' },
 ]
+
+const COMPANY_LEAVE_TOTAL = 18
 
 function prettyName(raw) {
   const value = String(raw || '').trim()
@@ -131,6 +153,7 @@ function prettyName(raw) {
 }
 
 function displayName(user) {
+  if (!user) return ''
   return prettyName(
     user?.name?.trim() ||
       [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
@@ -189,7 +212,7 @@ function headerCheckInMode(checkedInAt, elapsed) {
   return 'idle'
 }
 
-function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen }) {
+function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, onCheckIn, checkBusy }) {
   const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
 
   useEffect(() => {
@@ -209,21 +232,36 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen }
 
   const mode = headerCheckInMode(checkedInAt, elapsed)
   const stamp = formatElapsed(elapsed)
+  const idle = mode === 'idle'
   const label =
     mode === 'live'
       ? `On the clock, ${stamp}`
       : mode === 'paused'
         ? `Paused, ${stamp}`
-        : `Check-in, ${stamp}`
+        : 'Check-in'
   return (
     <button
       type="button"
       className={`pulse-head-timer is-${mode}`}
-      onClick={onOpen}
+      onClick={() => {
+        if (idle && typeof onCheckIn === 'function') {
+          onCheckIn()
+          return
+        }
+        onOpen?.()
+      }}
+      disabled={Boolean(checkBusy)}
       aria-label={label}
       title={label}
     >
-      {mode === 'live' ? <span className="pulse-head-timer-dot" aria-hidden="true" /> : null}
+      <span className="pulse-head-timer-mark" aria-hidden="true">
+        <ClockCircleOutlined className="pulse-head-timer-ico" />
+      </span>
+      {idle ? (
+        <span className="pulse-head-timer-cta">Check-in</span>
+      ) : (
+        <span className="pulse-head-timer-label">{mode === 'paused' ? 'Paused' : 'Today'}</span>
+      )}
       <span className="pulse-head-timer-time" aria-live={mode === 'live' ? 'polite' : 'off'}>
         {stamp}
       </span>
@@ -235,12 +273,53 @@ function presenceName(row) {
   return row?.name || String(row?.email || '').split('@')[0] || 'Employee'
 }
 
-function HeaderTeamPresence({ enabled }) {
+function presenceRowKey(row) {
+  return String(row?.email || row?.id || '').toLowerCase()
+}
+
+/** Instant header counts while the check-in API sync (~1.4s) is still in flight. */
+function applySelfPresence(board, selfEmail, status) {
+  const email = String(selfEmail || '').toLowerCase()
+  if (!email || (status !== 'active' && status !== 'stopped')) return board
+
+  const active = Array.isArray(board.active) ? board.active : []
+  const inactive = Array.isArray(board.inactive) ? board.inactive : []
+  const fromActive = active.find((row) => presenceRowKey(row) === email)
+  const fromInactive = inactive.find((row) => presenceRowKey(row) === email)
+  const self = fromActive || fromInactive
+  if (!self) return board
+
+  if (status === 'active') {
+    if (fromActive) return board
+    const nextActive = [...active, self].sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+    const nextInactive = inactive.filter((row) => presenceRowKey(row) !== email)
+    return {
+      active: nextActive,
+      inactive: nextInactive,
+      activeCount: nextActive.length,
+      inactiveCount: nextInactive.length,
+    }
+  }
+
+  if (fromInactive) return board
+  const nextInactive = [...inactive, self].sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+  const nextActive = active.filter((row) => presenceRowKey(row) !== email)
+  return {
+    active: nextActive,
+    inactive: nextInactive,
+    activeCount: nextActive.length,
+    inactiveCount: nextInactive.length,
+  }
+}
+
+function HeaderTeamPresence({ enabled, selfEmail }) {
   const [board, setBoard] = useState({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
 
   useEffect(() => {
     if (!enabled) return undefined
     let live = true
+    let syncRefreshTimer = 0
+
     const load = () => {
       api
         .get('/pulse-checkin/admin/presence')
@@ -259,13 +338,40 @@ function HeaderTeamPresence({ enabled }) {
           setBoard({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
         })
     }
+
     load()
     const timer = window.setInterval(load, 30_000)
+
+    const onCheckInChange = (event) => {
+      const email = String(event?.detail?.email || '').toLowerCase()
+      const status = event?.detail?.status
+      const self = String(selfEmail || '').toLowerCase()
+      if (self && email === self) {
+        setBoard((prev) => applySelfPresence(prev, self, status))
+      }
+      // Remote sync is debounced ~1.4s — confirm from server after it lands.
+      if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
+      syncRefreshTimer = window.setTimeout(() => {
+        syncRefreshTimer = 0
+        load()
+      }, 1800)
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+
+    window.addEventListener(PULSE_CHECKIN_EVENT, onCheckInChange)
+    document.addEventListener('visibilitychange', onVisible)
+
     return () => {
       live = false
       window.clearInterval(timer)
+      if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
+      window.removeEventListener(PULSE_CHECKIN_EVENT, onCheckInChange)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [enabled])
+  }, [enabled, selfEmail])
 
   if (!enabled) return null
 
@@ -341,8 +447,6 @@ function HeaderTeamPresence({ enabled }) {
 export default function PeopleHome() {
   const navigate = useNavigate()
   const location = useLocation()
-  const navigationType = useNavigationType()
-  const { notification, message } = App.useApp()
   const { user, loading } = useAuth()
   const [start] = useState(() => readPulseLocation(window.location.pathname, window.location.search))
   const [bootView] = useState(() => (start.boot ? start : null))
@@ -359,28 +463,30 @@ export default function PeopleHome() {
   )
   const [leaveSubTab, setLeaveSubTab] = useState('requests')
   const [moreOpen, setMoreOpen] = useState(false)
-  const [moreQuery, setMoreQuery] = useState('')
   const [checkedInAt, setCheckedInAt] = useState(null)
   const [elapsed, setElapsed] = useState(0)
   const [checkBusy, setCheckBusy] = useState(false)
-  const [showWelcome, setShowWelcome] = useState(false)
-  const [intro, setIntro] = useState(bootView ? 'ready' : 'pending')
+  // Single gate so shell chrome never mounts between loader and welcome.
+  // 'boot' → waiting session | 'logo' → full-page loader | 'welcome' → curtain only | 'app' → shell
+  const [entryPhase, setEntryPhase] = useState(() => {
+    if (bootView) return 'app'
+    if (isPulseServicePath(window.location.pathname)) return 'app'
+    // After login the user is already in context — decide before first paint.
+    if (!loading && user?.email && hasPulseAccount(user)) {
+      return hasSeenWelcomeCurtain(user.email) ? 'app' : 'logo'
+    }
+    return 'boot'
+  })
   const [appsOpen, setAppsOpen] = useState(false)
   const [assignedApps, setAssignedApps] = useState([])
   const appsBtnRef = useRef(null)
-  const routeHistRef = useRef({
-    entries: [toAppPath(String(start.path || location.pathname || '').replace(/\/+$/, '') || '/')],
-    index: 0,
-    lock: false,
-  })
-  const [routeNav, setRouteNav] = useState({ canBack: false, canForward: false })
   const { signingOut, signOutLogo, beginSignOut } = useAccountSignOut({
     onClosePanel: () => setAppsOpen(false),
   })
   const isPulseAdmin = userIsPulseAdmin(user)
 
   const name = displayName(user)
-  const initial = (name || 'S').charAt(0).toUpperCase()
+  const initial = (name.charAt(0) || (user ? 'S' : '')).toUpperCase()
   const sample = getPulseSampleChoice() === '1'
   const hour = new Date().getHours()
   const todaySeconds = Math.max(0, Math.floor(Number(elapsed) || 0))
@@ -409,7 +515,22 @@ export default function PeopleHome() {
   const timesheetRows = sample ? SAMPLE_TIMESHEET_ROWS : liveTimesheetRows
   const leaveBalances = sample ? SAMPLE_LEAVE_BALANCES : workWeek.leaveBalances
   const weekHours = Math.round(weekDays.reduce((sum, day) => sum + (Number(day.hours) || 0), 0) * 100) / 100
-  const leaveLeft = leaveBalances.reduce((sum, row) => sum + Math.max(0, row.total - row.used), 0)
+  const casualBalance = Array.isArray(leaveBalances)
+    ? leaveBalances.find((row) => row.name === 'Casual')
+    : null
+  const leaveTaken = Math.max(
+    0,
+    Math.min(
+      COMPANY_LEAVE_TOTAL,
+      casualBalance
+        ? Number(casualBalance.used) || 0
+        : (Array.isArray(leaveBalances) ? leaveBalances : []).reduce(
+            (sum, row) => sum + Math.max(0, Number(row.used) || 0),
+            0,
+          ),
+    ),
+  )
+  const leaveLeft = Math.max(0, COMPANY_LEAVE_TOTAL - leaveTaken)
   const monthPresent = sample ? 18 : (workWeek.month ? Number(workWeek.month.present) || 0 : weekDays.filter((day) => day.present && !day.weekend).length)
   const monthAbsent = sample ? 1 : (workWeek.month ? Number(workWeek.month.absent) || 0 : weekDays.filter((day) => day.status === 'Absent').length)
   const mtdDays = monthPresent + monthAbsent
@@ -457,24 +578,29 @@ export default function PeopleHome() {
     return () => window.clearTimeout(timer)
   }, [serviceGate, serviceGateTick, loading, user])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (loading || !user?.email) return
     if (!hasPulseAccount(user)) return
-    if (skipWelcome || hasSeenWelcomeCurtain(user.email)) {
-      setIntro('ready')
+
+    // Already past welcome (or boot/service open) — never reopen the gate.
+    if (entryPhase === 'app' || entryPhase === 'welcome') {
+      if (skipWelcome && entryPhase === 'welcome') setEntryPhase('app')
       return
     }
-    setIntro((prev) => (prev === 'ready' ? prev : 'logo'))
-  }, [user, loading, skipWelcome])
+
+    if (skipWelcome || hasSeenWelcomeCurtain(user.email)) {
+      setEntryPhase('app')
+      return
+    }
+
+    setEntryPhase('logo')
+  }, [user, loading, skipWelcome, entryPhase])
 
   useEffect(() => {
-    if (intro !== 'logo') return undefined
-    const timer = window.setTimeout(() => {
-      setShowWelcome(true)
-      setIntro('ready')
-    }, 1100)
+    if (entryPhase !== 'logo') return undefined
+    const timer = window.setTimeout(() => setEntryPhase('welcome'), 700)
     return () => window.clearTimeout(timer)
-  }, [intro])
+  }, [entryPhase])
 
   useEffect(() => {
     if (loading) return
@@ -493,62 +619,6 @@ export default function PeopleHome() {
     else if (next.leaveTab && next.leaveTab !== 'attendance') setLeaveTab(next.leaveTab)
     if (next.leaveSubTab) setLeaveSubTab(next.leaveSubTab)
   }, [location.pathname])
-
-  useEffect(() => {
-    const key = toAppPath(String(location.pathname || '').replace(/\/+$/, '') || '/')
-    const hist = routeHistRef.current
-    if (hist.lock) {
-      hist.lock = false
-    } else if (hist.entries[hist.index] !== key) {
-      if (navigationType === 'POP') {
-        if (hist.index > 0 && hist.entries[hist.index - 1] === key) hist.index -= 1
-        else if (hist.index < hist.entries.length - 1 && hist.entries[hist.index + 1] === key) hist.index += 1
-        else {
-          const found = hist.entries.lastIndexOf(key)
-          if (found >= 0) hist.index = found
-          else {
-            hist.entries = hist.entries.slice(0, hist.index + 1)
-            hist.entries.push(key)
-            hist.index = hist.entries.length - 1
-          }
-        }
-      } else if (navigationType === 'REPLACE') {
-        hist.entries[hist.index] = key
-      } else {
-        hist.entries = hist.entries.slice(0, hist.index + 1)
-        hist.entries.push(key)
-        hist.index = hist.entries.length - 1
-      }
-    }
-    setRouteNav({
-      canBack: hist.index > 0,
-      canForward: hist.index < hist.entries.length - 1,
-    })
-  }, [location.pathname, location.search, navigationType])
-
-  const goRouteBack = () => {
-    const hist = routeHistRef.current
-    if (hist.index <= 0) return
-    hist.lock = true
-    hist.index -= 1
-    setRouteNav({
-      canBack: hist.index > 0,
-      canForward: hist.index < hist.entries.length - 1,
-    })
-    navigate(hist.entries[hist.index])
-  }
-
-  const goRouteForward = () => {
-    const hist = routeHistRef.current
-    if (hist.index >= hist.entries.length - 1) return
-    hist.lock = true
-    hist.index += 1
-    setRouteNav({
-      canBack: hist.index > 0,
-      canForward: hist.index < hist.entries.length - 1,
-    })
-    navigate(hist.entries[hist.index])
-  }
 
   useEffect(() => {
     if (loading || !user) return
@@ -613,11 +683,7 @@ export default function PeopleHome() {
       setCheckedInAt((prev) => (prev === nextAt ? prev : nextAt))
       setElapsed((prev) => (prev === nextElapsed ? prev : nextElapsed))
       if (event?.detail?.interrupted) {
-        message.info({
-          content: 'Timer paused while your system was asleep or off',
-          className: 'pulse-message',
-          duration: 2.5,
-        })
+        pulseToast.info('Timer paused', 'Your system was asleep or off', { duration: 2500 })
       }
     }
     window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
@@ -625,7 +691,7 @@ export default function PeopleHome() {
       live = false
       window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
     }
-  }, [user?.email, message])
+  }, [user?.email])
 
   useEffect(() => {
     if (!user?.email) return undefined
@@ -651,11 +717,7 @@ export default function PeopleHome() {
         setCheckedInAt(null)
         const secs = Math.floor((session?.activeMs || getElapsedSeconds(user.email) || 0) / 1000)
         setElapsed(secs)
-        message.success({
-          content: `Checked out · ${formatElapsed(secs)}`,
-          className: 'pulse-message',
-          duration: 2,
-        })
+        pulseToast.success('Checked out', formatElapsed(secs), { duration: 2000 })
       } else {
         closeCheckInPip()
         // Resume from server day total so timer matches calendar (e.g. 3h 45m), not 00:00.
@@ -670,13 +732,11 @@ export default function PeopleHome() {
         setCheckedInAt(session?.checkedInAt || Date.now())
         const secs = getElapsedSeconds(user.email)
         setElapsed(secs)
-        message.success({
-          content: resuming
-            ? `Checked in again · ${formatElapsed(secs)}`
-            : `Checked in · ${format(new Date(), 'h:mm a')}`,
-          className: 'pulse-message',
-          duration: 2,
-        })
+        pulseToast.success(
+          resuming ? 'Checked in again' : 'Checked in',
+          resuming ? formatElapsed(secs) : format(new Date(), 'h:mm a'),
+          { duration: 2000 },
+        )
       }
     } finally {
       // Release quickly so the next CTA is not blocked
@@ -685,40 +745,36 @@ export default function PeopleHome() {
   }
 
   const soon = (label) =>
-    message.info({
-      content: `${label} is coming soon`,
-      className: 'pulse-message',
-      duration: 2.5,
-    })
+    pulseToast.info(label, 'Coming soon', { duration: 2500 })
 
   const openNotesBoard = () => {
     window.open(`${window.location.origin}${APP_NOTES}`, '_blank', 'noopener,noreferrer')
   }
 
-  const moreItems = useMemo(() => {
-    const q = moreQuery.trim().toLowerCase()
-    if (!q) return MORE_SERVICES
-    return MORE_SERVICES.filter((item) => item.name.toLowerCase().includes(q))
-  }, [moreQuery])
-
   if (signOutLogo) {
     return <AuthLogoLoader show label="Signing out" />
   }
 
-  // Block only while session is unknown. Service open (`?boot=1`) overlays the
-  // gate so Company Attendance/Timesheet can mount and fetch during the beat.
-  if (loading || !user || !hasPulseAccount(user)) {
+  const sessionReady = Boolean(user && hasPulseAccount(user) && !loading)
+  // Boot/service navigations still use the in-pane gate on the real shell.
+  const paneGate = Boolean(serviceGate)
+  const showShellContent = true
+
+  // Full-page loader until session is ready or while holding before welcome.
+  if (!sessionReady || entryPhase === 'boot' || entryPhase === 'logo') {
     return (
       <AuthLogoLoader
         show
-        label={bootView?.label || 'Opening BDA OS'}
+        label={
+          entryPhase === 'logo' || entryPhase === 'boot'
+            ? 'Welcome'
+            : (serviceGateLabel || bootView?.label || 'Opening BDA OS')
+        }
       />
     )
   }
 
-  if (!skipWelcome && !hasSeenWelcomeCurtain(user.email) && (intro === 'pending' || intro === 'logo')) {
-    return <AuthLogoLoader show label="Opening BDA OS" />
-  }
+  const showWelcomeCurtain = entryPhase === 'welcome'
 
   const showOverview = space === 'myspace' && module === 'home' && sub === 'overview'
   // Dashboard — parked on `pulse/company-later-services`
@@ -740,6 +796,18 @@ export default function PeopleHome() {
   const showOrgPeople = space === 'organization' && sub === 'people'
   const showOrgFiles = space === 'organization' && sub === 'files'
   const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgPayroll || showOrgApps || showOrgPeople || showOrgFiles
+  const showCompanyLeaveShell = showLeave && (leaveTab === 'team' || leaveTab === 'holidays')
+  const showCompanyShell =
+    isPulseAdmin &&
+    (showOnboarding ||
+      showOrgPeople ||
+      showOrgFiles ||
+      showOrgTime ||
+      showOrgAttendance ||
+      showOrgPerformance ||
+      showOrgPayroll ||
+      showOrgApps ||
+      showCompanyLeaveShell)
   const liveKind = space === 'myspace' && ({
     onboarding: 'onboarding',
     files: 'files',
@@ -756,13 +824,16 @@ export default function PeopleHome() {
   const liveProps = {
     name,
     initial,
+    email: user?.email,
     weekDays,
     checkedInAt,
     elapsed,
     checkBusy,
     onCheckIn,
     weekHours,
-    leaveLeft: sample ? 14 : leaveLeft,
+    leaveLeft: sample ? COMPANY_LEAVE_TOTAL : leaveLeft,
+    leaveTaken: sample ? 0 : leaveTaken,
+    leaveTotal: COMPANY_LEAVE_TOTAL,
     mtdPct: sample ? 96 : mtdPct,
     timesheetRows,
     sample,
@@ -777,13 +848,6 @@ export default function PeopleHome() {
 
   const selectRail = (key) => {
     setMoreOpen(false)
-    if (key === 'onboarding') {
-      openWithLogo(
-        { space: 'organization', module: 'home', sub: 'onboarding' },
-        PULSE_SHELL_VIEWS.onboarding.label,
-      )
-      return
-    }
     if (key === 'leave') {
       openWithLogo(
         { space: 'myspace', module: 'leave', sub: 'overview', leaveTab: 'mydata', leaveSubTab: 'requests' },
@@ -814,6 +878,15 @@ export default function PeopleHome() {
       },
       view.label || `Opening ${key}`,
     )
+  }
+
+  const openMoreItem = (item) => {
+    setMoreOpen(false)
+    if (item.kind === 'company') {
+      openCompanyService(item.id)
+      return
+    }
+    goShell({ space: 'myspace', module: item.id, sub: 'overview' })
   }
 
   const openDashTarget = (target) => {
@@ -861,15 +934,12 @@ export default function PeopleHome() {
   )
 
   const railItems = [
-    ...RAIL_TOP.filter((item) => isPulseAdmin || item.key !== 'onboarding').map((item) => {
+    ...RAIL_TOP.map((item) => {
       const Icon = item.Icon
-      const onboardingOn = item.key === 'onboarding' && space === 'organization' && sub === 'onboarding'
       const leaveHubOn = (module === 'leave' || module === 'attendance') && space === 'myspace' && !moreOpen
-      const active = onboardingOn
-        ? !moreOpen
-        : item.key === 'leave'
-          ? leaveHubOn
-          : module === item.key && space === 'myspace' && !moreOpen
+      const active = item.key === 'leave'
+        ? leaveHubOn
+        : module === item.key && space === 'myspace' && !moreOpen
       return {
         key: item.key,
         title: item.label,
@@ -878,6 +948,15 @@ export default function PeopleHome() {
         onClick: () => selectRail(item.key),
       }
     }),
+    ...(isPulseAdmin
+      ? [{
+          key: 'more',
+          title: 'More',
+          icon: <AppstoreOutlined />,
+          active: moreOpen || space === 'organization',
+          onClick: () => setMoreOpen((open) => !open),
+        }]
+      : []),
   ]
 
   const approvalCols = [
@@ -894,217 +973,115 @@ export default function PeopleHome() {
   ]
 
   return (
+    <>
     <AntLayout className={`pulse-shell pulse-id${showOnboarding ? ' is-onboarding' : ''}`}>
       <AuthLogoLoader show={signOutLogo} label="Signing out" />
-      <AuthLogoLoader show={serviceGate} label={serviceGateLabel || bootView?.label || 'Opening BDA OS'} />
       <AntLayout className="pulse-chrome">
       <Header className="pulse-top">
-        {showOnboarding ? (
-          <button type="button" className="pulse-space is-on">
-            Employee
-          </button>
-        ) : showAccount ? (
-          <button type="button" className="pulse-space is-on">
-            Account
-          </button>
-        ) : showOrgAttendance ? (
-          <button type="button" className="pulse-space is-on">
-            Attendance
-          </button>
-        ) : showOrgPerformance ? (
-          <button type="button" className="pulse-space is-on">
-            Performance
-          </button>
-        ) : showOrgPayroll ? (
-          <button type="button" className="pulse-space is-on">
-            Payroll
-          </button>
-        ) : showOrgFiles ? (
-          <button type="button" className="pulse-space is-on">
-            Files
-          </button>
-        ) : showOrgApps ? (
-          <button type="button" className="pulse-space is-on">
-            App access
-          </button>
-        ) : showTimesheet || showOrgTime ? (
-          <button type="button" className="pulse-space is-on">
-            Timesheet
-          </button>
-        ) : showPerformance ? (
-          <button type="button" className="pulse-space is-on">
-            Performance
-          </button>
-        ) : showPayroll ? (
-          <button type="button" className="pulse-space is-on">
-            Payroll
-          </button>
-        ) : showLeave || showAttendance ? (
-          LEAVE_TABS.filter((item) => !item.adminOnly || isPulseAdmin).map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`pulse-space${item.key === 'attendance' ? (showAttendance ? ' is-on' : '') : (showLeave && leaveTab === item.key ? ' is-on' : '')}`}
-              onClick={() => {
-                if (item.key === 'attendance') {
-                  goShell({ space: 'myspace', module: 'attendance', sub: 'overview', leaveTab: 'attendance' })
-                  return
-                }
-                goShell({
-                  space: 'myspace',
-                  module: 'leave',
-                  sub: 'overview',
-                  leaveTab: item.key,
-                  leaveSubTab: item.key === 'mydata' ? 'requests' : leaveSubTab,
-                })
-              }}
-            >
-              {item.label}
-            </button>
-          ))
-        ) : (
-          <>
-            <button
-              type="button"
-              className={`pulse-space${space === 'myspace' ? ' is-on' : ''}`}
-              onClick={() => {
-                setMoreOpen(false)
-                goShell({ space: 'myspace', module: 'home', sub: 'overview' })
-              }}
-            >
-              You
-            </button>
-            {isPulseAdmin && (
-              <button
-                type="button"
-                className={`pulse-space${space === 'organization' ? ' is-on' : ''}`}
-                onClick={() => {
-                  setMoreOpen(false)
-                  goShell({ space: 'organization', module: 'home', sub: 'overview' })
-                }}
-              >
-                Company
-              </button>
-            )}
-          </>
-        )}
-        <span className="pulse-top-rule" aria-hidden="true" />
-        <div
-          className={`pulse-route-nav${routeNav.canBack || routeNav.canForward ? ' is-live' : ''}`}
-          role="group"
-          aria-label="Route navigation"
+        <button
+          type="button"
+          className="pulse-head-brand"
+          aria-label="BDA Technologies home"
+          onClick={() => {
+            setMoreOpen(false)
+            goShell({ space: 'myspace', module: 'home', sub: 'overview' })
+          }}
         >
-          <button
-            type="button"
-            className="pulse-route-nav-btn"
-            aria-label="Go back"
-            title="Back"
-            disabled={!routeNav.canBack}
-            onClick={goRouteBack}
-          >
-            <svg className="pulse-route-nav-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path d="M10.25 3.5 5.75 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <span className="pulse-route-nav-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="pulse-route-nav-btn"
-            aria-label="Go forward"
-            title="Forward"
-            disabled={!routeNav.canForward}
-            onClick={goRouteForward}
-          >
-            <svg className="pulse-route-nav-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path d="M5.75 3.5 10.25 8l-4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        <div className="pulse-top-tools">
-          <HeaderAssignedApps apps={assignedApps.slice(0, HEADER_APP_CAP)} user={user} />
-          <HeaderTeamPresence enabled={isPulseAdmin} />
+          <img
+            src="/bda-logo-header.png"
+            alt="BDA Technologies"
+            className="pulse-head-brand-mark"
+            draggable={false}
+          />
+        </button>
+        <div className="pulse-top-live">
+          <HeaderTeamPresence enabled={isPulseAdmin} selfEmail={user?.email} />
           <HeaderCheckInTimer
             elapsed={elapsed}
             checkedInAt={checkedInAt}
             email={user?.email}
+            checkBusy={checkBusy}
+            onCheckIn={onCheckIn}
             onOpen={() => {
               setMoreOpen(false)
               goShell({ space: 'myspace', module: 'home', sub: 'overview' })
             }}
           />
-          <Dropdown
-            trigger={['click']}
-            placement="bottomRight"
-            arrow={false}
-            destroyOnHidden
-            rootClassName="pulse-plus-menu"
-            getPopupContainer={() => document.body}
-            align={{ offset: [0, 10] }}
-            styles={{ root: { zIndex: 10000 } }}
-            menu={{
-              items: [
-                {
-                  key: 'notebook',
-                  icon: <BookOutlined />,
-                  label: 'Notebook',
-                  onClick: openNotesBoard,
-                },
-              ],
-            }}
-          >
-            <Button className="pulse-plus" type="primary" icon={<PlusOutlined />} aria-label="Quick add" />
-          </Dropdown>
-          <PulseHeaderSearch
-            user={user}
-            onOpenView={(view) => {
-              setMoreOpen(false)
-              goShell({
-                space: view.space,
-                module: view.module,
-                sub: view.sub,
-                leaveTab: view.leaveTab,
-                leaveSubTab: view.leaveSubTab,
-              })
-            }}
-            onOpenModule={(moduleId) => {
-              setMoreOpen(false)
-              goShell({ space: 'myspace', module: moduleId, sub: 'overview' })
-            }}
-          />
-          <PulseHeaderNotifications
-            approvals={approvals}
-            onOpenLeave={() => {
-              setMoreOpen(false)
-              goShell({
-                space: 'myspace',
-                module: 'leave',
-                sub: 'overview',
-                leaveTab: 'mydata',
-                leaveSubTab: 'requests',
-              })
-            }}
-          />
-          <PulseAppearanceToggle />
-          <button
-            type="button"
-            className="pulse-avatar-btn"
-            aria-label="Assigned apps"
-            onClick={() => setAppsOpen(true)}
-          >
-            {user?.avatarUrl ? (
-              <Avatar className="pulse-avatar" size={30} src={user.avatarUrl} referrerPolicy="no-referrer" />
-            ) : (
-              <Avatar className="pulse-avatar" size={30}>{initial}</Avatar>
-            )}
-          </button>
-          <Button
-            type="text"
-            ref={appsBtnRef}
-            icon={<AppstoreOutlined />}
-            aria-label="Open assigned apps"
-            aria-expanded={appsOpen}
-            onClick={() => setAppsOpen(true)}
-          />
+        </div>
+        <div className="pulse-top-tools">
+          <HeaderAssignedApps apps={assignedApps.slice(0, HEADER_APP_CAP)} user={user} />
+          <div className="pulse-top-actions">
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              arrow={false}
+              destroyOnHidden
+              rootClassName="pulse-plus-menu"
+              getPopupContainer={() => document.body}
+              align={{ offset: [0, 10] }}
+              styles={{ root: { zIndex: 10000 } }}
+              menu={{
+                items: [
+                  {
+                    key: 'notebook',
+                    icon: <BookOutlined />,
+                    label: 'Notebook',
+                    onClick: openNotesBoard,
+                  },
+                ],
+              }}
+            >
+              <Button className="pulse-plus" type="primary" icon={<PlusOutlined />} aria-label="Quick add" />
+            </Dropdown>
+            <PulseHeaderSearch
+              user={user}
+              onOpenView={(view) => {
+                setMoreOpen(false)
+                goShell({
+                  space: view.space,
+                  module: view.module,
+                  sub: view.sub,
+                  leaveTab: view.leaveTab,
+                  leaveSubTab: view.leaveSubTab,
+                })
+              }}
+              onOpenModule={(moduleId) => {
+                setMoreOpen(false)
+                goShell({ space: 'myspace', module: moduleId, sub: 'overview' })
+              }}
+            />
+            <PulseHeaderNotifications
+              approvals={approvals}
+              onOpenLeave={() => {
+                setMoreOpen(false)
+                goShell({
+                  space: 'myspace',
+                  module: 'leave',
+                  sub: 'overview',
+                  leaveTab: 'mydata',
+                  leaveSubTab: 'requests',
+                })
+              }}
+            />
+            <PulseAppearanceToggle />
+            <button
+              type="button"
+              ref={appsBtnRef}
+              className="pulse-avatar-btn"
+              aria-label="Account and apps"
+              aria-expanded={appsOpen}
+              onClick={() => setAppsOpen(true)}
+            >
+              <PulseUserAvatar
+                className="pulse-avatar"
+                size={32}
+                src={user?.avatarUrl}
+                alt={name}
+              >
+                {initial}
+              </PulseUserAvatar>
+            </button>
+          </div>
         </div>
       </Header>
       <AppsFlyout
@@ -1117,11 +1094,57 @@ export default function PeopleHome() {
       />
 
       <AntLayout className="pulse-mid">
-        <AntLayout className="pulse-maincol">
-          {!showAccount && !showOnboarding && !showAttendance && !showTimesheet && !showPerformance && !showPayroll && !showOrgTime && !showOrgAttendance && !showOrgPerformance && !showOrgPayroll && !showOrgApps && !showOrgFiles ? (
-          <div className={`pulse-sub${showOverview || showOrgOverview || showOrgPeople || showCalendar || showLeave || showAttendance ? ' pulse-sub-overview' : ''}`} role="tablist" aria-label={showLeave ? 'Leave Tracker sections' : space === 'organization' ? 'Company sections' : 'You sections'}>
+        <AntLayout className={`pulse-maincol${paneGate ? ' is-gate-host' : ''}`}>
+          <AuthLogoLoader
+            show={paneGate}
+            variant="pane"
+            label={serviceGateLabel || bootView?.label || 'Opening BDA OS'}
+          />
+          {!(showAccount || showTimesheet || showPerformance || showPayroll) ? (
+          <div
+            className={`pulse-sub${
+              showOverview ||
+              showOrgOverview ||
+              showCompanyShell ||
+              showCalendar ||
+              showLeave ||
+              showAttendance
+                ? ' pulse-sub-overview'
+                : ''
+            }`}
+            role="tablist"
+            aria-label={
+              showCompanyShell
+                ? 'Company sections'
+                : showLeave || showAttendance
+                  ? 'Leave & Attendance sections'
+                  : space === 'organization'
+                    ? 'Company sections'
+                    : 'You sections'
+            }
+          >
             <div className="pulse-sub-tabs">
-              {space === 'organization'
+              {showCompanyShell
+                ? (() => {
+                    const active = activeCompanyShellTab({
+                      space,
+                      sub,
+                      leaveTab,
+                      showLeave,
+                    })
+                    if (!active) return null
+                    return (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected
+                        className="pulse-sub-tab is-on"
+                      >
+                        {active.label}
+                      </button>
+                    )
+                  })()
+                : space === 'organization'
                 ? ORG_TABS.filter((item) => item.key !== 'onboarding').map((item) => (
                     <button
                       key={item.key}
@@ -1133,26 +1156,39 @@ export default function PeopleHome() {
                       {item.label}
                     </button>
                   ))
-                : showLeave && leaveTab === 'mydata'
-                ? LEAVE_MY_DATA_TABS.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      role="tab"
-                      className={`pulse-sub-tab${leaveSubTab === item.key ? ' is-on' : ''}`}
-                      onClick={() => setLeaveSubTab(item.key)}
-                    >
-                      {item.label}
-                    </button>
-                  ))
-                : showLeave && leaveTab === 'team'
-                ? (
-                    <button type="button" className="pulse-sub-tab is-on">Company leave</button>
-                  )
-                : showLeave && leaveTab === 'holidays'
-                ? (
-                    <button type="button" className="pulse-sub-tab is-on">Company holidays</button>
-                  )
+                : showLeave || showAttendance
+                ? LEAVE_SHELL_SUB_TABS.map((item) => {
+                    const isLeave = item.key === 'leave'
+                    const isOn = isLeave ? showLeave : showAttendance
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="tab"
+                        className={`pulse-sub-tab${isOn ? ' is-on' : ''}`}
+                        onClick={() => {
+                          if (isLeave) {
+                            goShell({
+                              space: 'myspace',
+                              module: 'leave',
+                              sub: 'overview',
+                              leaveTab: 'mydata',
+                              leaveSubTab: 'requests',
+                            })
+                            return
+                          }
+                          goShell({
+                            space: 'myspace',
+                            module: 'attendance',
+                            sub: 'overview',
+                            leaveTab: 'attendance',
+                          })
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  })
                 : space === 'myspace' && module === 'home'
                 ? SUB_TABS.map((item) => (
                     <button
@@ -1175,70 +1211,57 @@ export default function PeopleHome() {
           </div>
           ) : null}
 
-          <Content className={`pulse-body${showOverview || showCalendar || showLeave || showAttendance || showAccount || showTimesheet || showPerformance || showPayroll || showOrgSurface ? ' pulse-body-surface' : ''}${liveKind || (space === 'organization' && !showOrgSurface) ? ' pulse-body-overview' : ''}${showAccount ? ' pulse-body-account' : ''}${space === 'organization' ? ' pulse-body-org' : ''}`}>
+          <Content className={`pulse-body${showOverview ? ' pulse-body-surface' : ''}${liveKind || (space === 'organization' && !showOrgSurface) ? ' pulse-body-overview' : ''}${showAccount ? ' pulse-body-account' : ''}${space === 'organization' ? ' pulse-body-org' : ''}`}>
+            {showShellContent ? (
+            <>
             {showAccount ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <AccountPortal embedded />
-                </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <AccountPortal embedded />
               </div>
             ) : space === 'organization' && isPulseAdmin ? (
-              showOrgSurface ? orgBoard : (
+              showOrgOverview ? (
+                orgBoard
+              ) : showOrgSurface ? (
+                <div className="pulse-scroll pulse-scroll-plain">
+                  {orgBoard}
+                </div>
+              ) : (
                 <div className="pulse-scroll pulse-scroll-live">
                   {orgBoard}
                 </div>
               )
             ) : showCalendar ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <div className="pulse-cal-page">
-                    <PulseMySpaceCalendar sample={sample} weekDays={weekDays} checkedInAt={checkedInAt} />
-                  </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <div className="pulse-cal-page">
+                  <PulseMySpaceCalendar sample={sample} weekDays={weekDays} checkedInAt={checkedInAt} />
                 </div>
               </div>
             ) : showLeave ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <PulseLeaveTracker
-                    sample={sample}
-                    isAdmin={isPulseAdmin}
-                    mainTab={leaveTab}
-                    myTab={leaveSubTab}
-                    onMyTabChange={setLeaveSubTab}
-                    casualBalance={leaveBalances.find((row) => row.name === 'Casual')}
-                  />
-                </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <PulseLeaveTracker
+                  sample={sample}
+                  isAdmin={isPulseAdmin}
+                  mainTab={leaveTab}
+                  myTab={leaveSubTab}
+                  onMyTabChange={setLeaveSubTab}
+                  casualBalance={casualBalance || leaveBalances.find((row) => row.name === 'Casual')}
+                />
               </div>
             ) : showAttendance ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <PulseLiveModule kind="attendance" scope="me" {...liveProps} />
-                </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <PulseLiveModule kind="attendance" scope="me" {...liveProps} />
               </div>
             ) : showTimesheet ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <PulseLiveModule kind="time" scope="me" {...liveProps} />
-                </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <PulseLiveModule kind="time" scope="me" {...liveProps} />
               </div>
             ) : showPerformance ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <PulseLiveModule kind="performance" scope="me" {...liveProps} />
-                </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <PulseLiveModule kind="performance" scope="me" {...liveProps} />
               </div>
             ) : showPayroll ? (
-              <div className="pulse-strip-root">
-                <PulseStripBackdrop />
-                <div className={`pulse-scroll pulse-scroll-surface pulse-ov-open is-${periodForHour(hour)}`} data-period={periodForHour(hour)}>
-                  <PulseLiveModule kind="payroll" scope="me" {...liveProps} />
-                </div>
+              <div className="pulse-scroll pulse-scroll-plain">
+                <PulseLiveModule kind="payroll" scope="me" {...liveProps} />
               </div>
             ) : liveKind ? (
               <div className="pulse-scroll pulse-scroll-live">
@@ -1266,6 +1289,8 @@ export default function PeopleHome() {
                 onSoon={soon}
               />
             )}
+            </>
+            ) : null}
           </Content>
         </AntLayout>
 
@@ -1296,51 +1321,26 @@ export default function PeopleHome() {
         )}
       </AntLayout>
 
-      <Drawer
-        title="More services"
-        placement="left"
+      <PulseMoreLauncher
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
-        extra={<Button type="link" onClick={() => soon('Preferences')}>Preferences</Button>}
-      >
-        <Input
-          allowClear
-          prefix={<SearchOutlined />}
-          placeholder="Search services"
-          value={moreQuery}
-          onChange={(e) => setMoreQuery(e.target.value)}
-          style={{ marginBottom: 16 }}
-        />
-        <List
-          dataSource={moreItems}
-          locale={{ emptyText: 'No matching services' }}
-          renderItem={(item) => {
-            const Icon = item.Icon
-            return (
-              <List.Item
-                style={{ cursor: 'pointer' }}
-                onClick={() => {
-                  setMoreOpen(false)
-                  goShell({ space: 'myspace', module: item.id, sub: 'overview' })
-                }}
-              >
-                <List.Item.Meta avatar={<Avatar style={{ background: '#1A5F4A' }} icon={<Icon />} />} title={item.name} />
-              </List.Item>
-            )
-          }}
-        />
-      </Drawer>
+        showCompany={isPulseAdmin}
+        onSelect={openMoreItem}
+      />
       <PulseSmartChat />
-      {showWelcome && !skipWelcome ? (
-        <PulseWelcomeCurtain
-          name={name}
-          email={user.email}
-          hour={hour}
-          onDone={() => setShowWelcome(false)}
-        />
-      ) : null}
       </AntLayout>
-      <PulseFloatingDock items={railItems} />
+      <PulseFloatingDock
+        items={railItems}
+      />
     </AntLayout>
+    {showWelcomeCurtain ? (
+      <PulseWelcomeCurtain
+        name={name}
+        email={user.email}
+        hour={hour}
+        onDone={() => setEntryPhase('app')}
+      />
+    ) : null}
+    </>
   )
 }

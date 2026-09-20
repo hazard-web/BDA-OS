@@ -6,7 +6,7 @@
   place-items: center;
   padding: 24px;
   font-family: Figtree, system-ui, sans-serif;
-  color: #142019;
+  color: #183B35;
   background:
     radial-gradient(ellipse 90% 70% at 0% 0%, #e4efe0 0%, transparent 55%),
     radial-gradient(ellipse 70% 50% at 100% 100%, #c5d4b8 0%, transparent 50%),
@@ -30,7 +30,16 @@
   font-weight: 750;
   letter-spacing: -0.03em;
   line-height: 1.2;
-  color: #142019;
+  color: #183B35;
+}
+
+.pulse-crash-detail {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(24, 59, 53, 0.62);
+  word-break: break-word;
 }
 
 .pulse-crash-actions {
@@ -57,12 +66,12 @@
 
 .pulse-crash-retry {
   border: 0;
-  background: #1a5f4a;
+  background: var(--pulse-primary);
   color: #fff;
 }
 
 .pulse-crash-retry:hover {
-  background: #164f3e;
+  background: var(--pulse-primary-hover);
 }
 
 .pulse-crash-reload {
@@ -74,7 +83,7 @@
 .pulse-crash-reload:hover,
 .pulse-crash-reload:focus-visible {
   border-color: #d9d9d9;
-  background: rgba(20, 32, 25, 0.06);
+  background: rgba(24, 59, 53, 0.06);
 }
 
 :root[data-theme='dark'] .pulse-crash {

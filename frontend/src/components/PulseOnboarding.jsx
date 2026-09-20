@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import {
   App,
   Button,
@@ -20,7 +19,6 @@ import {
 import {
   DeleteOutlined,
   FileDoneOutlined,
-  CloseOutlined,
   FilterOutlined,
   MoreOutlined,
   PlusOutlined,
@@ -36,6 +34,8 @@ import PulseCandidateForm, {
   payloadFromValues,
   valuesFromCandidate,
 } from './PulseCandidateForm'
+import { personName } from '../utils/pulsePerson'
+import PulseSlideClose from './PulseSlideClose'
 import './pulse-onboarding.css'
 
 const ALL_COLUMNS = [
@@ -95,7 +95,7 @@ function statusTagClass(status) {
 }
 
 function employeeName(row) {
-  return [row?.firstName, row?.lastName].map((part) => String(part || '').trim()).filter(Boolean).join(' ')
+  return personName(row, '')
 }
 
 function matchesDeleteConfirm(typed, row) {
@@ -106,8 +106,22 @@ function matchesDeleteConfirm(typed, row) {
   return Boolean((id && value === id) || (name && value === name))
 }
 
+function normalizePersonalEmails(raw) {
+  const list = Array.isArray(raw) ? raw : String(raw || '').split(/[,;\s]+/)
+  const seen = new Set()
+  const out = []
+  for (const item of list) {
+    const email = String(item || '').trim().toLowerCase()
+    if (!email || !email.includes('@') || !email.includes('.')) continue
+    if (seen.has(email)) continue
+    seen.add(email)
+    out.push(email)
+  }
+  return out
+}
+
 function dash(value) {
-  if (value == null || value === '') return '—'
+  if (value == null || value === '') return '-'
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
     try {
       return new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -119,7 +133,7 @@ function dash(value) {
 }
 
 function fileDash(value) {
-  if (!value) return '—'
+  if (!value) return '-'
   if (typeof value === 'string') return dash(value)
   return dash(value.name || (value.hasFile ? 'Uploaded' : ''))
 }
@@ -286,10 +300,20 @@ export default function PulseOnboarding() {
   const saveDraft = async () => {
     try {
       setSaving(true)
+      if (!editing?._id) {
+        const emails = normalizePersonalEmails(form.getFieldValue('personalEmails'))
+        if (emails.length > 1) {
+          message.info('Use Send email to invite multiple people at once')
+          return
+        }
+        if (emails[0]) form.setFieldValue('email', emails[0])
+        await form.validateFields(['email'])
+      }
       await persistAdmin()
       message.success('Saved')
       await load()
     } catch (err) {
+      if (err?.errorFields) return
       message.error(err?.response?.data?.message || err.message || 'Could not save employee')
     } finally {
       setSaving(false)
@@ -298,6 +322,41 @@ export default function PulseOnboarding() {
 
   const sendDetailsEmail = async () => {
     try {
+      const isNew = !editing?._id
+      if (isNew) {
+        await form.validateFields(['personalEmails'])
+        const emails = normalizePersonalEmails(form.getFieldValue('personalEmails'))
+        if (!emails.length) {
+          message.error('Add at least one personal email')
+          return
+        }
+        setSending(true)
+        const values = form.getFieldsValue(true)
+        const shared = payloadFromValues({ ...values, email: emails[0] })
+        const res = await api.post('/candidates/bulk-onboard', {
+          emails,
+          firstName: shared.firstName || '',
+          lastName: shared.lastName || '',
+          officialEmail: shared.officialEmail || '',
+          department: shared.department || '',
+          title: shared.title || '',
+          workLocation: shared.workLocation || '',
+          sourceOfHire: shared.sourceOfHire || '',
+          tentativeJoiningDate: shared.tentativeJoiningDate || null,
+        })
+        const sent = Number(res.data?.sent || 0)
+        const failed = Number(res.data?.failed || 0)
+        const skipped = Number(res.data?.skipped || 0)
+        if (sent > 0 && failed === 0) {
+          message.success(res.data?.message || `Details email sent to ${sent}`)
+        } else {
+          message.info(res.data?.message || `Sent ${sent}, failed ${failed}, skipped ${skipped}`)
+        }
+        closeForm()
+        await load()
+        return
+      }
+
       await form.validateFields(['email'])
       setSending(true)
       const row = await persistAdmin()
@@ -307,7 +366,7 @@ export default function PulseOnboarding() {
       const onboardLink = res.data?.data?.devOnboardLink || res.data?.data?.onboardUrl
       if (res.data?.emailSent === false) {
         setMailFail({
-          title: 'Employee saved — email not sent',
+          title: 'Employee saved - email not sent',
           message: res.data?.message || 'Record saved, but the email could not be sent',
           link: onboardLink || '',
           linkLabel: 'Details form link',
@@ -347,7 +406,7 @@ export default function PulseOnboarding() {
       const inviteLink = res.data?.data?.devInviteLink || res.data?.data?.inviteUrl
       if (res.data?.emailSent === false) {
         setMailFail({
-          title: 'Invite created — email not sent',
+          title: 'Invite created - email not sent',
           message: res.data?.message || 'Invite created, but the email could not be sent',
           link: inviteLink || '',
           linkLabel: 'BDA OS invite link',
@@ -579,63 +638,93 @@ export default function PulseOnboarding() {
   ]
 
   return (
-    <div className="ob-page">
-      <div className="ob-toolbar">
-        <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-          Add Employee
-        </Button>
-        <Button type="text" icon={<FilterOutlined />} aria-label="Filter" onClick={() => setFilterOpen(true)} />
-        <Dropdown
-          menu={{
-            items: [
-              { key: 'reload', icon: <ReloadOutlined />, label: 'Refresh', onClick: load },
-              ...(selectedRowKeys.length === 1
-                ? [{
-                    key: 'delete',
-                    icon: <DeleteOutlined />,
-                    label: 'Delete',
-                    danger: true,
-                    onClick: () => {
-                      const row = rows.find((item) => item._id === selectedRowKeys[0])
-                      if (row) askDelete(row)
-                    },
-                  }]
-                : []),
-            ],
-          }}
-        >
-          <Button type="text" icon={<MoreOutlined />} aria-label="More" />
-        </Dropdown>
-      </div>
+    <div className="pulse-att-page pulse-onb-att">
+      <div className="pulse-att-board">
+        <header className="pulse-att-toolbar">
+          <div className="pulse-att-period" />
+          <div className="pulse-onb-toolbar-actions">
+            <button
+              type="button"
+              className="pov-cta plive-top-cta plive-checkin"
+              onClick={openAdd}
+            >
+              <PlusOutlined />
+              Add Employee
+            </button>
+            <Button
+              icon={<FilterOutlined />}
+              aria-label="Filter"
+              className={`pulse-onb-filter-btn${
+                applied.employee || applied.department !== 'all' || applied.location !== 'all' ? ' is-on' : ''
+              }`}
+              onClick={() => setFilterOpen(true)}
+            />
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'reload', icon: <ReloadOutlined />, label: 'Refresh', onClick: load },
+                  ...(selectedRowKeys.length === 1
+                    ? [{
+                        key: 'delete',
+                        icon: <DeleteOutlined />,
+                        label: 'Delete',
+                        danger: true,
+                        onClick: () => {
+                          const row = rows.find((item) => item._id === selectedRowKeys[0])
+                          if (row) askDelete(row)
+                        },
+                      }]
+                    : []),
+                ],
+              }}
+            >
+              <Button type="text" icon={<MoreOutlined />} aria-label="More" className="pulse-onb-more-btn" />
+            </Dropdown>
+          </div>
+        </header>
 
-      <div className="ob-table-wrap">
-        <Table
-          rowKey="_id"
-          size="small"
-          loading={loading}
-          columns={columns}
-          dataSource={rows}
-          pagination={rows.length > 20 ? { pageSize: 20, showSizeChanger: false } : false}
-          scroll={{ x: 'max-content' }}
-          onRow={(record) => ({ onClick: () => openEdit(record) })}
-          locale={{
-            emptyText: (
-              <Empty
-                image={<EmptyArt />}
-                description={
-                  <div className="ob-empty-copy">
-                    <strong>No employees have been added yet</strong>
-                    <p>
-                      Add an employee and send a details form to their personal email. After they submit, their
-                      information appears here. Then fill work email and send the BDA OS invite. Joining date and
-                      offer letter can be added later.
-                    </p>
-                  </div>
-                }
+        <section className="pulse-att-panel" aria-label="Onboarding employees">
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>Onboarding</h4>
+              <span>
+                {rows.length} employee{rows.length === 1 ? '' : 's'}
+              </span>
+            </header>
+          </div>
+
+          <div className="pulse-onb-att-body">
+            <div className="ob-table-wrap">
+              <Table
+                rowKey="_id"
+                size="small"
+                loading={loading}
+                columns={columns}
+                dataSource={rows}
+                pagination={rows.length > 20 ? { pageSize: 20, showSizeChanger: false } : false}
+                scroll={{ x: 'max-content' }}
+                onRow={(record) => ({ onClick: () => openEdit(record) })}
+                locale={{
+                  emptyText: (
+                    <Empty
+                      image={<EmptyArt />}
+                      description={
+                        <div className="ob-empty-copy">
+                          <strong>No employees have been added yet</strong>
+                          <p>
+                            Add an employee and send a details form to their personal email. After they submit, their
+                            information appears here. Then fill work email and send the BDA OS invite. Joining date and
+                            offer letter can be added later.
+                          </p>
+                        </div>
+                      }
+                    />
+                  ),
+                }}
               />
-            ),
-          }}
-        />
+            </div>
+          </div>
+        </section>
       </div>
 
       <Drawer
@@ -644,6 +733,7 @@ export default function PulseOnboarding() {
         width={340}
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
+        closable={false}
         footer={
           <Flex gap={8}>
             <Button
@@ -706,6 +796,11 @@ export default function PulseOnboarding() {
         destroyOnHidden
         rootClassName="ob-add-drawer"
         closable={false}
+        styles={{
+          mask: { boxShadow: 'none' },
+          wrapper: { boxShadow: 'none' },
+          content: { boxShadow: 'none' },
+        }}
         footer={
           <Space wrap>
             {editing?.employeeSubmittedAt ? (
@@ -714,22 +809,23 @@ export default function PulseOnboarding() {
               </Button>
             ) : (
               <Button type="primary" loading={sending} onClick={sendDetailsEmail}>
-                {editing?.onboardingEmailSentAt ? 'Resend details email' : 'Send details email'}
+                {editing?.onboardingEmailSentAt ? 'Resend email' : 'Send email'}
               </Button>
             )}
             <Button loading={saving} disabled={sending} onClick={saveDraft}>
               Save
             </Button>
+            <Button onClick={closeForm}>Cancel</Button>
             {editing?._id ? (
               <Button
                 danger
+                className="ob-add-drawer-delete"
                 disabled={sending || saving}
                 onClick={() => askDelete(editing)}
               >
                 Delete
               </Button>
             ) : null}
-            <Button onClick={closeForm}>Cancel</Button>
           </Space>
         }
       >
@@ -753,21 +849,15 @@ export default function PulseOnboarding() {
             )}
           </div>
         ) : null}
-        <PulseCandidateForm form={form} mode="admin" reviewEmployee={Boolean(editing?.employeeSubmittedAt)} />
+        <PulseCandidateForm
+          form={form}
+          mode="admin"
+          reviewEmployee={Boolean(editing?.employeeSubmittedAt)}
+          allowMultiEmail={!editing?._id}
+        />
       </Drawer>
-      {open
-        ? createPortal(
-            <button
-              type="button"
-              className="ob-drawer-close"
-              aria-label="Close"
-              onClick={closeForm}
-            >
-              <CloseOutlined />
-            </button>,
-            document.body,
-          )
-        : null}
+      <PulseSlideClose open={open} onClose={closeForm} width={920} />
+      <PulseSlideClose open={filterOpen} onClose={() => setFilterOpen(false)} width={340} />
       <Modal
         title="Delete employee"
         open={Boolean(removing)}

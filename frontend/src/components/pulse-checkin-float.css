@@ -12,10 +12,10 @@
   min-width: 98px;
   max-width: 104px;
   padding: 0 11px;
-  border: 1.5px solid #1a5f4a;
+  border: 1.5px solid var(--pulse-primary);
   border-radius: 999px;
   background: #fff;
-  color: #1c1917;
+  color: #183B35;
   box-shadow:
     0 6px 18px rgba(15, 23, 42, 0.16),
     0 0 0 1px rgba(255, 255, 255, 0.6);
@@ -52,12 +52,12 @@
   padding-right: 5px;
   box-shadow:
     0 10px 26px rgba(15, 23, 42, 0.2),
-    0 0 0 2px rgba(26, 95, 74, 0.35);
+    0 0 0 2px rgba(var(--pulse-primary-rgb), 0.35);
 }
 
 .pulse-checkin-float.is-needs-pin .pulse-checkin-float-pip {
   color: #fff !important;
-  background: #1a5f4a !important;
+  background: var(--pulse-primary) !important;
 }
 
 .pulse-checkin-float.is-pip {
@@ -116,8 +116,8 @@
 }
 
 .pulse-checkin-float-grip:hover {
-  color: #1a5f4a;
-  background: #e8f2ee;
+  color: var(--pulse-primary);
+  background: #E8F1EE;
 }
 
 .pulse-checkin-float-action.ant-btn {
@@ -136,13 +136,13 @@
 
 .pulse-checkin-float-action.ant-btn:hover,
 .pulse-checkin-float-action.ant-btn:focus-visible {
-  color: #1a5f4a !important;
-  background: #e8f2ee !important;
+  color: var(--pulse-primary) !important;
+  background: #E8F1EE !important;
 }
 
 .pulse-checkin-float-pip.is-on {
   color: #fff !important;
-  background: #1a5f4a !important;
+  background: var(--pulse-primary) !important;
 }
 
 @media (max-width: 980px) {

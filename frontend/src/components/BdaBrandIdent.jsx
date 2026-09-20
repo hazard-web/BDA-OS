@@ -1,6 +1,6 @@
 import './bda-brand-ident.css'
 
-const GREEN = '#1A5F4A'
+const GREEN = '#556B2F'
 
 /** Green People OS four-square mark for loaders / gates only. */
 function PeopleOsTiles({ size = 72, className = '' }) {

@@ -41,6 +41,12 @@ const pulsePerformanceMonthSchema = new mongoose.Schema(
     employeeNote: { type: String, default: '', trim: true },
     correctionRequested: { type: Boolean, default: false },
     correctionNote: { type: String, default: '', trim: true },
+    correctionAttachment: {
+      name: { type: String, default: '', trim: true },
+      mime: { type: String, default: '', trim: true },
+      size: { type: Number, default: 0 },
+      url: { type: String, default: '', trim: true },
+    },
     status: {
       type: String,
       enum: ['draft', 'review', 'confirmed', 'locked'],

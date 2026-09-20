@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
-import { App, Button, DatePicker, Empty, Modal, Select, Table, Tag } from 'antd'
-import { LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import { App, DatePicker, Drawer, Empty, Select } from 'antd'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { hoursLabel } from '../utils/pulseCalendar'
-import { hiResAvatarUrl } from '../utils/hiResAvatar'
-import PulsePlaceLabel from './PulsePlaceLabel'
+import { personName } from '../utils/pulsePerson'
+import PulseSlideClose from './PulseSlideClose'
+import './pulse-performance.css'
 
 const DATE_FILTERS = [
   { value: 'today', label: 'Today' },
   { value: 'custom', label: 'Custom' },
 ]
 
-/** Live status refresh while viewing today. */
-const LIVE_POLL_MS = 12_000
+/** Live status refresh while viewing today (keep light - cards API is org-wide). */
+const LIVE_POLL_MS = 30_000
 
 function dayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -23,14 +24,6 @@ function dayKey(d = new Date()) {
 function clockLabel(ms) {
   const safe = Math.max(0, Number(ms) || 0)
   return hoursLabel(safe / 3_600_000)
-}
-
-function personName(row) {
-  return row.name || String(row.email || '').split('@')[0] || 'Employee'
-}
-
-function personInitial(row) {
-  return personName(row).trim().charAt(0).toUpperCase() || 'E'
 }
 
 function lastCheckOutAt(row) {
@@ -67,76 +60,33 @@ function eventLabel(type) {
   }
 }
 
-function eventTag(type) {
-  switch (type) {
-    case 'CHECK_IN':
-    case 'RESUME':
-      return <Tag color="success">{eventLabel(type)}</Tag>
-    case 'CHECK_OUT':
-      return <Tag color="warning">{eventLabel(type)}</Tag>
-    case 'MIDNIGHT_CLOSE':
-      return <Tag color="processing">{eventLabel(type)}</Tag>
-    case 'TARGET_REACHED':
-      return <Tag color="blue">{eventLabel(type)}</Tag>
-    default:
-      return <Tag>{eventLabel(type)}</Tag>
-  }
+function formatEventIp(ip) {
+  const value = String(ip || '').trim()
+  if (!value) return ''
+  if (value === '127.0.0.1' || value === '::1' || value === 'localhost' || value === '0.0.0.0') return ''
+  return value
 }
 
-/** Account HTTPS photo, or onboarding/account data photo via authenticated blob. */
-function AttendanceAvatar({ row }) {
-  const initial = personInitial(row)
-  const httpsSrc = hiResAvatarUrl(row?.avatarUrl, 128)
-  const proxyId = String(row?.avatarUserId || '')
-  const [src, setSrc] = useState(httpsSrc || '')
-  const [broken, setBroken] = useState(false)
-
-  useEffect(() => {
-    setBroken(false)
-    if (httpsSrc) {
-      setSrc(httpsSrc)
-      return undefined
-    }
-    if (!proxyId) {
-      setSrc('')
-      return undefined
-    }
-    let alive = true
-    let objectUrl = ''
-    api
-      .get(`/pulse-checkin/admin/avatar/${proxyId}`, { responseType: 'blob', timeout: 20000 })
-      .then((res) => {
-        if (!alive) return
-        const type = String(res.data?.type || '')
-        if (type && !type.startsWith('image/')) {
-          setSrc('')
-          return
-        }
-        objectUrl = URL.createObjectURL(res.data)
-        setSrc(objectUrl)
-      })
-      .catch(() => {
-        if (alive) setSrc('')
-      })
-    return () => {
-      alive = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [httpsSrc, proxyId])
-
-  if (!src || broken) {
-    return <span className="pulse-ts-person-avatar is-fallback" aria-hidden="true">{initial}</span>
+function formatEventPlace(event) {
+  const loc = event?.location
+  if (!loc) return ''
+  const lat = Number(loc.lat)
+  const lng = Number(loc.lng)
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) {
+    return ''
   }
-
-  return (
-    <img
-      className="pulse-ts-person-avatar"
-      src={src}
-      alt=""
-      referrerPolicy="no-referrer"
-      onError={() => setBroken(true)}
-    />
-  )
+  const named = [loc.city, loc.locality || loc.sector, loc.state].filter(Boolean)
+  if (named.length) return [...new Set(named)].join(', ')
+  if (loc.displayName) {
+    return String(loc.displayName)
+      .split(',')
+      .slice(0, 2)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .join(', ')
+  }
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return `${lat.toFixed(2)}, ${lng.toFixed(2)}`
+  return ''
 }
 
 export default function PulseAttendanceAdmin() {
@@ -233,16 +183,20 @@ export default function PulseAttendanceAdmin() {
       const detail = res.data?.data
       if (detail) setSelected(detail)
     } catch {
-      /* keep card preview in modal */
+      /* keep card preview in the slide-in */
     } finally {
       setDetailLoading(false)
     }
   }
 
-  const selectedEvents = useMemo(
-    () => (selected ? [...(selected.events || [])].reverse() : []),
-    [selected],
-  )
+  const selectedEvents = useMemo(() => {
+    if (!selected) return []
+    return [...(selected.events || [])].sort((a, b) => {
+      const ta = a?.at ? new Date(a.at).getTime() : 0
+      const tb = b?.at ? new Date(b.at).getTime() : 0
+      return ta - tb
+    })
+  }, [selected])
   const selectedCheckOut = selected ? lastCheckOutAt(selected) : null
   const atToday = dayjs(viewed).isSame(dayjs(), 'day')
 
@@ -260,11 +214,10 @@ export default function PulseAttendanceAdmin() {
   }
 
   return (
-    <div className="pulse-ts-admin pulse-org-att">
-      <header className="pulse-ts-admin-head">
-        <div className="pulse-att-day-heading">
-          <p className="pov-kicker">{atToday ? 'Today' : 'Custom'}</p>
-          <div className="pulse-att-day-row">
+    <div className="pulse-att-page pulse-org-admin-att pulse-att-admin">
+      <div className="pulse-att-board">
+        <header className="pulse-att-toolbar">
+          <div className="pulse-att-period">
             <div className="pulse-att-day-nav" role="group" aria-label="Change day">
               <button
                 type="button"
@@ -284,143 +237,159 @@ export default function PulseAttendanceAdmin() {
                 <RightOutlined />
               </button>
             </div>
-            <h2>{format(viewed, 'EEEE d MMM')}</h2>
-          </div>
-        </div>
-        <div className="pulse-ts-admin-filter">
-          <Select
-            value={period}
-            onChange={(next) => {
-              setPeriod(next)
-              if (next === 'today') setCustomDate(dayjs())
-            }}
-            options={DATE_FILTERS}
-            className="pulse-ts-admin-select"
-            classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
-            aria-label="Attendance date filter"
-          />
-          {period === 'custom' ? (
-            <DatePicker
-              value={customDate}
-              allowClear={false}
-              format="DD-MMM-YYYY"
-              className="pulse-ts-admin-date"
-              classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
-              disabledDate={(value) => value && value.isAfter(dayjs(), 'day')}
+            <strong className="pulse-org-admin-day-label">{format(viewed, 'EEEE d MMM')}</strong>
+            <Select
+              value={period}
               onChange={(next) => {
-                if (!next) return
-                if (next.isSame(dayjs(), 'day')) {
-                  setPeriod('today')
-                  setCustomDate(dayjs())
-                  return
-                }
-                setCustomDate(next)
+                setPeriod(next)
+                if (next === 'today') setCustomDate(dayjs())
               }}
+              options={DATE_FILTERS}
+              className="pulse-att-select pulse-org-admin-select"
+              classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
+              aria-label="Attendance date filter"
             />
-          ) : null}
-          <Button
-            type="text"
-            icon={<ReloadOutlined />}
-            onClick={() => void fetchDays({ silent: false })}
-            loading={loading}
-            aria-label="Refresh"
-          />
-        </div>
-      </header>
+            {period === 'custom' ? (
+              <DatePicker
+                value={customDate}
+                allowClear={false}
+                format="DD-MMM-YYYY"
+                className="pulse-org-admin-date"
+                classNames={{ popup: { root: 'pulse-att-range-dropdown' } }}
+                disabledDate={(value) => value && value.isAfter(dayjs(), 'day')}
+                onChange={(next) => {
+                  if (!next) return
+                  if (next.isSame(dayjs(), 'day')) {
+                    setPeriod('today')
+                    setCustomDate(dayjs())
+                    return
+                  }
+                  setCustomDate(next)
+                }}
+              />
+            ) : null}
+          </div>
+        </header>
 
-      {loading && !days.length ? (
-        <p className="pulse-ts-admin-empty">Loading employee attendance…</p>
-      ) : null}
+        <section className="pulse-att-panel" aria-label="Company attendance">
+          <div className="pulse-att-panel-chrome">
+            <header className="pulse-att-panel-head">
+              <h4>Attendance</h4>
+              <span>
+                {days.length} people
+              </span>
+            </header>
+            <div className="pulse-att-cols pulse-att-admin-cols" aria-hidden="true">
+              <span className="pulse-att-cols-spacer" />
+              <span>Person</span>
+              <span>Check-in</span>
+              <span>Check-out</span>
+              <span>Worked</span>
+              <span>Status</span>
+            </div>
+          </div>
 
-      {!loading && !days.length ? (
-        <div className="pov-glass pulse-ts-person">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No employees to show yet" />
-        </div>
-      ) : null}
-
-      <div className="pulse-ts-admin-grid">
-        {days.map((row) => {
-          const label = attendanceLabel(row)
-          const active = label === 'Active'
-          const checkOut = lastCheckOutAt(row)
-          const events = [...(row.events || [])].reverse().slice(0, 4)
-          return (
-            <button
-              type="button"
-              key={String(row.user || row.email)}
-              className="pov-glass pulse-ts-person is-clickable"
-              onClick={() => void openDetail(row)}
-            >
-              <header className="pulse-ts-person-head">
-                <AttendanceAvatar row={row} />
-                <div>
-                  <h3>{personName(row)}</h3>
-                  <p>{row.email || 'No email'}</p>
-                </div>
-                <span className={`pulse-ts-person-tag${active ? ' is-on' : ''}`}>
-                  {label}
-                </span>
-              </header>
-
-              <div className="pulse-ts-person-metrics">
-                <div>
-                  <p>Check-in</p>
-                  <strong>{row.checkInAt ? format(new Date(row.checkInAt), 'h:mm a') : '—'}</strong>
-                </div>
-                <div>
-                  <p>Check-out</p>
-                  <strong>{checkOut ? format(new Date(checkOut), 'h:mm a') : row.status === 'active' ? 'In' : '—'}</strong>
-                </div>
-                <div>
-                  <p>Worked</p>
-                  <strong>{clockLabel(row.totalActiveMs)}</strong>
-                  {row.anomaly?.flagged ? (
-                    <em className="pulse-ts-anomaly" title={row.anomaly.reason || 'Hours exceed session wall time'}>
-                      Review
-                    </em>
-                  ) : null}
-                </div>
+          <div className="pulse-org-admin-body">
+            {loading && !days.length ? (
+              <p className="pulse-org-admin-empty">Loading employee attendance…</p>
+            ) : !loading && !days.length ? (
+              <div className="pulse-org-admin-empty">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No employees to show yet" />
               </div>
-
-              <ul className="pulse-ts-person-tasks">
-                {events.length ? events.map((event, index) => (
-                  <li key={event._id || `${event.type}-${event.at}-${index}`}>
-                    <span>{eventLabel(event.type)}</span>
-                    <em>{event.at ? format(new Date(event.at), 'h:mm a') : '—'}</em>
-                  </li>
-                )) : (
-                  <li className="is-empty">No check-in activity</li>
-                )}
+            ) : (
+              <ul className="pulse-att-list" aria-label="Employee attendance">
+                {days.map((row) => {
+                  const label = attendanceLabel(row)
+                  const active = label === 'Active'
+                  const checkOut = lastCheckOutAt(row)
+                  return (
+                    <li
+                      key={String(row.user || row.email)}
+                      className={`pulse-att-row pulse-org-admin-row is-clickable${active ? ' is-today' : ''}`}
+                      onClick={() => void openDetail(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          void openDetail(row)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className={`pulse-att-dot ${active ? 'is-ok' : label === 'Absent' ? 'is-open' : 'is-bad'}`} aria-hidden="true" />
+                      <div className="pulse-att-day">
+                        <strong>{personName(row)}</strong>
+                        <span>{row.email || 'No email'}</span>
+                      </div>
+                      <div className="pulse-att-hours">
+                        {row.checkInAt ? format(new Date(row.checkInAt), 'h:mm a') : '-'}
+                      </div>
+                      <div className="pulse-att-hours">
+                        {checkOut ? format(new Date(checkOut), 'h:mm a') : row.status === 'active' ? 'In' : '-'}
+                      </div>
+                      <div className="pulse-att-hours">
+                        {clockLabel(row.totalActiveMs)}
+                        {row.anomaly?.flagged ? (
+                          <em className="pulse-ts-anomaly" title={row.anomaly.reason || 'Hours exceed session wall time'}>
+                            {' '}Review
+                          </em>
+                        ) : null}
+                      </div>
+                      <span className={`pulse-att-status ${active ? 'is-ok' : label === 'Absent' ? 'is-open' : 'is-bad'}`}>
+                        {label}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
-            </button>
-          )
-        })}
+            )}
+          </div>
+        </section>
       </div>
 
-      <Modal
+      <Drawer
+        title={selected ? personName(selected) : 'Attendance'}
+        placement="right"
+        width={720}
         open={Boolean(selected)}
-        onCancel={() => setSelected(null)}
-        footer={null}
-        width={920}
+        onClose={() => setSelected(null)}
         destroyOnHidden
-        rootClassName="pulse-att-detail-modal-root"
-        className="pulse-att-detail-modal"
-        title={selected ? `${personName(selected)} · check-in activity` : 'Check-in activity'}
+        rootClassName="pulse-perf-edit-drawer"
+        zIndex={1195}
+        closable={false}
+        styles={{
+          mask: { boxShadow: 'none' },
+          wrapper: { boxShadow: 'none' },
+          content: { boxShadow: 'none' },
+        }}
       >
         {selected ? (
           <div className="pulse-att-detail">
-            <p className="pulse-att-detail-sub">
-              {selected.email || 'No email'}
-              {detailLoading ? ' · Loading full activity…' : ''}
-            </p>
-            <div className="pulse-ts-person-metrics pulse-att-detail-metrics">
-              <div>
-                <p>Status</p>
-                <strong>{attendanceLabel(selected)}</strong>
+            <header className="pulse-att-detail-head">
+              <div className="pulse-att-detail-head-copy">
+                <p>
+                  {[selected.email || null, detailLoading ? 'Loading…' : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
               </div>
+              <span
+                className={`pulse-att-status ${
+                  attendanceLabel(selected) === 'Active'
+                    ? 'is-ok'
+                    : attendanceLabel(selected) === 'Absent'
+                      ? 'is-open'
+                      : 'is-bad'
+                }`}
+              >
+                {attendanceLabel(selected)}
+              </span>
+            </header>
+
+            <div className="pulse-att-detail-metrics" role="group" aria-label="Day summary">
               <div>
                 <p>Check-in</p>
-                <strong>{selected.checkInAt ? format(new Date(selected.checkInAt), 'h:mm a') : '—'}</strong>
+                <strong>{selected.checkInAt ? format(new Date(selected.checkInAt), 'h:mm a') : '-'}</strong>
               </div>
               <div>
                 <p>Check-out</p>
@@ -428,64 +397,68 @@ export default function PulseAttendanceAdmin() {
                   {selectedCheckOut
                     ? format(new Date(selectedCheckOut), 'h:mm a')
                     : selected.status === 'active'
-                      ? 'In'
-                      : '—'}
+                      ? 'Still in'
+                      : '-'}
                 </strong>
               </div>
               <div>
                 <p>Worked</p>
                 <strong>{clockLabel(selected.totalActiveMs)}</strong>
-                {selected.anomaly?.flagged ? (
-                  <p className="pulse-ts-anomaly-note">{selected.anomaly.reason || 'Hours exceed session wall time'}</p>
-                ) : null}
+              </div>
+              <div>
+                <p>Sessions</p>
+                <strong>{selectedEvents.filter((e) => e.type === 'CHECK_IN' || e.type === 'RESUME').length || '-'}</strong>
               </div>
             </div>
 
-            <Table
-              size="small"
-              pagination={false}
-              loading={detailLoading}
-              rowKey={(e) => e._id || `${e.type}-${e.at}`}
-              dataSource={selectedEvents}
-              scroll={{ x: 720 }}
-              locale={{
-                emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No events yet" />,
-              }}
-              columns={[
-                {
-                  title: 'When',
-                  dataIndex: 'at',
-                  width: 170,
-                  render: (v) => (v ? format(new Date(v), 'd MMM · h:mm a') : '—'),
-                },
-                {
-                  title: 'Activity',
-                  dataIndex: 'type',
-                  width: 140,
-                  render: (v) => eventTag(v),
-                },
-                {
-                  title: 'Timer at event',
-                  dataIndex: 'activeMsAtEvent',
-                  width: 120,
-                  render: (ms) => clockLabel(ms),
-                },
-                {
-                  title: 'IP',
-                  dataIndex: 'ip',
-                  width: 130,
-                  render: (v) => v || '—',
-                },
-                {
-                  title: 'Location',
-                  key: 'loc',
-                  render: (_, e) => <PulsePlaceLabel location={e.location} />,
-                },
-              ]}
-            />
+            {selected.anomaly?.flagged ? (
+              <p className="pulse-ts-anomaly-note">
+                {selected.anomaly.reason || 'Hours exceed session wall time'}
+              </p>
+            ) : null}
+
+            <div className="pulse-att-detail-activity">
+              <h4>Check-in activity</h4>
+              {detailLoading && !selectedEvents.length ? (
+                <p className="pulse-att-detail-empty">Loading activity…</p>
+              ) : selectedEvents.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No check-in events yet" />
+              ) : (
+                <ul className="pulse-att-detail-timeline" aria-label="Check-in events">
+                  {selectedEvents.map((event, index) => {
+                    const tone =
+                      event.type === 'CHECK_OUT' || event.type === 'MIDNIGHT_CLOSE'
+                        ? 'out'
+                        : event.type === 'TARGET_REACHED'
+                          ? 'target'
+                          : 'in'
+                    const place = formatEventPlace(event)
+                    const ip = formatEventIp(event.ip)
+                    const meta = [place, ip].filter(Boolean).join(' · ')
+                    return (
+                      <li key={event._id || `${event.type}-${event.at}-${index}`} className={`is-${tone}`}>
+                        <span className="pulse-att-detail-rail" aria-hidden="true" />
+                        <span className="pulse-att-detail-dot" aria-hidden="true" />
+                        <div className="pulse-att-detail-when">
+                          <strong>{event.at ? format(new Date(event.at), 'h:mm a') : '-'}</strong>
+                        </div>
+                        <div className="pulse-att-detail-what">
+                          <strong>{eventLabel(event.type)}</strong>
+                          {meta ? <span>{meta}</span> : null}
+                        </div>
+                        <div className="pulse-att-detail-elapsed" title="Timer at event">
+                          {clockLabel(event.activeMsAtEvent)}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         ) : null}
-      </Modal>
+      </Drawer>
+      <PulseSlideClose open={Boolean(selected)} onClose={() => setSelected(null)} width={720} top={76} />
     </div>
   )
 }

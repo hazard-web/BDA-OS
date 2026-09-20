@@ -16,10 +16,12 @@ const {
   effectiveRole,
   pulseRoleLabel,
 } = require('../utils/pulseAuth')
+const { personName } = require('../utils/pulsePerson')
 const { assertAllowedCompanyEmail, resolveCompanyDomain } = require('../utils/companyDomain')
 const { createAndSendOrgInvite } = require('../utils/pulseOrgInvite')
 const { sendPulseRoleChangedEmail } = require('../utils/emailService')
 const { DEFAULT_GENDER } = require('../utils/indiaLocation')
+const { ensureHttpsAvatar } = require('../utils/pulseAvatar')
 
 function memberConfirmName(user) {
   const n = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
@@ -40,8 +42,7 @@ function requireAdmin(req, res, next) {
 }
 
 function inviterName(user) {
-  const n = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-  return n || user.displayName || user.email || 'Your admin'
+  return personName(user, 'Your admin')
 }
 
 function isManagerRole(role) {
@@ -339,16 +340,29 @@ router.post('/accept', async (req, res) => {
       organizationId: invite.organizationId,
       $or: [{ officialEmail: invite.email }, { email: invite.email }],
     })
-      .select('photo firstName lastName')
+      .select('photo firstName lastName phone countryCode')
       .lean()
 
     let avatarUrl = ''
     if (candidate?.photo?.data) {
       const raw = String(candidate.photo.data)
-      if (raw.startsWith('data:')) avatarUrl = raw
-      else if (raw.length <= 350000) {
-        avatarUrl = `data:${candidate.photo.mime || 'image/jpeg'};base64,${raw}`
-      }
+      avatarUrl = await ensureHttpsAvatar(raw, {
+        mime: candidate.photo.mime || 'image/jpeg',
+        folder: 'payroll_portal/avatars',
+        publicId: `invite_${String(invite.organizationId)}_${String(invite.email || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .slice(0, 48)}`,
+      })
+    }
+
+    const candDigits = String(candidate?.phone || '').replace(/\D/g, '')
+    let mobilePhone = ''
+    if (candDigits.length === 10) {
+      const cc = String(candidate?.countryCode || '+91').replace(/\D/g, '') || '91'
+      mobilePhone = `+${cc}${candDigits}`
+    } else if (candDigits.length >= 11) {
+      mobilePhone = `+${candDigits}`
     }
 
     const user = new User({
@@ -361,6 +375,7 @@ router.post('/accept', async (req, res) => {
       companyName: (admin && admin.companyName) || invite.companyName || '',
       companyAddress: (admin && admin.companyAddress) || '',
       companyPhone: (admin && admin.companyPhone) || '',
+      mobilePhone,
       companyEmail: (admin && admin.companyEmail) || invite.email,
       companyDomain,
       companyCIN: (admin && admin.companyCIN) || '',

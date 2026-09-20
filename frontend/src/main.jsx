@@ -8,7 +8,9 @@ import AntdProvider from './components/AntdProvider'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
+import './theme/pulse-tokens.css'
 import './theme/pulse-dark.css'
+import './theme/pulse-close.css'
 
 // Automatically unregister any active service worker from previous PWA installations.
 // This prevents old cached service workers from intercepting new portal routes.

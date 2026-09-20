@@ -6,20 +6,21 @@ export default function BdaGateLoader({
   show = false,
   leaving = false,
   label = 'Loading',
+  variant = 'page',
 }) {
   useEffect(() => {
-    if (!show) return undefined
+    if (!show || variant !== 'page') return undefined
     document.documentElement.classList.add('bda-open-boot')
     document.getElementById('bda-boot')?.remove()
     return () => {
       document.documentElement.classList.remove('bda-open-boot')
     }
-  }, [show])
+  }, [show, variant])
 
   if (!show) return null
   return (
     <div
-      className={`bda-gate${leaving ? ' is-out' : ''}`}
+      className={`bda-gate${variant === 'pane' ? ' bda-gate--pane' : ''}${leaving ? ' is-out' : ''}`}
       role="status"
       aria-live="polite"
       aria-label={label || 'Loading'}

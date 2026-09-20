@@ -48,6 +48,8 @@ import { AuthLogoLoader, useAccountSignOut, useAuthRedirect } from '../component
 import AccountsLogo from '../components/AccountsLogo'
 import AppsFlyout from '../components/AppsFlyout'
 import LinkedAppsPanel from '../components/LinkedAppsPanel'
+import PulseUserAvatar from '../components/PulseUserAvatar'
+import PulseSlideClose from '../components/PulseSlideClose'
 import './account-portal.css'
 
 const { Header, Content } = AntLayout
@@ -249,7 +251,20 @@ function AccField({ label, children, className = '' }) {
   )
 }
 
-function ContactRow({ icon, title, tags, meta, actions }) {
+function ContactRow({ icon, title, tags, meta, actions, variant = 'tile' }) {
+  if (variant === 'att') {
+    return (
+      <li className="pulse-att-row pulse-acc-contact-row is-ok">
+        <span className="pulse-att-dot is-ok" aria-hidden="true" />
+        <div className="pulse-att-day">
+          <strong>{title}</strong>
+          <span>{meta || '—'}</span>
+        </div>
+        <div className="pulse-acc-contact-tags">{tags}</div>
+        <div className="pulse-acc-contact-actions">{actions}</div>
+      </li>
+    )
+  }
   return (
     <div className="acc-tile">
       <Avatar icon={icon} className="acc-tile-avatar" />
@@ -262,6 +277,18 @@ function ContactRow({ icon, title, tags, meta, actions }) {
       </div>
       <Space className="acc-tile-actions" size={8}>{actions}</Space>
     </div>
+  )
+}
+
+function AccHeadBtn({ children, onClick, primary = false }) {
+  return (
+    <button
+      type="button"
+      className={`pulse-acc-att-head-cta${primary ? ' is-primary' : ''}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -340,7 +367,7 @@ export default function AccountPortal({ embedded = false }) {
       state: resolveState(user),
       timezone: user.timezone || 'Asia/Kolkata',
       language: user.language || 'English',
-      companyPhone: user.companyPhone || '',
+      mobilePhone: user.mobilePhone || '',
     })
   }, [user])
 
@@ -429,7 +456,6 @@ export default function AccountPortal({ embedded = false }) {
         state: form.state,
         timezone: form.timezone,
         language: form.language,
-        companyPhone: form.companyPhone,
       }
       const res = await api.put('/auth/profile', payload)
       updateProfile({ ...user, ...res.data.user })
@@ -496,10 +522,10 @@ export default function AccountPortal({ embedded = false }) {
     if (saving) return
     setSaving(true)
     try {
-      const companyPhone = `+91${digits}`
-      const res = await api.put('/auth/profile', { companyPhone })
+      const mobilePhone = `+91${digits}`
+      const res = await api.put('/auth/profile', { mobilePhone })
       updateProfile({ ...user, ...res.data.user })
-      setForm((f) => ({ ...f, companyPhone }))
+      setForm((f) => ({ ...f, mobilePhone }))
       setAddingMobile(false)
       setNewMobile('')
       setMobileMarketing(true)
@@ -558,7 +584,7 @@ export default function AccountPortal({ embedded = false }) {
       state: resolveState(user),
       timezone: user.timezone || 'Asia/Kolkata',
       language: user.language || 'English',
-      companyPhone: user.companyPhone || '',
+      mobilePhone: user.mobilePhone || '',
     })
   }
 
@@ -593,12 +619,18 @@ export default function AccountPortal({ embedded = false }) {
     setSection(key)
   }
 
-  const avatar = user.avatarUrl
-    ? <Avatar src={user.avatarUrl} referrerPolicy="no-referrer" size={28} />
-    : <Avatar size={28} style={{ background: '#1A5F4A' }}>{initials || 'P'}</Avatar>
+  const avatar = (
+    <PulseUserAvatar
+      src={user.avatarUrl}
+      size={28}
+      style={user.avatarUrl ? undefined : { background: '#176B5B' }}
+    >
+      {initials || 'P'}
+    </PulseUserAvatar>
+  )
 
   return (
-    <AntLayout className={`acc-shell${embedded ? ' is-embedded' : ''}`}>
+    <AntLayout className={`acc-shell${embedded ? ' is-embedded pulse-att-page pulse-acc-att' : ''}`}>
       <AuthLogoLoader
         show={redirecting || saving || signOutLogo}
         label={signOutLogo ? 'Signing out' : saving ? 'Saving' : 'Redirecting'}
@@ -638,13 +670,17 @@ export default function AccountPortal({ embedded = false }) {
         width={360}
         open={profileOpen}
         onClose={() => { if (!signingOut && !signOutLogo) setProfileOpen(false) }}
+        closable={false}
       >
         <Flex vertical align="center" gap={8} style={{ marginBottom: 24 }}>
-          {user.avatarUrl ? (
-            <Avatar src={user.avatarUrl} size={88} referrerPolicy="no-referrer" />
-          ) : (
-            <Avatar size={88} style={{ background: '#1A5F4A', fontSize: 32 }}>{initials || 'P'}</Avatar>
-          )}
+          <PulseUserAvatar
+            src={user.avatarUrl}
+            size={88}
+            px={256}
+            style={user.avatarUrl ? undefined : { background: '#176B5B', fontSize: 32 }}
+          >
+            {initials || 'P'}
+          </PulseUserAvatar>
           <Typography.Title level={4} style={{ margin: 0 }}>{fullName}</Typography.Title>
           <Typography.Text type="secondary">{user.email}</Typography.Text>
           <Typography.Text type="secondary">
@@ -673,24 +709,47 @@ export default function AccountPortal({ embedded = false }) {
           }}
         />
       </Drawer>
+      <PulseSlideClose
+        open={profileOpen}
+        onClose={() => { if (!signingOut && !signOutLogo) setProfileOpen(false) }}
+        width={360}
+      />
 
-      <AntLayout className="acc-mid">
+      <AntLayout className={`acc-mid${embedded ? ' pulse-att-board' : ''}`}>
         {/* Sidebar (Find a setting + Profile/Security/…) — parked on `pulse/company-later-services`. */}
-        <Content className="acc-main" ref={mainRef}>
+        <Content className={`acc-main${embedded ? ' pulse-acc-att-main' : ''}`} ref={mainRef}>
           <div className="acc-stack">
-            <div className="acc-page-head">
-              <Typography.Title level={2} className="acc-page-title">{pageTitle}</Typography.Title>
-            </div>
+            {embedded ? null : (
+              <div className="acc-page-head">
+                <Typography.Title level={2} className="acc-page-title">{pageTitle}</Typography.Title>
+              </div>
+            )}
             {isProfile ? (
-              <>
-                <Card id="acc-personal" className="acc-card acc-profile-card" bordered={false}>
+              <div className={embedded ? 'pulse-acc-att-shell' : undefined}>
+                <Card id="acc-personal" className={`acc-card acc-profile-card${embedded ? ' pulse-acc-att-card' : ''}`} bordered={false}>
+                  {embedded ? (
+                    <header className="pulse-att-panel-head pulse-acc-att-card-head">
+                      <h4>Personal information</h4>
+                      {editing ? (
+                        <div className="pulse-acc-att-actions">
+                          <AccHeadBtn onClick={onCancelEdit}>Cancel</AccHeadBtn>
+                          <AccHeadBtn primary onClick={onSave}>{saving ? 'Saving…' : 'Save'}</AccHeadBtn>
+                        </div>
+                      ) : (
+                        <AccHeadBtn primary onClick={() => setEditing(true)}>Edit</AccHeadBtn>
+                      )}
+                    </header>
+                  ) : (
                   <Flex className="acc-profile-head" justify="space-between" align="flex-start" gap={16} wrap="wrap">
                     <Flex gap={16} align="center" className="acc-identity">
-                      {user.avatarUrl ? (
-                        <Avatar src={user.avatarUrl} size={72} referrerPolicy="no-referrer" />
-                      ) : (
-                        <Avatar size={72} style={{ background: '#1A5F4A', fontSize: 26 }}>{initials || 'P'}</Avatar>
-                      )}
+                      <PulseUserAvatar
+                        src={user.avatarUrl}
+                        size={72}
+                        px={192}
+                        style={user.avatarUrl ? undefined : { background: '#176B5B', fontSize: 26 }}
+                      >
+                        {initials || 'P'}
+                      </PulseUserAvatar>
                       <div>
                         <Typography.Title level={3} className="acc-user-name">{fullName}</Typography.Title>
                         <Typography.Text type="secondary">{user.email}</Typography.Text>
@@ -706,7 +765,25 @@ export default function AccountPortal({ embedded = false }) {
                       <Button type="primary" onClick={() => setEditing(true)}>Edit</Button>
                     )}
                   </Flex>
-                  <Divider />
+                  )}
+                  {embedded ? null : <Divider />}
+                  <div className={embedded ? 'pulse-acc-att-well' : undefined}>
+                  {embedded ? (
+                    <div className="pulse-acc-ident-block">
+                      <PulseUserAvatar
+                        src={user.avatarUrl}
+                        size={64}
+                        px={192}
+                        style={user.avatarUrl ? undefined : { background: '#176B5B', fontSize: 22 }}
+                      >
+                        {initials || 'P'}
+                      </PulseUserAvatar>
+                      <div className="pulse-acc-ident-copy">
+                        <strong>{fullName}</strong>
+                        <span>{user.email}</span>
+                      </div>
+                    </div>
+                  ) : null}
                   {editing ? (
                     <Form layout="vertical" requiredMark={false}>
                       <Row gutter={[20, 4]}>
@@ -731,6 +808,7 @@ export default function AccountPortal({ embedded = false }) {
                               value={form.gender}
                               options={GENDER_OPTIONS}
                               onChange={(value) => setForm((f) => ({ ...f, gender: value }))}
+                              classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
                             />
                           </Form.Item>
                         </Col>
@@ -740,6 +818,7 @@ export default function AccountPortal({ embedded = false }) {
                               value={form.language}
                               options={LANGUAGE_OPTIONS.map((lang) => ({ value: lang, label: lang }))}
                               onChange={(value) => setForm((f) => ({ ...f, language: value }))}
+                              classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
                             />
                           </Form.Item>
                         </Col>
@@ -749,6 +828,7 @@ export default function AccountPortal({ embedded = false }) {
                               value={form.country}
                               options={COUNTRY_OPTIONS.map((c) => ({ value: c.name, label: `${c.flag}  ${c.name}` }))}
                               onChange={(value) => setForm((f) => ({ ...f, country: value, state: value === 'India' ? f.state : '' }))}
+                              classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
                             />
                           </Form.Item>
                         </Col>
@@ -761,6 +841,7 @@ export default function AccountPortal({ embedded = false }) {
                                 placeholder="Select state"
                                 options={INDIA_STATES.map((s) => ({ value: s, label: s }))}
                                 onChange={(value) => setForm((f) => ({ ...f, state: value || '' }))}
+                                classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
                               />
                             ) : (
                               <Input value={form.state} placeholder="State / Province" onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
@@ -773,13 +854,14 @@ export default function AccountPortal({ embedded = false }) {
                               value={form.timezone}
                               options={TIMEZONE_OPTIONS}
                               onChange={(value) => setForm((f) => ({ ...f, timezone: value }))}
+                              classNames={{ popup: { root: 'pulse-att-select-dropdown' } }}
                             />
                           </Form.Item>
                         </Col>
                       </Row>
                     </Form>
                   ) : (
-                    <div className="acc-fields">
+                    <div className={`acc-fields${embedded ? ' pulse-acc-fields' : ''}`}>
                       <AccField label="Full name">{fullName}</AccField>
                       <AccField label="Display name">{user.displayName || fullName}</AccField>
                       <AccField label="Gender">{resolveGender(user)}</AccField>
@@ -791,24 +873,40 @@ export default function AccountPortal({ embedded = false }) {
                       <AccField label="Time zone" className="acc-field-wide">{formatTimezone(user.timezone || 'Asia/Kolkata')}</AccField>
                     </div>
                   )}
+                  </div>
                 </Card>
 
-                <Row gutter={[16, 16]} className="acc-contact-grid">
+                {embedded ? <div className="pulse-acc-att-divider" aria-hidden /> : null}
+
+                <Row gutter={[16, 16]} className={`acc-contact-grid${embedded ? ' pulse-acc-att-grid' : ''}`}>
                   <Col xs={24} lg={12}>
                 <Card
                   id="acc-email"
-                  className="acc-card acc-fill"
+                  className={`acc-card acc-fill${embedded ? ' pulse-acc-att-card' : ''}`}
                   bordered={false}
-                  title="My Email Addresses"
+                  title={embedded ? undefined : 'My Email Addresses'}
                   extra={
+                    embedded ? null : (
                     <Button type="link" icon={<PlusOutlined />} onClick={() => { setAddingEmail(true); setSection('email') }}>
                       Add email
                     </Button>
+                    )
                   }
                 >
+                  {embedded ? (
+                    <header className="pulse-att-panel-head pulse-acc-att-card-head">
+                      <h4>My Email Addresses</h4>
+                      <AccHeadBtn onClick={() => { setAddingEmail(true); setSection('email') }}>
+                        <PlusOutlined /> Add email
+                      </AccHeadBtn>
+                    </header>
+                  ) : null}
+                  {embedded ? null : (
                   <Typography.Paragraph type="secondary" className="acc-lead">
                     These addresses can sign you in and recover your password.
                   </Typography.Paragraph>
+                  )}
+                  <div className={embedded ? 'pulse-acc-att-well' : undefined}>
                   <div className="acc-tiles">
                     <ContactRow
                       icon={<MailOutlined />}
@@ -858,22 +956,24 @@ export default function AccountPortal({ embedded = false }) {
                       />
                     ))}
                   </div>
+                  </div>
                 </Card>
                   </Col>
                   <Col xs={24} lg={12}>
                 <Card
                   id="acc-mobile"
-                  className="acc-card acc-fill"
+                  className={`acc-card acc-fill${embedded ? ' pulse-acc-att-card' : ''}`}
                   bordered={false}
-                  title="My Mobile Numbers"
+                  title={embedded ? undefined : 'My Mobile Numbers'}
                   extra={
+                    embedded ? null : (
                     <Button
                       type="link"
                       icon={<PlusOutlined />}
                       onClick={() => {
                         setAddingMobile(true)
                         setSection('mobile')
-                        const digits = String(user.companyPhone || '').replace(/\D/g, '')
+                        const digits = String(user.mobilePhone || '').replace(/\D/g, '')
                         const local =
                           digits.length === 12 && digits.startsWith('91')
                             ? digits.slice(2)
@@ -885,16 +985,41 @@ export default function AccountPortal({ embedded = false }) {
                     >
                       Add mobile
                     </Button>
+                    )
                   }
                 >
+                  {embedded ? (
+                    <header className="pulse-att-panel-head pulse-acc-att-card-head">
+                      <h4>My Mobile Numbers</h4>
+                      <AccHeadBtn
+                        onClick={() => {
+                          setAddingMobile(true)
+                          setSection('mobile')
+                          const digits = String(user.mobilePhone || '').replace(/\D/g, '')
+                          const local =
+                            digits.length === 12 && digits.startsWith('91')
+                              ? digits.slice(2)
+                              : digits.length === 10
+                                ? digits
+                                : ''
+                          setNewMobile(local)
+                        }}
+                      >
+                        <PlusOutlined /> Add mobile
+                      </AccHeadBtn>
+                    </header>
+                  ) : null}
+                  {embedded ? null : (
                   <Typography.Paragraph type="secondary" className="acc-lead">
                     Used for account recovery and important verification alerts.
                   </Typography.Paragraph>
-                  {user.companyPhone ? (
+                  )}
+                  <div className={embedded ? 'pulse-acc-att-well' : undefined}>
+                  {user.mobilePhone ? (
                     <div className="acc-tiles">
                       <ContactRow
                         icon={<PhoneOutlined />}
-                        title={formatPhone(user.companyPhone)}
+                        title={formatPhone(user.mobilePhone)}
                         meta={`Updated ${touchedLabel}`}
                         tags={(
                           <>
@@ -930,10 +1055,11 @@ export default function AccountPortal({ embedded = false }) {
                   ) : (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No mobile number added yet." />
                   )}
+                  </div>
                 </Card>
                   </Col>
                 </Row>
-              </>
+              </div>
             ) : null}
 
             {openParent?.children ? (
@@ -997,7 +1123,7 @@ export default function AccountPortal({ embedded = false }) {
               <Card className="acc-card" bordered={false}>
                 <div className="acc-groups">
                   <Empty
-                    image={<TeamOutlined style={{ fontSize: 40, color: '#1A5F4A' }} />}
+                    image={<TeamOutlined style={{ fontSize: 40, color: '#176B5B' }} />}
                     description={<Typography.Title level={4}>Create a group</Typography.Title>}
                   >
                     <Typography.Paragraph type="secondary">Share access and collaborate with a named group of people.</Typography.Paragraph>
@@ -1070,7 +1196,7 @@ export default function AccountPortal({ embedded = false }) {
         okText="Update"
       >
         <Typography.Paragraph>
-          This will make <Typography.Text strong>{formatPhone(user.companyPhone)}</Typography.Text> your primary mobile number.
+          This will make <Typography.Text strong>{formatPhone(user.mobilePhone)}</Typography.Text> your primary mobile number.
         </Typography.Paragraph>
       </Modal>
 

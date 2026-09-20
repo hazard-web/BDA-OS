@@ -43,7 +43,8 @@ const MONTHLY_VARIABLE_CAP = 10000
 function clampScore(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return 0
-  return Math.max(0, Math.min(100, Math.round(n)))
+  const clamped = Math.max(0, Math.min(100, n))
+  return Math.round(clamped / 25) * 25
 }
 
 function weightedPerformanceScore(scores = {}) {

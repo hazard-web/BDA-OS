@@ -8,16 +8,11 @@ const PulsePayrollPayslip = require('../models/PulsePayrollPayslip')
 const PulseWorkDay = require('../models/PulseWorkDay')
 const LeaveRequest = require('../models/LeaveRequest')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
+const { personName } = require('../utils/pulsePerson')
 const { computeMonthlyCompensation, monthKey } = require('../utils/pulsePerformanceCalc')
 const { generatePulsePayslipPDF } = require('../utils/pulsePayslipPdf')
 
 const router = express.Router()
-
-function personName(user) {
-  const parts = [user?.firstName, user?.lastName].filter(Boolean)
-  if (parts.length) return parts.join(' ')
-  return user?.displayName || String(user?.email || '').split('@')[0] || 'Employee'
-}
 
 function toOrgObjectId(organizationId) {
   return mongoose.Types.ObjectId.isValid(organizationId)
@@ -81,6 +76,7 @@ function serializePayslip(doc, user) {
     performanceStatus: plain.performanceStatus || '',
     grossPay: plain.grossPay || 0,
     netPay: plain.netPay || 0,
+    netPayManual: Boolean(plain.netPayManual),
     status: plain.status || 'generated',
     generatedAt: plain.generatedAt || null,
     paidAt: plain.paidAt || null,
@@ -160,34 +156,43 @@ async function enrichPayslipForPdf(doc, employeeUser) {
     otherDeductions: Number(plain.otherDeductions) || 0,
     employerPF: Number(plain.employerPF) || 0,
     hra: Number(plain.hra) || 0,
-    companyName: org?.companyName || 'BDA Technologies Private Limited',
-    companyAddress: org?.companyAddress || '',
+    companyName: 'BDA Technologies Private Limited',
+    companyAddress: org?.companyAddress
+      || 'Flat No. 207, Plot No. 31A, Unione Residency, Akbarpur, Behrampur, Ghaziabad, Uttar Pradesh, India, 201009',
     companyPhone: org?.companyPhone || '',
-    companyEmail: org?.companyEmail || '',
-    companyWebsite: org?.companyWebsite || '',
-    companyCIN: org?.companyCIN || '',
-    companyGST: org?.companyGST || '',
+    companyEmail: 'hr@bdatechnologies.com',
+    companyWebsite: 'www.bdatechnologies.com',
+    companyCIN: org?.companyCIN || 'U74999UP2017PTC096671',
+    companyGST: org?.companyGST || '09AAHCB4248F1ZO',
     companyLogo: org?.companyLogo || '',
   }
 }
 
-function buildPayslipPayload({ organizationId, member, performance, actorId }) {
+function buildPayslipPayload({ organizationId, member, performance, actorId, netPay, month }) {
+  const perf = performance || {}
   const calc = computeMonthlyCompensation({
-    fixedPay: performance.fixedPay,
-    scores: performance.scores,
-    projectTier: performance.projectTier,
-    projectApproved: performance.projectApproved,
-    learningApproved: performance.learningApproved,
-    innovationApproved: performance.innovationApproved,
+    fixedPay: perf.fixedPay,
+    scores: perf.scores,
+    projectTier: perf.projectTier,
+    projectApproved: perf.projectApproved,
+    learningApproved: perf.learningApproved,
+    innovationApproved: perf.innovationApproved,
   })
-  const fixedPay = Math.max(0, Number(performance.fixedPay) || 0)
+  const fixedPay = Math.max(0, Number(perf.fixedPay) || 0)
   const grossPay = fixedPay + calc.totalBonus
+  const standing = Math.max(0, Math.round(Number(member.pulseNetPay) || 0))
+  const hasManualNet = netPay != null && Number.isFinite(Number(netPay))
+  const resolvedNet = hasManualNet
+    ? Math.max(0, Math.round(Number(netPay)))
+    : standing > 0
+      ? standing
+      : grossPay
   return {
     organizationId,
     user: member._id,
     email: String(member.email || '').toLowerCase(),
-    month: performance.month,
-    performanceId: performance._id,
+    month: perf.month || month,
+    performanceId: perf._id || undefined,
     employeeName: personName(member),
     fixedPay,
     performanceBonus: calc.performanceBonus,
@@ -198,17 +203,51 @@ function buildPayslipPayload({ organizationId, member, performance, actorId }) {
     weightedScore: calc.weightedScore,
     performanceStatus: calc.performanceStatus,
     grossPay,
-    netPay: grossPay,
+    netPay: resolvedNet,
+    netPayManual: hasManualNet || standing > 0,
     status: 'generated',
     generatedAt: new Date(),
     generatedBy: actorId,
   }
 }
 
-async function upsertPayslipFromPerformance({ organizationId, member, performance, actorId }) {
-  const payload = buildPayslipPayload({ organizationId, member, performance, actorId })
+async function upsertPayslipFromPerformance({ organizationId, member, performance, actorId, netPay, month }) {
+  const slipMonth = performance?.month || month
+  if (!slipMonth) {
+    const err = new Error('Month is required')
+    err.status = 400
+    throw err
+  }
+
+  const existing = await PulsePayrollPayslip.findOne({
+    user: member._id,
+    month: slipMonth,
+  }).lean()
+
+  let resolvedNet = netPay
+  if (resolvedNet == null && existing?.netPayManual && Number(existing.netPay) > 0) {
+    resolvedNet = existing.netPay
+  }
+  if (resolvedNet == null && Number(member.pulseNetPay) > 0) {
+    resolvedNet = member.pulseNetPay
+  }
+
+  const payload = buildPayslipPayload({
+    organizationId,
+    member,
+    performance,
+    actorId,
+    netPay: resolvedNet,
+    month: slipMonth,
+  })
+
+  if (existing?.status === 'paid') {
+    payload.status = 'paid'
+    payload.paidAt = existing.paidAt
+  }
+
   const doc = await PulsePayrollPayslip.findOneAndUpdate(
-    { user: member._id, month: performance.month },
+    { user: member._id, month: slipMonth },
     { $set: payload },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   )
@@ -265,7 +304,7 @@ router.get('/me/list', auth, async (req, res) => {
   }
 })
 
-// Admin: month board — locked performance + payslip status
+// Admin: month board — all org members + performance lock + payslip status
 router.get('/admin/month', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -275,54 +314,70 @@ router.get('/admin/month', auth, async (req, res) => {
     const organizationId = orgIdOf(req.user)
     const orgObjectId = toOrgObjectId(organizationId)
 
-    const [lockedPerf, payslips, members] = await Promise.all([
-      PulsePerformanceMonth.find({ organizationId: orgObjectId, month, status: 'locked' })
+    const [perfRows, payslips, members] = await Promise.all([
+      PulsePerformanceMonth.find({ organizationId: orgObjectId, month })
         .select('user email fixedPay scores projectTier projectApproved learningApproved innovationApproved status lockedAt')
         .lean(),
       PulsePayrollPayslip.find({ organizationId: orgObjectId, month }).lean(),
       User.find({
         $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
       })
-        .select('_id firstName lastName displayName email avatarUrl')
-        .lean(),
+      .select('_id firstName lastName displayName email avatarUrl role pulseNetPay pulseNetPayUpdatedAt')
+      .lean(),
     ])
 
-    const memberById = new Map(members.map((m) => [String(m._id), m]))
+    const perfByUser = new Map(perfRows.map((p) => [String(p.user), p]))
     const payByUser = new Map(payslips.map((p) => [String(p.user), p]))
 
-    const rows = lockedPerf.map((perf) => {
-      const member = memberById.get(String(perf.user))
-      const calc = computeMonthlyCompensation({
-        fixedPay: perf.fixedPay,
-        scores: perf.scores,
-        projectTier: perf.projectTier,
-        projectApproved: perf.projectApproved,
-        learningApproved: perf.learningApproved,
-        innovationApproved: perf.innovationApproved,
+    const rows = members
+      .filter((member) => Boolean(member.email))
+      .map((member) => {
+        const perf = perfByUser.get(String(member._id))
+        const slip = payByUser.get(String(member._id))
+        const calc = computeMonthlyCompensation({
+          fixedPay: perf?.fixedPay,
+          scores: perf?.scores,
+          projectTier: perf?.projectTier,
+          projectApproved: perf?.projectApproved,
+          learningApproved: perf?.learningApproved,
+          innovationApproved: perf?.innovationApproved,
+        })
+        const locked = perf?.status === 'locked'
+        const standingNetPay = Math.max(0, Math.round(Number(member.pulseNetPay) || 0))
+        return {
+          user: String(member._id),
+          email: member.email,
+          name: personName(member),
+          avatarUrl: member.avatarUrl || '',
+          month,
+          performanceStatus: locked || Number(calc.weightedScore) > 0 ? calc.performanceStatus : '',
+          weightedScore: calc.weightedScore || 0,
+          totalBonus: calc.totalBonus || 0,
+          fixedPay: perf?.fixedPay || 0,
+          standingNetPay,
+          netPay: slip?.netPay ?? standingNetPay,
+          performanceLocked: locked,
+          performanceState: perf?.status || 'none',
+          lockedAt: perf?.lockedAt || null,
+          payslip: slip ? serializePayslip(slip, member) : null,
+          hasPayslip: Boolean(slip),
+        }
       })
-      const slip = payByUser.get(String(perf.user))
-      return {
-        user: String(perf.user),
-        email: perf.email,
-        name: member ? personName(member) : perf.email,
-        avatarUrl: member?.avatarUrl || '',
-        month,
-        lockedAt: perf.lockedAt || null,
-        fixedPay: perf.fixedPay || 0,
-        ...calc,
-        payslip: slip ? serializePayslip(slip, member) : null,
-        hasPayslip: Boolean(slip),
-      }
+
+    rows.sort((a, b) => {
+      const rank = (row) => (row.hasPayslip ? 0 : row.standingNetPay > 0 ? 1 : 2)
+      return rank(a) - rank(b) || String(a.name).localeCompare(String(b.name))
     })
 
-    rows.sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    const lockedCount = rows.filter((r) => r.performanceLocked).length
     res.json({
       success: true,
       data: rows,
       meta: {
         month,
-        locked: rows.length,
+        locked: lockedCount,
         generated: rows.filter((r) => r.hasPayslip).length,
+        members: rows.length,
       },
     })
   } catch (err) {
@@ -359,7 +414,7 @@ router.get('/admin/:userId/download', auth, async (req, res) => {
   }
 })
 
-// Admin: generate payslips for locked performance (all or one user)
+// Admin: generate payslips for the month (all members with standing net, or one user)
 router.post('/admin/generate', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -369,37 +424,58 @@ router.post('/admin/generate', auth, async (req, res) => {
     const organizationId = orgIdOf(req.user)
     const orgObjectId = toOrgObjectId(organizationId)
     const onlyUserId = req.body.userId ? String(req.body.userId) : null
+    const netPayOverride =
+      req.body.netPay != null && Number.isFinite(Number(req.body.netPay))
+        ? Math.max(0, Math.round(Number(req.body.netPay)))
+        : null
 
-    const query = { organizationId: orgObjectId, month, status: 'locked' }
-    if (onlyUserId) query.user = onlyUserId
+    const memberQuery = {
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+    }
+    if (onlyUserId) memberQuery._id = onlyUserId
 
-    const locked = await PulsePerformanceMonth.find(query)
-    if (!locked.length) {
-      return res.status(400).json({
-        success: false,
-        message: onlyUserId
-          ? 'Lock performance before generating this payslip'
-          : 'No locked performance rows for this month',
-      })
+    const members = await User.find(memberQuery)
+      .select('_id firstName lastName displayName email avatarUrl pulseNetPay')
+      .lean()
+    if (!members.length) {
+      return res.status(404).json({ success: false, message: 'No members found' })
     }
 
-    const memberIds = locked.map((row) => row.user)
-    const members = await User.find({ _id: { $in: memberIds } })
-      .select('_id firstName lastName displayName email avatarUrl')
-      .lean()
-    const memberById = new Map(members.map((m) => [String(m._id), m]))
+    const memberIds = members.map((m) => m._id)
+    const perfRows = await PulsePerformanceMonth.find({
+      organizationId: orgObjectId,
+      month,
+      user: { $in: memberIds },
+    })
+    const perfByUser = new Map(perfRows.map((p) => [String(p.user), p]))
 
     const created = []
-    for (const performance of locked) {
-      const member = memberById.get(String(performance.user))
-      if (!member) continue
+    for (const member of members) {
+      if (!member.email) continue
+      const performance = perfByUser.get(String(member._id)) || null
+      const standing = Math.max(0, Math.round(Number(member.pulseNetPay) || 0))
+      const netForOne = onlyUserId ? (netPayOverride != null ? netPayOverride : standing || null) : null
+      // Batch generate: skip people with no standing net and no performance month
+      if (!onlyUserId && standing <= 0 && !performance) continue
+
       const doc = await upsertPayslipFromPerformance({
         organizationId: orgObjectId,
         member,
         performance,
         actorId: req.user._id,
+        netPay: onlyUserId ? netForOne : (standing > 0 ? standing : null),
+        month,
       })
       created.push(serializePayslip(doc, member))
+    }
+
+    if (!created.length) {
+      return res.status(400).json({
+        success: false,
+        message: onlyUserId
+          ? 'Set net pay for this employee first'
+          : 'Set standing net pay for employees before generating',
+      })
     }
 
     res.json({
@@ -409,6 +485,64 @@ router.post('/admin/generate', auth, async (req, res) => {
     })
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to generate payroll' })
+  }
+})
+
+// Admin / superadmin: set standing net pay (persists until hike / promotion change)
+router.put('/admin/:userId/net-pay', auth, async (req, res) => {
+  try {
+    if (!isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Admin access required' })
+    }
+    const month = assertMonth(req.body.month || monthKey())
+    const netPay = Math.max(0, Math.round(Number(req.body.netPay)))
+    if (!Number.isFinite(netPay)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid net pay amount' })
+    }
+
+    const organizationId = orgIdOf(req.user)
+    const orgObjectId = toOrgObjectId(organizationId)
+    const userId = String(req.params.userId)
+
+    const memberDoc = await User.findOne({
+      _id: userId,
+      $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
+    }).select('_id firstName lastName displayName email avatarUrl pulseNetPay')
+    if (!memberDoc) {
+      return res.status(404).json({ success: false, message: 'Member not found in your organization' })
+    }
+
+    memberDoc.pulseNetPay = netPay
+    memberDoc.pulseNetPayUpdatedAt = new Date()
+    await memberDoc.save()
+
+    const member = memberDoc.toObject()
+    const performance = await PulsePerformanceMonth.findOne({
+      organizationId: orgObjectId,
+      user: userId,
+      month,
+    })
+
+    const doc = await upsertPayslipFromPerformance({
+      organizationId: orgObjectId,
+      member,
+      performance,
+      actorId: req.user._id,
+      netPay,
+      month,
+    })
+
+    res.json({
+      success: true,
+      data: serializePayslip(doc, member),
+      meta: {
+        month,
+        netPay: doc.netPay,
+        standingNetPay: netPay,
+      },
+    })
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to set net pay' })
   }
 })
 

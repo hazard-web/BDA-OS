@@ -1,85 +1,173 @@
-/* Aceternity floating dock — horizontal, bottom of Pulse. */
+/* Left module rail — Bitrix column + dock magnification. */
 
 .pulse-fd-wrap {
+  --pulse-fd-w: 88px;
   position: fixed;
+  top: 0;
+  bottom: 0;
   left: 0;
-  right: 0;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 50;
-  display: flex;
-  justify-content: center;
+  z-index: 1100;
+  width: var(--pulse-fd-w);
   pointer-events: none;
+  box-shadow: none;
+  filter: none;
 }
 
 .pulse-fd {
   pointer-events: auto;
   display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 6px 16px 10px;
-  overflow: visible;
-  isolation: isolate;
-  border-radius: 22px;
-  background: #f4f2ee;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 0 0 10px;
+  background: var(--pulse-chrome, #556b2f);
   border: 0;
-  box-shadow:
-    0 12px 32px rgba(8, 22, 16, 0.2),
-    0 2px 8px rgba(8, 22, 16, 0.1);
+  border-radius: 0;
+  box-shadow: none !important;
+  filter: none !important;
+  overflow: visible;
+}
+
+.pulse-fd-brand {
+  flex: 0 0 auto;
+  height: 64px;
+  border-bottom: 1px solid var(--pulse-chrome-line, rgba(120, 175, 163, 0.28));
+  box-sizing: border-box;
+}
+
+.pulse-fd-stack {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  overflow: visible;
+  padding: 8px 0;
+}
+
+.pulse-fd-foot {
+  flex: 0 0 auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--pulse-chrome-line, rgba(120, 175, 163, 0.28));
 }
 
 .pulse-fd-hit {
   appearance: none;
   position: relative;
-  display: grid;
-  place-items: end center;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 68px;
   margin: 0;
-  padding: 0;
+  padding: 8px 4px 9px;
   border: 0;
   background: transparent;
+  color: var(--pulse-chrome-muted, rgba(232, 241, 238, 0.62));
   cursor: pointer;
   outline: none;
   box-shadow: none;
 }
 
+.pulse-fd-hit:hover {
+  z-index: 2;
+  color: var(--pulse-chrome-fg, #e8f1ee);
+}
+
 .pulse-fd-hit:focus-visible .pulse-fd-well {
-  box-shadow: 0 0 0 2px rgba(20, 32, 25, 0.2);
+  box-shadow: 0 0 0 2px rgba(232, 241, 238, 0.35);
+}
+
+.pulse-fd-hit.is-on,
+.pulse-fd-hit.is-on:hover {
+  z-index: 2;
+  color: #556b2f !important;
+  background: #ffffff;
+  border-radius: 14px;
+  margin: 2px 7px;
+  width: calc(100% - 14px);
+  min-height: 72px;
+  height: 72px;
+  max-height: 72px;
+  padding: 8px 4px 8px;
+  gap: 4px;
+  align-self: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.pulse-fd-hit.is-on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  bottom: auto;
+  width: 4px;
+  height: 28px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--pulse-orange, #e88a2d);
+  box-shadow: none;
 }
 
 .pulse-fd-well {
   position: relative;
   display: grid;
   place-items: center;
-  border-radius: 999px;
-  background: rgba(20, 32, 25, 0.08);
-  color: #3a4540;
-  transform-origin: 50% 80%;
-  will-change: transform;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(232, 241, 238, 0.1);
+  color: inherit;
+  transform-origin: 50% 50%;
+  will-change: width, height;
+  flex-shrink: 0;
+}
+
+.pulse-fd-hit:hover:not(.is-on) .pulse-fd-well {
+  background: rgba(232, 241, 238, 0.16);
 }
 
 .pulse-fd-hit.is-on .pulse-fd-well {
-  background: rgba(196, 92, 38, 0.14);
-  color: #c45c26;
+  background: transparent !important;
+  color: #556b2f !important;
+  width: 40px !important;
+  height: 40px !important;
 }
 
-/* Home: clean white circle; active ring stays outside so the PNG can’t cover it. */
-.pulse-fd-hit.is-brand .pulse-fd-well {
-  background: #fff;
+.pulse-fd-hit.is-on .pulse-fd-glyph,
+.pulse-fd-hit.is-on .pulse-fd-glyph .anticon,
+.pulse-fd-hit.is-on .pulse-fd-glyph svg,
+.pulse-fd-hit.is-on .pulse-fd-glyph svg * {
+  color: #556b2f !important;
+  fill: currentColor !important;
+}
+
+.pulse-fd-hit.is-on .pulse-fd-glyph {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.pulse-fd-hit.is-on .pulse-fd-label {
+  color: #556b2f !important;
+  font-weight: 600;
+  max-height: 28px;
   overflow: hidden;
-  box-shadow: none;
-}
-
-.pulse-fd-hit.is-brand.is-on .pulse-fd-well {
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(196, 92, 38, 0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .pulse-fd-glyph {
   display: grid;
   place-items: center;
   line-height: 0;
+  color: inherit;
 }
 
 .pulse-fd-glyph .anticon,
@@ -90,86 +178,93 @@
   object-fit: contain;
 }
 
-.pulse-fd-hit.is-brand .pulse-fd-glyph {
-  width: 78% !important;
-  height: 78% !important;
-}
-
-.pulse-fd-hit.is-brand .pulse-fd-glyph .people-os-mark {
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  padding: 0;
-  margin: 0;
-  object-fit: contain;
-  object-position: center;
-  transform: none;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.pulse-fd-tip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 10px);
-  z-index: 80;
-  padding: 5px 9px;
-  border-radius: 8px;
-  background: #142019;
-  color: #f5f3ee;
+.pulse-fd-label {
+  display: block;
+  max-width: 100%;
+  padding: 0 2px;
   font-family: Figtree, system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
   letter-spacing: 0.01em;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: 0 10px 24px rgba(8, 22, 16, 0.18);
+  text-align: center;
+  color: inherit;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.pulse-shell.pulse-id .pulse-chrome {
+  padding-left: var(--pulse-fd-w, 88px);
 }
 
 .pulse-shell.pulse-id .pulse-scroll.pulse-scroll-live::after,
 .pulse-shell.pulse-id .pulse-scroll.pulse-scroll-dash::after {
-  content: '';
-  display: block;
-  height: 96px;
-  pointer-events: none;
+  content: none;
+  display: none;
 }
 
 :root[data-theme='dark'] .pulse-fd {
-  background: #1a1f1c;
-  border: 0;
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.42),
-    0 2px 8px rgba(0, 0, 0, 0.24);
+  background: var(--pulse-chrome-deep, #3d4a22);
 }
 
-:root[data-theme='dark'] .pulse-fd-well {
-  background: rgba(255, 255, 255, 0.1);
-  color: #d7ddd6;
+:root[data-theme='dark'] .pulse-fd-hit.is-on,
+:root[data-theme='dark'] .pulse-fd-hit.is-on:hover,
+:root[data-theme='dark'] .pulse-fd-hit.is-on .pulse-fd-well,
+:root[data-theme='dark'] .pulse-fd-hit.is-on .pulse-fd-label,
+:root[data-theme='dark'] .pulse-fd-hit.is-on .pulse-fd-glyph,
+:root[data-theme='dark'] .pulse-fd-hit.is-on .pulse-fd-glyph .anticon,
+:root[data-theme='dark'] .pulse-fd-hit.is-on .pulse-fd-glyph svg {
+  color: #3d4a22 !important;
 }
 
-:root[data-theme='dark'] .pulse-fd-hit.is-brand .pulse-fd-well,
-:root[data-theme='dark'] .pulse-fd-hit.is-brand.is-on .pulse-fd-well {
-  background: #fff;
-}
-
-:root[data-theme='dark'] .pulse-fd-hit.is-on .pulse-fd-well {
-  background: rgba(196, 92, 38, 0.22);
-  color: #e8a070;
-}
-
-:root[data-theme='dark'] .pulse-fd-hit:focus-visible .pulse-fd-well {
-  box-shadow: 0 0 0 2px rgba(231, 238, 230, 0.28);
-}
-
-:root[data-theme='dark'] .pulse-fd-tip {
-  background: #e7eee6;
-  color: #121612;
+@media (prefers-reduced-motion: reduce) {
+  .pulse-fd-well {
+    will-change: auto;
+  }
 }
 
 @media (max-width: 720px) {
-  .pulse-fd {
-    gap: 6px;
-    padding: 4px 10px 8px;
-    max-width: calc(100vw - 16px);
+  .pulse-fd-wrap {
+    --pulse-fd-w: 76px;
+  }
+
+  .pulse-fd-brand {
+    height: 60px;
+  }
+
+  .pulse-fd-hit {
+    min-height: 60px;
+    padding: 7px 4px 8px;
+    gap: 4px;
+  }
+
+  .pulse-fd-hit.is-on,
+  .pulse-fd-hit.is-on:hover {
+    min-height: 64px;
+    height: 64px;
+    max-height: 64px;
+  }
+
+  .pulse-fd-well {
+    width: 36px;
+    height: 36px;
+  }
+
+  .pulse-fd-hit.is-on .pulse-fd-well {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .pulse-fd-hit.is-on .pulse-fd-glyph {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .pulse-fd-hit.is-on::before {
+    height: 24px;
+  }
+
+  .pulse-fd-label {
+    font-size: 10px;
   }
 }

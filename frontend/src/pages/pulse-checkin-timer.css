@@ -13,9 +13,9 @@ body,
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1.5px solid #1a5f4a;
+  border: 1.5px solid var(--pulse-primary);
   background: #fff;
-  color: #0f172a;
+  color: #183B35;
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
 }
 
@@ -52,7 +52,7 @@ body,
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #1a5f4a;
+  color: var(--pulse-primary);
 }
 
 .pulse-checkin-timer-time {

@@ -1,4 +1,4 @@
-const STORAGE_PREFIX = 'pulseWelcomeCurtain.v15:'
+const STORAGE_PREFIX = 'pulseWelcomeCurtain.v27:'
 const LINE_PREFIX = 'pulseWelcomeLines.v2:'
 
 export function welcomeCurtainStorageKey(email) {
@@ -195,6 +195,7 @@ export function pickWelcomeLine(email, period, weekday) {
   const source = unused.length > 0 ? unused : pool
   const index = Math.floor(Math.random() * source.length)
   const chosen = source[index] || pool[0]
+  if (!chosen?.text) return 'Another day, another step towards your goals. Lets make it count!'
   const nextUsed = unused.length > 0 ? [...used, chosen.id] : [chosen.id]
   if (email) writeUsedIds(email, nextUsed)
   return chosen.text
