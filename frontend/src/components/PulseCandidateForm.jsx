@@ -327,10 +327,12 @@ export const EMPLOYEE_STEP_FIELDS = {
     'phone',
     'dob',
     'gender',
+    'photo',
     ['emergencyContact', 'name'],
+    ['emergencyContact', 'relationship'],
     ['emergencyContact', 'phone'],
   ],
-  id: ['aadhaarFront', 'aadhaarBack', 'panFront'],
+  id: ['aadhaar', 'pan', 'aadhaarFront', 'aadhaarBack', 'panFront'],
   address: [],
   work: [
     'highestQualification',
@@ -398,7 +400,14 @@ function EmergencyFields({ disabled, required }) {
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name={['emergencyContact', 'relationship']} label="Relationship">
+          <Form.Item
+            name={['emergencyContact', 'relationship']}
+            label="Relationship"
+            rules={rules ? [
+              { required: true, message: 'Relationship is required' },
+              { whitespace: true, message: 'Relationship is required' },
+            ] : []}
+          >
             <Input placeholder="e.g. Parent, Spouse" disabled={disabled} />
           </Form.Item>
         </Col>
@@ -441,7 +450,10 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                 <Form.Item
                   name="firstName"
                   label="First name"
-                  rules={[{ required: true, message: 'First name is required' }]}
+                  rules={[
+                    { required: true, message: 'First name is required' },
+                    { whitespace: true, message: 'First name is required' },
+                  ]}
                 >
                   <Input autoComplete="given-name" disabled={disabled} />
                 </Form.Item>
@@ -450,7 +462,10 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
                 <Form.Item
                   name="lastName"
                   label="Last name"
-                  rules={[{ required: true, message: 'Last name is required' }]}
+                  rules={[
+                    { required: true, message: 'Last name is required' },
+                    { whitespace: true, message: 'Last name is required' },
+                  ]}
                 >
                   <Input autoComplete="family-name" disabled={disabled} />
                 </Form.Item>
@@ -478,7 +493,12 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
               </Col>
               <YouPersonalFields disabled={disabled} required={!disabled} />
             </Row>
-            <Form.Item name="photo" label="Photo" className="ob-you-photo">
+            <Form.Item
+              name="photo"
+              label="Photo"
+              className="ob-you-photo"
+              rules={disabled ? [] : requireUpload('Photo is required')}
+            >
               <FileSlot kinds="image" disabled={disabled} compact />
             </Form.Item>
           </div>
@@ -508,13 +528,32 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
               <EmergencyFields disabled={disabled} required={!disabled} />
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="aadhaar" label="Aadhaar card number">
-                <Input disabled={disabled} />
+              <Form.Item
+                name="aadhaar"
+                label="Aadhaar card number"
+                rules={disabled ? [] : [
+                  { required: true, message: 'Aadhaar number is required' },
+                  { whitespace: true, message: 'Aadhaar number is required' },
+                ]}
+              >
+                <Input disabled={disabled} inputMode="numeric" maxLength={12} />
               </Form.Item>
-              <Form.Item name="pan" label="PAN card number">
-                <Input placeholder="ABCDE1234F" disabled={disabled} />
+              <Form.Item
+                name="pan"
+                label="PAN card number"
+                rules={disabled ? [] : [
+                  { required: true, message: 'PAN number is required' },
+                  { whitespace: true, message: 'PAN number is required' },
+                ]}
+                normalize={(value) => String(value || '').toUpperCase()}
+              >
+                <Input placeholder="ABCDE1234F" disabled={disabled} maxLength={10} />
               </Form.Item>
-              <Form.Item name="photo" label="Photo">
+              <Form.Item
+                name="photo"
+                label="Photo"
+                rules={disabled ? [] : requireUpload('Photo is required')}
+              >
                 <FileSlot
                   kinds="image"
                   disabled={disabled}
@@ -534,8 +573,24 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
               <p className="ob-id-name">Aadhaar</p>
             </div>
             {publicLayout ? (
-              <Form.Item name="aadhaar" label="Number">
-                <Input disabled={disabled} />
+              <Form.Item
+                name="aadhaar"
+                label="Number"
+                rules={disabled ? [] : [
+                  { required: true, message: 'Aadhaar number is required' },
+                  { whitespace: true, message: 'Aadhaar number is required' },
+                  {
+                    validator: (_, value) => {
+                      const digits = String(value || '').replace(/\s+/g, '')
+                      if (!digits) return Promise.resolve()
+                      return /^\d{12}$/.test(digits)
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('Enter a valid 12-digit Aadhaar number'))
+                    },
+                  },
+                ]}
+              >
+                <Input disabled={disabled} inputMode="numeric" maxLength={12} placeholder="12-digit Aadhaar" />
               </Form.Item>
             ) : null}
             <div className="ob-id-sides">
@@ -562,8 +617,25 @@ function EmployeeFillFields({ disabled, requireDocs, variant = 'admin', step = '
               <p className="ob-id-name">PAN</p>
             </div>
             {publicLayout ? (
-              <Form.Item name="pan" label="Number">
-                <Input placeholder="ABCDE1234F" disabled={disabled} />
+              <Form.Item
+                name="pan"
+                label="Number"
+                rules={disabled ? [] : [
+                  { required: true, message: 'PAN number is required' },
+                  { whitespace: true, message: 'PAN number is required' },
+                  {
+                    validator: (_, value) => {
+                      const pan = String(value || '').trim().toUpperCase()
+                      if (!pan) return Promise.resolve()
+                      return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('Enter a valid PAN (e.g. ABCDE1234F)'))
+                    },
+                  },
+                ]}
+                normalize={(value) => String(value || '').toUpperCase()}
+              >
+                <Input placeholder="ABCDE1234F" disabled={disabled} maxLength={10} />
               </Form.Item>
             ) : null}
             <div className="ob-id-sides ob-id-sides-single">
@@ -839,12 +911,26 @@ export default function PulseCandidateForm({
       {isEmployee ? null : (
         <Row gutter={24}>
           <Col xs={24} md={12}>
-            <Form.Item name="firstName" label="First name">
+            <Form.Item
+              name="firstName"
+              label="First name"
+              rules={[
+                { required: true, message: 'First name is required' },
+                { whitespace: true, message: 'First name is required' },
+              ]}
+            >
               <Input autoComplete="given-name" disabled={isAdmin && reviewEmployee} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="lastName" label="Last name">
+            <Form.Item
+              name="lastName"
+              label="Last name"
+              rules={[
+                { required: true, message: 'Last name is required' },
+                { whitespace: true, message: 'Last name is required' },
+              ]}
+            >
               <Input autoComplete="family-name" disabled={isAdmin && reviewEmployee} />
             </Form.Item>
           </Col>

@@ -504,12 +504,25 @@ router.post('/onboard/:token', async (req, res) => {
     if (!payload.gender) {
       return res.status(400).json({ success: false, message: 'Gender is required' })
     }
-    if (!payload.emergencyContact.name || !payload.emergencyContact.phone) {
+    if (!payload.emergencyContact.name || !payload.emergencyContact.phone || !payload.emergencyContact.relationship) {
       return res.status(400).json({
         success: false,
-        message: 'Emergency contact name and phone are required',
+        message: 'Emergency contact name, relationship, and phone are required',
       })
     }
+    if (!hasCardFile(payload.photo) && !hasCardFile(row.photo)) {
+      return res.status(400).json({ success: false, message: 'Photo is required' })
+    }
+    const aadhaar = String(payload.aadhaar || '').replace(/\s+/g, '')
+    const pan = String(payload.pan || '').trim().toUpperCase()
+    if (!/^\d{12}$/.test(aadhaar)) {
+      return res.status(400).json({ success: false, message: 'Aadhaar number is required (12 digits)' })
+    }
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      return res.status(400).json({ success: false, message: 'PAN number is required (e.g. ABCDE1234F)' })
+    }
+    payload.aadhaar = aadhaar
+    payload.pan = pan
     requireIdCards(payload, row)
     requireEducation(payload)
 
@@ -640,6 +653,12 @@ router.post('/bulk-onboard', auth, requireAdmin, async (req, res) => {
     }
     const firstName = cleanStr(req.body?.firstName)
     const lastName = cleanStr(req.body?.lastName)
+    if (emails.length === 1 && (!firstName || !lastName)) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name and last name are required',
+      })
+    }
     const singleOfficial =
       emails.length === 1 ? completeCompanyEmail(req.body?.officialEmail) : ''
 
@@ -907,6 +926,12 @@ router.post('/:id/send-onboarding', auth, requireAdmin, async (req, res) => {
     }
 
     requirePersonalEmail(row)
+    if (!cleanStr(row.firstName) || !cleanStr(row.lastName)) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name and last name are required before sending onboarding',
+      })
+    }
     issueOnboardingToken(row)
     const onboardUrl = buildCandidateOnboardLink(row.onboardingToken)
     const candidateName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim()

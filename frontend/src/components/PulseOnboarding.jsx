@@ -307,7 +307,7 @@ export default function PulseOnboarding() {
           return
         }
         if (emails[0]) form.setFieldValue('email', emails[0])
-        await form.validateFields(['email'])
+        await form.validateFields(['firstName', 'lastName', 'email'])
       }
       await persistAdmin()
       message.success('Saved')
@@ -324,11 +324,20 @@ export default function PulseOnboarding() {
     try {
       const isNew = !editing?._id
       if (isNew) {
-        await form.validateFields(['personalEmails'])
         const emails = normalizePersonalEmails(form.getFieldValue('personalEmails'))
+        const nameFields = emails.length <= 1 ? ['firstName', 'lastName'] : []
+        await form.validateFields([...nameFields, 'personalEmails'])
         if (!emails.length) {
           message.error('Add at least one personal email')
           return
+        }
+        if (emails.length === 1) {
+          const firstName = String(form.getFieldValue('firstName') || '').trim()
+          const lastName = String(form.getFieldValue('lastName') || '').trim()
+          if (!firstName || !lastName) {
+            message.error('First name and last name are required')
+            return
+          }
         }
         setSending(true)
         const values = form.getFieldsValue(true)
@@ -357,7 +366,7 @@ export default function PulseOnboarding() {
         return
       }
 
-      await form.validateFields(['email'])
+      await form.validateFields(['firstName', 'lastName', 'email'])
       setSending(true)
       const row = await persistAdmin()
       const id = row?._id || editing?._id
