@@ -29,7 +29,7 @@ function Plaque({ companyName, step, onStep, complete }) {
     <aside className="ob-public-plaque">
       <div className="ob-public-brand">
         <div className="ob-public-logo">
-          <img src="/bda-logo-lockup.png" alt="BDA Technologies" />
+          <img src="/bda-logo-mark.png" alt="BDA Technologies" />
         </div>
         <h1 className="ob-public-org">{org}</h1>
       </div>

@@ -917,13 +917,33 @@ router.post('/check-in', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'This day is already closed for timesheet' });
     }
 
+    // Idempotent: already checked in with an open session — do not queue another RESUME.
+    const openSession = findOpenSession(doc);
+    if (doc.status === 'active' && openSession) {
+      const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: false });
+      doc.totalActiveMs = trusted.totalActiveMs;
+      doc.email = email;
+      touchHeartbeat(doc, now);
+      await doc.save();
+      return res.json({ success: true, data: serializeDay(doc) });
+    }
+
     // Close a dangling open session before opening a new one (tab crash / missed check-out).
-    const dangling = findOpenSession(doc);
-    if (dangling) {
+    // Always emit CHECK_OUT so the activity queue stays alternating.
+    if (openSession) {
       const trustedClose = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
       doc.totalActiveMs = trustedClose.totalActiveMs;
       applyAnomaly(doc, trustedClose.anomaly);
       closeOpenSession(doc, now, { location, ip, userAgent });
+      doc.events.push({
+        type: 'CHECK_OUT',
+        at: now,
+        activeMsAtEvent: doc.totalActiveMs,
+        ip,
+        userAgent,
+        location,
+      });
+      doc.status = 'stopped';
     } else {
       const trusted = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: false });
       doc.totalActiveMs = trusted.totalActiveMs;
@@ -992,11 +1012,15 @@ router.post('/check-out', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'This day is already closed for timesheet' });
     }
 
-    // Idempotent: tab-close may fire keepalive + sendBeacon together.
-    const alreadyOut = doc.status === 'stopped' && !findOpenSession(doc);
-    if (alreadyOut) {
+    // Idempotent: nothing open — do not invent a zero-duration session or extra CHECK_OUT.
+    const openSession = findOpenSession(doc);
+    if (!openSession) {
       const trustedIdle = applyTrustedActiveMs(doc, clientActiveMs, now, { allowInflate: true });
       doc.totalActiveMs = Math.max(Number(doc.totalActiveMs) || 0, trustedIdle.totalActiveMs || 0);
+      if (doc.status !== 'stopped') {
+        doc.status = 'stopped';
+        doc.email = email;
+      }
       touchHeartbeat(doc, now);
       await doc.save();
       return res.json({ success: true, data: serializeDay(doc) });
@@ -1009,17 +1033,7 @@ router.post('/check-out', auth, async (req, res) => {
     doc.email = email;
     touchHeartbeat(doc, now);
 
-    const closed = closeOpenSession(doc, now, { location, ip, userAgent });
-    if (!closed) {
-      doc.sessions.push({
-        checkInAt: now,
-        checkOutAt: now,
-        durationMs: 0,
-        ip,
-        userAgent,
-        locationOut: location,
-      });
-    }
+    closeOpenSession(doc, now, { location, ip, userAgent });
 
     doc.events.push({
       type: 'CHECK_OUT',

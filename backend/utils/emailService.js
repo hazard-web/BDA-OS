@@ -1,6 +1,27 @@
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
 const { generatePayslipPDFBuffer } = require('./pdfBuffer');
 const { buildSetupLink, buildVerifyLink } = require('./urlHelper');
+
+const BDA_LOGO_CID = 'bda-logo@bdatech';
+/** Green square mark (white BDA) — used as circular brand in transactional mail. */
+const BDA_LOGO_PATH = path.join(__dirname, '../assets/bda-logo-mark.png');
+
+function bdaLogoAttachment() {
+  try {
+    if (!fs.existsSync(BDA_LOGO_PATH)) return null;
+    return {
+      filename: 'bda-logo-mark.png',
+      content: fs.readFileSync(BDA_LOGO_PATH),
+      contentType: 'image/png',
+      cid: BDA_LOGO_CID,
+      contentDisposition: 'inline',
+    };
+  } catch {
+    return null;
+  }
+}
 
 function sanitizeEmailValue(value) {
   if (!value) return '';
@@ -53,7 +74,14 @@ function displayNameFrom(value, fallback = 'BDA Technologies') {
   if (named) raw = named[1].trim()
   if (!raw || raw.includes('@')) return fallback
   if (raw.toLowerCase() === 'pulse') return fallback
+  // Placeholder workspace names should never appear in outbound mail.
+  if (/^my\s*company$/i.test(raw) || /^your\s*company$/i.test(raw)) return fallback
   return raw
+}
+
+/** Canonical brand for candidate / invite mail — never "My company". */
+function brandOrgName(companyName) {
+  return displayNameFrom(companyName, 'BDA Technologies')
 }
 
 function formatFrom(displayName, address) {
@@ -111,10 +139,19 @@ function hasRealCredentials() {
 function toResendAttachment(file) {
   const filename = file.filename || file.name || 'attachment';
   let content = file.content;
-  if (typeof content === 'string' && content.startsWith('data:')) {
+  if (Buffer.isBuffer(content)) {
+    content = content.toString('base64');
+  } else if (typeof content === 'string' && content.startsWith('data:')) {
     content = content.split(',')[1];
   }
-  return { filename, content };
+  const out = { filename, content };
+  const cid = file.cid || file.contentId || file.content_id;
+  if (cid) {
+    out.content_id = String(cid).replace(/^cid:/i, '');
+    out.contentId = out.content_id;
+  }
+  if (file.contentType) out.content_type = file.contentType;
+  return out;
 }
 
 function friendlyMailError(raw) {
@@ -1086,44 +1123,97 @@ async function sendPunchOutReminderEmail(staff, loginUrl, details = {}) {
 }
 
 /**
- * BDA OS invite — accept link sets password and joins the organization.
+ * Clean Atlassian-style transactional layout for BDA Technologies.
+ * White card, centered brand, hairline rules, one CTA, trust footer.
  */
-async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedByName, loginEmail }) {
-  const transporter = await createSMTPTransporter();
-  const org = companyName || 'BDA Technologies';
-  const roleLabel = role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
-  const fromName = invitedByName || 'HR';
-  const login = loginEmail || to;
+function buildBdaTrustEmailHtml({
+  orgName,
+  title,
+  subtitle,
+  bodyHtml,
+  ctaLabel,
+  ctaUrl,
+  closing,
+  expiryNote,
+}) {
+  const org = escapeHtml(orgName || 'BDA Technologies');
+  const safeTitle = escapeHtml(title || '');
+  const safeSubtitle = escapeHtml(subtitle || '');
+  const safeCta = escapeHtml(ctaLabel || 'Continue');
+  const safeUrl = escapeHtml(ctaUrl || '#');
+  const hasClosing = Boolean(closing && String(closing).trim());
+  const safeClosing = hasClosing ? escapeHtml(String(closing).trim()) : '';
+  const year = new Date().getFullYear();
 
-  const mailOptions = {
-    from: buildFromAddress(org),
-    to,
-    subject: `You're invited to ${org}`,
-    html: `
+  return `
 <!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f5f0e8;font-family:Segoe UI,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>${safeTitle}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:40px 16px;">
     <tr>
       <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">
           <tr>
-            <td style="background:#1A5F4A;padding:28px 32px;">
-              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
-              <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">You're invited</h1>
+            <td align="center" style="padding:40px 40px 24px;">
+              <img src="cid:${BDA_LOGO_CID}" width="96" height="96" alt="BDA Technologies" style="display:block;width:96px;height:96px;border:0;outline:none;text-decoration:none;border-radius:50%;" />
+              <p style="margin:14px 0 0;font-size:15px;font-weight:800;letter-spacing:0.08em;color:#465a27;text-transform:uppercase;">${org}</p>
             </td>
           </tr>
           <tr>
-            <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
-              <p style="margin:0 0 12px;"><strong>${fromName}</strong> invited you to join <strong>${org}</strong> as a <strong>${roleLabel}</strong>.</p>
-              <p style="margin:0 0 12px;color:#555;">Sign in with your work email:</p>
-              <p style="margin:0 0 16px;padding:10px 12px;background:#f4f2ec;border-radius:8px;font-weight:600;">${login}</p>
-              <p style="margin:0 0 24px;color:#555;">Open the link below to set your password. After that you can sign in with this work email.</p>
-              <p style="margin:0 0 28px;">
-                <a href="${inviteUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Set password &amp; join</a>
-              </p>
-              <p style="margin:0;font-size:12px;color:#888;word-break:break-all;">Or open this link:<br/>${inviteUrl}</p>
-              <p style="margin:20px 0 0;font-size:12px;color:#888;">This link expires in 7 days.</p>
+            <td style="padding:0 40px;">
+              <div style="height:1px;background:#e8ebef;line-height:1px;font-size:1px;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:36px 40px 8px;">
+              <h1 style="margin:0;font-size:28px;line-height:1.25;font-weight:700;color:#172b4d;letter-spacing:-0.02em;">${safeTitle}</h1>
+              ${safeSubtitle ? `<p style="margin:12px 0 0;font-size:18px;line-height:1.4;font-weight:500;color:#172b4d;">${safeSubtitle}</p>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 40px 8px;color:#172b4d;font-size:15px;line-height:1.6;">
+              ${bodyHtml}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:28px 40px 28px;">
+              <a href="${safeUrl}" style="display:inline-block;background:#465a27;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-size:15px;font-weight:700;">${safeCta}</a>
+            </td>
+          </tr>
+          ${hasClosing ? `
+          <tr>
+            <td style="padding:0 40px 28px;color:#172b4d;font-size:15px;line-height:1.6;">
+              ${safeClosing}
+            </td>
+          </tr>` : ''}
+          <tr>
+            <td style="padding:0 40px;">
+              <div style="height:1px;background:#e8ebef;line-height:1px;font-size:1px;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:24px 40px 8px;font-size:12px;line-height:1.6;color:#6b778c;">
+              Contact us · <a href="https://www.bdatechnologies.com" style="color:#6b778c;text-decoration:underline;">bdatechnologies.com</a>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:8px 40px 4px;font-size:11px;line-height:1.55;color:#6b778c;">
+              Copyright ${year} ${org}. All rights reserved.
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 40px 8px;font-size:11px;line-height:1.55;color:#6b778c;">
+              Sent on behalf of ${org}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:4px 40px 36px;font-size:11px;line-height:1.55;color:#6b778c;">
+              ${expiryNote ? `${escapeHtml(expiryNote)} ` : ''}If you were not expecting this email, you can ignore it.
             </td>
           </tr>
         </table>
@@ -1132,56 +1222,74 @@ async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, invitedB
   </table>
 </body>
 </html>
-    `,
+  `.trim();
+}
+
+/**
+ * BDA OS invite — accept link sets password and joins the organization.
+ */
+async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, loginEmail }) {
+  const transporter = await createSMTPTransporter();
+  const org = brandOrgName(companyName);
+  const roleLabel = role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
+  const login = escapeHtml(loginEmail || to);
+  const logo = bdaLogoAttachment();
+
+  const mailOptions = {
+    from: buildFromAddress(org),
+    to,
+    subject: `You're invited to ${org}`,
+    html: buildBdaTrustEmailHtml({
+      orgName: org,
+      title: "You're invited",
+      subtitle: `Join ${org} as a ${roleLabel}`,
+      bodyHtml: `
+        <p style="margin:0 0 14px;">Hi,</p>
+        <p style="margin:0 0 14px;">
+          This message is sent on behalf of <strong>${escapeHtml(org)}</strong>.
+          You have been invited to join the workspace. Use the work email below to set your password and get started.
+        </p>
+        <p style="margin:0 0 0;padding:12px 14px;background:#f4f5f7;border-radius:4px;font-weight:600;color:#172b4d;">${login}</p>
+      `,
+      ctaLabel: 'Set password & join',
+      ctaUrl: inviteUrl,
+      closing: 'We look forward to having you on the team.',
+      expiryNote: 'This link expires in 7 days.',
+    }),
+    ...(logo ? { attachments: [logo] } : {}),
   };
 
   const info = await sendMailWithRetry(transporter, mailOptions);
   return info;
 }
 
-async function sendCandidateOnboardingEmail({ to, onboardUrl, companyName, candidateName, invitedByName }) {
+async function sendCandidateOnboardingEmail({ to, onboardUrl, companyName }) {
   const transporter = await createSMTPTransporter();
-  const org = companyName || 'BDA Technologies';
-  const hello = candidateName ? `Hi ${candidateName},` : 'Hello,';
-  const fromName = invitedByName || 'HR';
+  const org = brandOrgName(companyName);
+  const logo = bdaLogoAttachment();
 
   const mailOptions = {
     from: buildFromAddress(org),
     to,
-    subject: `Complete your details for ${org}`,
-    html: `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f5f0e8;font-family:Segoe UI,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
-          <tr>
-            <td style="background:#1A5F4A;padding:28px 32px;">
-              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
-              <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">Fill your details</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
-              <p style="margin:0 0 12px;">${hello}</p>
-              <p style="margin:0 0 12px;"><strong>${fromName}</strong> at <strong>${org}</strong> asked you to complete your personal information for onboarding.</p>
-              <p style="margin:0 0 24px;color:#555;">After you submit, HR will finish your offer details and send sign-in instructions to your work email.</p>
-              <p style="margin:0 0 28px;">
-                <a href="${onboardUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Complete your details</a>
-              </p>
-              <p style="margin:0;font-size:12px;color:#888;word-break:break-all;">Or open this link:<br/>${onboardUrl}</p>
-              <p style="margin:20px 0 0;font-size:12px;color:#888;">This link expires in 14 days.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `,
+    subject: `Complete your details | ${org}`,
+    html: buildBdaTrustEmailHtml({
+      orgName: org,
+      title: 'Complete your details',
+      subtitle: 'A quick step to continue your onboarding',
+      bodyHtml: `
+        <p style="margin:0 0 14px;">Hi,</p>
+        <p style="margin:0 0 14px;">
+          As part of joining <strong>${escapeHtml(org)}</strong>, please share a few personal details so we can finish your onboarding.
+        </p>
+        <p style="margin:0;">
+          This message is sent on behalf of ${escapeHtml(org)}. After you submit, our HR team will complete your offer details and send sign-in instructions to your work email.
+        </p>
+      `,
+      ctaLabel: 'Complete your details',
+      ctaUrl: onboardUrl,
+      expiryNote: 'This link expires in 14 days.',
+    }),
+    ...(logo ? { attachments: [logo] } : {}),
   };
 
   const info = await sendMailWithRetry(transporter, mailOptions);

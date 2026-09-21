@@ -91,6 +91,7 @@ function publicUserFields(user) {
     lastName: plain.lastName || '',
     displayName: plain.displayName || '',
     avatarUrl: plain.avatarUrl || '',
+    mobilePhone: plain.mobilePhone || '',
     role: plain.role || 'admin',
     organizationId: plain.organizationId || plain._id,
     onboardingCompleted: plain.onboardingCompleted !== false,

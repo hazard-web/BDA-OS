@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
@@ -466,14 +467,18 @@ export default function PeopleHome() {
   const [checkedInAt, setCheckedInAt] = useState(null)
   const [elapsed, setElapsed] = useState(0)
   const [checkBusy, setCheckBusy] = useState(false)
-  // Single gate so shell chrome never mounts between loader and welcome.
-  // 'boot' → waiting session | 'logo' → full-page loader | 'welcome' → curtain only | 'app' → shell
+  // Single gate so chrome can stay up on refresh while welcome still hides chrome on first login.
+  // 'boot' → waiting session (shell + pane loader) | 'logo' → full-page | 'welcome' → curtain | 'app' → shell
   const [entryPhase, setEntryPhase] = useState(() => {
     if (bootView) return 'app'
     if (isPulseServicePath(window.location.pathname)) return 'app'
     // After login the user is already in context — decide before first paint.
     if (!loading && user?.email && hasPulseAccount(user)) {
       return hasSeenWelcomeCurtain(user.email) ? 'app' : 'logo'
+    }
+    // Browser refresh with a token: start in boot so shell chrome mounts with a content-pane loader.
+    if (typeof window !== 'undefined' && window.localStorage.getItem('token')) {
+      return 'boot'
     }
     return 'boot'
   })
@@ -659,15 +664,23 @@ export default function PeopleHome() {
 
   /** Same-tab open with the BDA logo beat (no new tab). */
   const openWithLogo = (patch, label) => {
-    setServiceGateLabel(label || 'Opening BDA OS')
-    setServiceGate(true)
-    setServiceGateTick((n) => n + 1)
+    // Paint the gate before swapping module content — avoids a one-frame flash.
+    flushSync(() => {
+      setServiceGateLabel(label || 'Opening BDA OS')
+      setServiceGate(true)
+      setServiceGateTick((n) => n + 1)
+    })
     goShell(patch)
   }
 
   useEffect(() => {
     if (!user?.email) return undefined
     let live = true
+    // Reload/hydrate often stamps an idle gap — don't flash a toast for that.
+    let allowInterruptedToast = false
+    const readyTimer = window.setTimeout(() => {
+      allowInterruptedToast = true
+    }, 2500)
     prefetchPulseLocation()
     void rolloverCheckInDayIfNeeded(user.email)
       .then(() => hydrateCheckInFromServer(user.email))
@@ -682,13 +695,14 @@ export default function PeopleHome() {
       const nextElapsed = getElapsedSeconds(user.email)
       setCheckedInAt((prev) => (prev === nextAt ? prev : nextAt))
       setElapsed((prev) => (prev === nextElapsed ? prev : nextElapsed))
-      if (event?.detail?.interrupted) {
+      if (event?.detail?.interrupted && allowInterruptedToast) {
         pulseToast.info('Timer paused', 'Your system was asleep or off', { duration: 2500 })
       }
     }
     window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
     return () => {
       live = false
+      window.clearTimeout(readyTimer)
       window.removeEventListener(PULSE_CHECKIN_EVENT, onChange)
     }
   }, [user?.email])
@@ -740,7 +754,7 @@ export default function PeopleHome() {
       }
     } finally {
       // Release quickly so the next CTA is not blocked
-      window.setTimeout(() => setCheckBusy(false), 120)
+      window.setTimeout(() => setCheckBusy(false), 700)
     }
   }
 
@@ -756,25 +770,29 @@ export default function PeopleHome() {
   }
 
   const sessionReady = Boolean(user && hasPulseAccount(user) && !loading)
-  // Boot/service navigations still use the in-pane gate on the real shell.
-  const paneGate = Boolean(serviceGate)
-  const showShellContent = true
+  const hasSessionToken =
+    typeof window !== 'undefined' && Boolean(window.localStorage.getItem('token'))
 
-  // Full-page loader until session is ready or while holding before welcome.
-  if (!sessionReady || entryPhase === 'boot' || entryPhase === 'logo') {
+  // First-login logo hold stays full-page so chrome never flashes before welcome.
+  if (entryPhase === 'logo') {
+    return <AuthLogoLoader show label="Welcome" />
+  }
+
+  // No token / no session — full-page (ProtectedRoute usually redirects to login).
+  if (!sessionReady && !hasSessionToken) {
     return (
       <AuthLogoLoader
         show
-        label={
-          entryPhase === 'logo' || entryPhase === 'boot'
-            ? 'Welcome'
-            : (serviceGateLabel || bootView?.label || 'Opening BDA OS')
-        }
+        label={serviceGateLabel || bootView?.label || 'Opening BDA OS'}
       />
     )
   }
 
-  const showWelcomeCurtain = entryPhase === 'welcome'
+  // Refresh / cold load with a token: keep header + sidebar mounted; gate only the content pane.
+  const paneGate = Boolean(serviceGate) || !sessionReady || entryPhase === 'boot'
+  const showShellContent = sessionReady && entryPhase !== 'boot'
+
+  const showWelcomeCurtain = entryPhase === 'welcome' && Boolean(user?.email)
 
   const showOverview = space === 'myspace' && module === 'home' && sub === 'overview'
   // Dashboard — parked on `pulse/company-later-services`
@@ -1336,7 +1354,7 @@ export default function PeopleHome() {
     {showWelcomeCurtain ? (
       <PulseWelcomeCurtain
         name={name}
-        email={user.email}
+        email={user?.email}
         hour={hour}
         onDone={() => setEntryPhase('app')}
       />

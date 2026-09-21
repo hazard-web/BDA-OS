@@ -1291,20 +1291,16 @@
 .ob-public-logo {
   width: 96px;
   height: 96px;
-  border-radius: 22px;
-  background: #fff;
+  border-radius: 50%;
+  background: #465a27;
   border: 0;
-  display: grid;
-  place-items: center;
   overflow: hidden;
-  padding: 10px;
-  box-sizing: border-box;
 }
 
 .ob-public-logo img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .ob-public-org {

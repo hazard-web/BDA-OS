@@ -24,7 +24,6 @@ import {
   snapScores,
   statusTone,
 } from '../utils/pulsePerformanceCalc'
-import { buildPerfAdminDemoRow } from '../utils/pulsePerformanceDemo'
 import PulseFileTypeIcon from './PulseFileTypeIcon'
 import PulseRangeSlider from './PulseRangeSlider'
 import PulseSwitch from './PulseSwitch'
@@ -50,10 +49,6 @@ function statusChipClass(row) {
   if (row.status === 'locked') return 'is-locked'
   if (row.correctionRequested) return 'is-leave'
   return statusTone(row.performanceStatus)
-}
-
-function isSyntheticDemo(row) {
-  return row?.user === 'demo-employee'
 }
 
 const emptyScores = () =>
@@ -120,10 +115,6 @@ export default function PulsePerformanceAdmin() {
 
   const save = async () => {
     if (!selected || !draft || draft.status === 'locked') return
-    if (isSyntheticDemo(selected)) {
-      pulseToast.info('Demo showcase', 'Scores match employee Performance')
-      return
-    }
     setSaving(true)
     try {
       const res = await api.put(`/pulse-performance/admin/${selected.user}`, {
@@ -162,10 +153,6 @@ export default function PulsePerformanceAdmin() {
 
   const lockMonth = async () => {
     if (!selected) return
-    if (isSyntheticDemo(selected)) {
-      pulseToast.info('Demo showcase', 'Already treated as locked for payroll')
-      return
-    }
     setSaving(true)
     try {
       const res = await api.post(`/pulse-performance/admin/${selected.user}/lock`, { month })
@@ -190,13 +177,6 @@ export default function PulsePerformanceAdmin() {
 
   const unlockMonth = async () => {
     if (!selected || !namesMatch(unlockName, selected)) return
-    if (isSyntheticDemo(selected)) {
-      applyUnlocked({ ...selected, status: 'confirmed', lockedAt: null })
-      setUnlockOpen(false)
-      setUnlockName('')
-      pulseToast.success('Unlocked', 'You can edit scores again')
-      return
-    }
     setSaving(true)
     try {
       const res = await api.post(`/pulse-performance/admin/${selected.user}/unlock`, {
@@ -215,11 +195,8 @@ export default function PulsePerformanceAdmin() {
   }
 
   const sorted = useMemo(() => {
-    const list = rows.length
-      ? rows
-      : (!loading ? [buildPerfAdminDemoRow(month)] : [])
-    return [...list].sort((a, b) => (b.weightedScore || 0) - (a.weightedScore || 0))
-  }, [rows, loading, month])
+    return [...rows].sort((a, b) => (b.weightedScore || 0) - (a.weightedScore || 0))
+  }, [rows])
 
   const locked = draft?.status === 'locked' || selected?.status === 'locked'
   const preview = draft ? previewCompensation(draft) : null
@@ -269,6 +246,10 @@ export default function PulsePerformanceAdmin() {
           <div className="pulse-org-admin-body">
             {loading && !sorted.length ? (
               <p className="pulse-org-admin-empty">Loading…</p>
+            ) : !sorted.length ? (
+              <p className="pulse-org-admin-empty">
+                No team members yet. Invite people, then enter and lock Performance scores.
+              </p>
             ) : (
               <ul className="pulse-att-list" aria-label="Performance people">
                 {sorted.map((row) => {

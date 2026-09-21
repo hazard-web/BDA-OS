@@ -238,22 +238,21 @@ const ToastItem = memo(function ToastItem({
       initial={
         reduce
           ? { opacity: 0 }
-          : { opacity: 0, y: 22, scale: 0.96, filter: 'blur(10px)' }
+          : { opacity: 0, y: 12, scale: 0.98 }
       }
       animate={
         reduce
           ? { opacity: 1 }
-          : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }
+          : { opacity: 1, y: 0, scale: 1 }
       }
       exit={
         reduce
           ? { opacity: 0 }
           : {
               opacity: 0,
-              x: 32,
-              scale: 0.96,
-              filter: 'blur(8px)',
-              transition: { duration: 0.18, ease: EASE_OUT },
+              y: -8,
+              scale: 0.98,
+              transition: { duration: 0.16, ease: EASE_OUT },
             }
       }
       transition={STACK_SPRING}
@@ -289,17 +288,17 @@ const ToastItem = memo(function ToastItem({
                   initial={
                     reduce
                       ? { opacity: 0 }
-                      : { opacity: 0, y: 8, scale: 0.8, filter: 'blur(6px)' }
+                      : { opacity: 0, y: 6, scale: 0.92 }
                   }
                   animate={
                     reduce
                       ? { opacity: 1 }
-                      : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }
+                      : { opacity: 1, y: 0, scale: 1 }
                   }
                   exit={
                     reduce
                       ? { opacity: 0 }
-                      : { opacity: 0, y: -8, scale: 0.9, filter: 'blur(6px)' }
+                      : { opacity: 0, y: -6, scale: 0.94 }
                   }
                   transition={CONTENT_TRANSITION}
                   className="pulse-toast-icon-swap"
@@ -320,17 +319,17 @@ const ToastItem = memo(function ToastItem({
                   initial={
                     reduce
                       ? { opacity: 0 }
-                      : { opacity: 0, y: 8, filter: 'blur(6px)' }
+                      : { opacity: 0, y: 6 }
                   }
                   animate={
                     reduce
                       ? { opacity: 1 }
-                      : { opacity: 1, y: 0, filter: 'blur(0px)' }
+                      : { opacity: 1, y: 0 }
                   }
                   exit={
                     reduce
                       ? { opacity: 0 }
-                      : { opacity: 0, y: -8, filter: 'blur(6px)' }
+                      : { opacity: 0, y: -6 }
                   }
                   transition={CONTENT_TRANSITION}
                 >

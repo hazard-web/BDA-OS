@@ -1441,3 +1441,54 @@ body:has(.signup-page),
     font-size: 24px !important;
   }
 }
+
+/* Desktop-only gate (phones / small tablets) */
+.auth-page.auth-desktop-only {
+  justify-content: center;
+  padding: 32px 20px 48px;
+  background: #fff;
+}
+
+.auth-desktop-only-card {
+  width: min(420px, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-desktop-only-logo {
+  width: 56px;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.auth-desktop-only-card h1 {
+  margin: 0;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 28px;
+  font-weight: 650;
+  color: var(--auth-text, #183b35);
+  letter-spacing: -0.02em;
+}
+
+.auth-desktop-only-card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--auth-muted, #6b7280);
+  max-width: 32ch;
+}
+
+.auth-desktop-only-link {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--auth-link, var(--pulse-primary, #465a27));
+  text-decoration: none;
+}
+
+.auth-desktop-only-link:hover {
+  text-decoration: underline;
+}

@@ -386,7 +386,12 @@ async function resolveInviter(candidate) {
 
 async function companyNameFor(candidate) {
   const inviter = await resolveInviter(candidate)
-  return (inviter && inviter.companyName) || 'BDA Technologies'
+  const raw = (inviter && inviter.companyName) || ''
+  const trimmed = String(raw || '').trim()
+  if (!trimmed || /^my\s*company$/i.test(trimmed) || /^your\s*company$/i.test(trimmed)) {
+    return 'BDA Technologies'
+  }
+  return trimmed
 }
 
 function issueOnboardingToken(candidate) {

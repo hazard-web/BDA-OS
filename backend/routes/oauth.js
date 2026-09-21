@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { DEFAULT_GENDER } = require('../utils/indiaLocation');
 const { assertAllowedCompanyEmail, resolveCompanyDomain, allowedEmailDomain } = require('../utils/companyDomain');
+const { DESKTOP_ONLY_MESSAGE, isMobileRequest } = require('../utils/pulseDesktopOnly');
 
 const router = express.Router();
 
@@ -476,6 +477,13 @@ router.get('/signup-session', (req, res) => {
 // POST /api/auth/oauth/complete - finish Create Account
 router.post('/complete', async (req, res, next) => {
   try {
+    if (isMobileRequest(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'DESKTOP_ONLY',
+        message: DESKTOP_ONLY_MESSAGE,
+      });
+    }
     const { ticket, firstName, lastName, phone, agreed } = req.body || {};
     if (!ticket) return res.status(400).json({ success: false, message: 'Missing signup ticket' });
     if (!agreed) {
@@ -625,6 +633,9 @@ router.post('/link', async (req, res, next) => {
 
 // GET /api/auth/oauth/:provider - start OAuth
 router.get('/:provider', (req, res) => {
+  if (isMobileRequest(req)) {
+    return redirectError(res, DESKTOP_ONLY_MESSAGE);
+  }
   const provider = String(req.params.provider || '').toLowerCase();
   const cfg = PROVIDERS[provider];
   if (!cfg) return redirectError(res, 'Unknown sign-in provider');
@@ -672,6 +683,9 @@ router.get('/:provider', (req, res) => {
 });
 
 async function handleOAuthCallback(req, res) {
+  if (isMobileRequest(req)) {
+    return redirectError(res, DESKTOP_ONLY_MESSAGE);
+  }
   const provider = String(req.params.provider || '').toLowerCase();
   const cfg = PROVIDERS[provider];
   try {
