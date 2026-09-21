@@ -85,10 +85,10 @@ function brandOrgName(companyName) {
 }
 
 function formatFrom(displayName, address) {
-  const name = displayNameFrom(displayName)
+  const name = displayNameFrom(displayName).replace(/"/g, '')
   const email = extractEmailAddress(address)
-  if (!email) return `${name} <beth.t@example.com>`
-  return `${name} <${email}>`
+  if (!email) return `"${name}" <beth.t@example.com>`
+  return `"${name}" <${email}>`
 }
 
 /**
@@ -101,9 +101,9 @@ function resendFromAddress(displayName) {
   const domain = emailDomain(configured)
   const address = extractEmailAddress(configured)
   if (!address || !domain || domain === 'example.com' || domain === 'example.org') {
-    return `${name} <beth.t@example.com>`
+    return `"${name.replace(/"/g, '')}" <beth.t@example.com>`
   }
-  return `${name} <${address}>`
+  return `"${name.replace(/"/g, '')}" <${address}>`
 }
 
 /**
@@ -1162,7 +1162,7 @@ function buildBdaTrustEmailHtml({
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">
           <tr>
             <td align="center" style="padding:24px 40px 12px;">
-              <img src="cid:${BDA_LOGO_CID}" width="180" alt="BDA Technologies" style="display:block;width:180px;height:auto;max-width:180px;border:0;outline:none;text-decoration:none;" />
+              <img src="cid:${BDA_LOGO_CID}" width="240" alt="BDA Technologies" style="display:block;width:240px;height:auto;max-width:240px;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
           <tr>
@@ -1233,33 +1233,52 @@ function buildBdaTrustEmailHtml({
 /**
  * BDA OS invite — accept link sets password and joins the organization.
  */
-async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, loginEmail }) {
+async function sendPulseInviteEmail({
+  to,
+  inviteUrl,
+  companyName,
+  loginEmail,
+  firstName,
+  lastName,
+}) {
   const transporter = await createSMTPTransporter();
   const org = brandOrgName(companyName);
-  const roleLabel = role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
   const login = escapeHtml(loginEmail || to);
   const logo = bdaLogoAttachment();
+  const greetName = String(firstName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)[0]
+    || String(lastName || '').trim().split(/\s+/).filter(Boolean)[0]
+    || 'there';
+  const safeFirst = escapeHtml(greetName);
 
   const mailOptions = {
-    from: buildFromAddress(org),
+    from: buildFromAddress('BDA Technologies'),
     to,
-    subject: `You're invited to ${org}`,
+    subject: 'Your BDA OS access is ready',
     html: buildBdaTrustEmailHtml({
       orgName: org,
-      title: "You're invited",
-      subtitle: `Join ${org} as a ${roleLabel}`,
+      title: 'Your BDA OS access is ready',
       bodyHtml: `
-        <p style="margin:0 0 14px;">Hi,</p>
+        <p style="margin:0 0 14px;">Hi ${safeFirst},</p>
         <p style="margin:0 0 14px;">
-          This message is sent on behalf of <strong>${escapeHtml(org)}</strong>.
-          You have been invited to join the workspace. Use the work email below to set your password and get started.
+          Your onboarding details have been received, and your BDA OS account is now ready.
         </p>
+        <p style="margin:0 0 14px;">
+          Use the work email shown below and click the button to set your password and access the BDA Technologies workspace.
+        </p>
+        <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#6b778c;">Work email</p>
         <p style="margin:0 0 0;padding:12px 14px;background:#f4f5f7;border-radius:4px;font-weight:600;color:#172b4d;">${login}</p>
       `,
-      ctaLabel: 'Set password & join',
+      ctaLabel: 'Set password and access BDA OS',
       ctaUrl: inviteUrl,
-      closing: 'We look forward to having you on the team.',
-      expiryNote: 'This link expires in 7 days.',
+      closing: `
+        <p style="margin:0 0 14px;">If you face any difficulty accessing your account, please contact <a href="mailto:office@bda.co.in" style="color:#465a27;font-weight:600;text-decoration:none;">office@bda.co.in</a>.</p>
+        <p style="margin:0 0 14px;">Once again, Welcome to BDA Technologies!</p>
+        <p style="margin:0;">Regards,<br/>BDA Technologies Private Limited</p>
+      `,
+      poweredBy: 'Powered by BDA OS',
     }),
     ...(logo ? { attachments: [logo] } : {}),
   };
