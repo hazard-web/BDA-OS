@@ -5,14 +5,14 @@ const { generatePayslipPDFBuffer } = require('./pdfBuffer');
 const { buildSetupLink, buildVerifyLink } = require('./urlHelper');
 
 const BDA_LOGO_CID = 'bda-logo@bdatech';
-/** Green square mark (white BDA) — used as circular brand in transactional mail. */
-const BDA_LOGO_PATH = path.join(__dirname, '../assets/bda-logo-mark.png');
+/** Full BDA Technologies lockup for transactional mail headers. */
+const BDA_LOGO_PATH = path.join(__dirname, '../assets/bda-logo-lockup.png');
 
 function bdaLogoAttachment() {
   try {
     if (!fs.existsSync(BDA_LOGO_PATH)) return null;
     return {
-      filename: 'bda-logo-mark.png',
+      filename: 'bda-logo-lockup.png',
       content: fs.readFileSync(BDA_LOGO_PATH),
       contentType: 'image/png',
       cid: BDA_LOGO_CID,
@@ -1124,7 +1124,7 @@ async function sendPunchOutReminderEmail(staff, loginUrl, details = {}) {
 
 /**
  * Clean Atlassian-style transactional layout for BDA Technologies.
- * White card, centered brand, hairline rules, one CTA, trust footer.
+ * White card, centered brand lockup, hairline rules, one CTA, trust footer.
  */
 function buildBdaTrustEmailHtml({
   orgName,
@@ -1135,6 +1135,7 @@ function buildBdaTrustEmailHtml({
   ctaUrl,
   closing,
   expiryNote,
+  poweredBy = 'Powered by BDA OS',
 }) {
   const org = escapeHtml(orgName || 'BDA Technologies');
   const safeTitle = escapeHtml(title || '');
@@ -1142,8 +1143,9 @@ function buildBdaTrustEmailHtml({
   const safeCta = escapeHtml(ctaLabel || 'Continue');
   const safeUrl = escapeHtml(ctaUrl || '#');
   const hasClosing = Boolean(closing && String(closing).trim());
-  const safeClosing = hasClosing ? escapeHtml(String(closing).trim()) : '';
+  const safeClosing = hasClosing ? String(closing).trim() : '';
   const year = new Date().getFullYear();
+  const powered = escapeHtml(poweredBy || 'Powered by BDA OS');
 
   return `
 <!DOCTYPE html>
@@ -1159,9 +1161,8 @@ function buildBdaTrustEmailHtml({
       <td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">
           <tr>
-            <td align="center" style="padding:40px 40px 24px;">
-              <img src="cid:${BDA_LOGO_CID}" width="96" height="96" alt="BDA Technologies" style="display:block;width:96px;height:96px;border:0;outline:none;text-decoration:none;border-radius:50%;" />
-              <p style="margin:14px 0 0;font-size:15px;font-weight:800;letter-spacing:0.08em;color:#465a27;text-transform:uppercase;">${org}</p>
+            <td align="center" style="padding:24px 40px 12px;">
+              <img src="cid:${BDA_LOGO_CID}" width="180" alt="BDA Technologies" style="display:block;width:180px;height:auto;max-width:180px;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
           <tr>
@@ -1170,7 +1171,7 @@ function buildBdaTrustEmailHtml({
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:36px 40px 8px;">
+            <td align="center" style="padding:28px 40px 8px;">
               <h1 style="margin:0;font-size:28px;line-height:1.25;font-weight:700;color:#172b4d;letter-spacing:-0.02em;">${safeTitle}</h1>
               ${safeSubtitle ? `<p style="margin:12px 0 0;font-size:18px;line-height:1.4;font-weight:500;color:#172b4d;">${safeSubtitle}</p>` : ''}
             </td>
@@ -1208,14 +1209,18 @@ function buildBdaTrustEmailHtml({
           </tr>
           <tr>
             <td align="center" style="padding:0 40px 8px;font-size:11px;line-height:1.55;color:#6b778c;">
-              Sent on behalf of ${org}
+              ${powered}
             </td>
           </tr>
+          ${expiryNote ? `
           <tr>
             <td align="center" style="padding:4px 40px 36px;font-size:11px;line-height:1.55;color:#6b778c;">
-              ${expiryNote ? `${escapeHtml(expiryNote)} ` : ''}If you were not expecting this email, you can ignore it.
+              ${escapeHtml(expiryNote)}
             </td>
-          </tr>
+          </tr>` : `
+          <tr>
+            <td style="padding:0 0 36px;font-size:1px;line-height:1px;">&nbsp;</td>
+          </tr>`}
         </table>
       </td>
     </tr>
@@ -1263,31 +1268,39 @@ async function sendPulseInviteEmail({ to, inviteUrl, companyName, role, loginEma
   return info;
 }
 
-async function sendCandidateOnboardingEmail({ to, onboardUrl, companyName }) {
+async function sendCandidateOnboardingEmail({ to, onboardUrl, companyName, candidateName }) {
   const transporter = await createSMTPTransporter();
   const org = brandOrgName(companyName);
   const logo = bdaLogoAttachment();
+  const firstName = String(candidateName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)[0] || 'there';
+  const safeFirst = escapeHtml(firstName);
 
   const mailOptions = {
     from: buildFromAddress(org),
     to,
-    subject: `Complete your details | ${org}`,
+    subject: `Welcome to ${org}`,
     html: buildBdaTrustEmailHtml({
       orgName: org,
-      title: 'Complete your details',
-      subtitle: 'A quick step to continue your onboarding',
+      title: `Welcome to ${org}!`,
       bodyHtml: `
-        <p style="margin:0 0 14px;">Hi,</p>
+        <p style="margin:0 0 14px;">Hi ${safeFirst},</p>
         <p style="margin:0 0 14px;">
-          As part of joining <strong>${escapeHtml(org)}</strong>, please share a few personal details so we can finish your onboarding.
+          To complete your onboarding, please submit the required information using the button below. It should take approximately 1-2 minutes.
         </p>
         <p style="margin:0;">
-          This message is sent on behalf of ${escapeHtml(org)}. After you submit, our HR team will complete your offer details and send sign-in instructions to your work email.
+          Once submitted, our HR team will verify your information, complete your employment documentation, and share your work email and sign-in instructions.
         </p>
       `,
-      ctaLabel: 'Complete your details',
+      ctaLabel: 'Complete onboarding',
       ctaUrl: onboardUrl,
-      expiryNote: 'This link expires in 14 days.',
+      closing: `
+        <p style="margin:0 0 14px;">If you face any difficulty while submitting the form, please contact the BDA HR team.</p>
+        <p style="margin:0;">Regards,<br/>BDA Technologies</p>
+      `,
+      poweredBy: 'Powered by BDA OS',
     }),
     ...(logo ? { attachments: [logo] } : {}),
   };
