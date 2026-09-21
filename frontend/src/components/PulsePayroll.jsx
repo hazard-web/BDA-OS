@@ -5,7 +5,6 @@ import { DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { formatInr, monthKey, statusFullLabel, statusShortLabel } from '../utils/pulsePerformanceCalc'
-import { withEmployeePayrollDemo, needsPayrollDemo } from '../utils/pulsePerformanceDemo'
 import './pulse-performance.css'
 
 function monthLabel(month) {
@@ -88,8 +87,7 @@ export default function PulsePayroll() {
     }
   }
 
-  const display = !loading ? withEmployeePayrollDemo(row, month) : null
-  const isDemo = Boolean(display) && needsPayrollDemo(row)
+  const display = !loading ? row : null
   const dash = loading ? '…' : '—'
 
   return (
@@ -111,7 +109,7 @@ export default function PulsePayroll() {
               aria-label="Payroll month"
             />
           </div>
-          {row && !isDemo ? (
+          {row ? (
             <button
               type="button"
               className="pov-cta plive-top-cta plive-checkin"
@@ -133,7 +131,11 @@ export default function PulsePayroll() {
                 <span>Take home</span>
               </div>
               <div>
-                <strong>{display ? (display.status === 'paid' ? 'Paid' : isDemo ? 'Demo' : 'Generated') : dash}</strong>
+                <strong>
+                  {display
+                    ? (display.status === 'paid' ? 'Paid' : 'Generated')
+                    : dash}
+                </strong>
                 <span>Status</span>
               </div>
             </div>
@@ -178,8 +180,8 @@ export default function PulsePayroll() {
                 <span>Payslip month</span>
               </div>
               <div>
-                <strong>{display ? (isDemo ? 'Showcase' : 'Final') : dash}</strong>
-                <span>{isDemo ? 'Matches Performance' : 'Ready to download'}</span>
+                <strong>{display ? 'Final' : dash}</strong>
+                <span>{display ? 'Ready to download' : 'No payslip yet'}</span>
               </div>
             </div>
           </article>
@@ -198,8 +200,12 @@ export default function PulsePayroll() {
             </div>
           </div>
 
-          {loading && !display ? (
+          {loading ? (
             <p className="pulse-att-empty">Loading…</p>
+          ) : !display ? (
+            <p className="pulse-att-empty">
+              No payslip for this month yet. It appears after Performance is locked and payroll is generated.
+            </p>
           ) : (
             <ul className="pulse-att-list pulse-pay-att-list" aria-label="Payslip lines">
               {LINE_ITEMS.map((item) => {

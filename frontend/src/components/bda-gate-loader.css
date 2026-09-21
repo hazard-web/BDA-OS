@@ -18,6 +18,15 @@
   z-index: 80;
   padding: 0;
   border-radius: inherit;
+  /* Never fade in — dock CTAs must cover content on the first paint. */
+  animation: none;
+  opacity: 1;
+}
+
+/* Hide pane content while the gate is up so modules cannot flash underneath. */
+.pulse-maincol.is-gate-host > :not(.bda-gate) {
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .bda-gate-stage {

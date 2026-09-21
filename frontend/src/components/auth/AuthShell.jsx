@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthPromo from './AuthPromo'
 import AuthBg from './AuthBg'
+import DesktopOnlyGate from './DesktopOnlyGate'
+import { isMobileClient } from '../../utils/pulseDesktopOnly'
 import './auth-shell.css'
 
 export default function AuthShell({
@@ -13,6 +15,14 @@ export default function AuthShell({
   showPromo = true,
 }) {
   const [usingKeys, setUsingKeys] = useState(false)
+  const [mobile, setMobile] = useState(() => isMobileClient())
+
+  useEffect(() => {
+    setMobile(isMobileClient())
+    const onResize = () => setMobile(isMobileClient())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -28,6 +38,10 @@ export default function AuthShell({
       window.removeEventListener('pointerdown', onPointer)
     }
   }, [])
+
+  if (mobile) {
+    return <DesktopOnlyGate />
+  }
 
   return (
     <div className={`auth-page${usingKeys ? ' is-keys' : ''}`}>

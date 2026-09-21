@@ -34,6 +34,12 @@ export default function OAuthCallback() {
       }
       try {
         localStorage.setItem('token', token)
+        try {
+          localStorage.setItem('pulseSessionAliveAt', String(Date.now()))
+          localStorage.removeItem('pulsePendingForceExit')
+        } catch {
+          /* ignore */
+        }
         const res = await api.get('/auth/profile', { __skipCache: true })
         if (cancelled) return
         login(token, res.data.user)

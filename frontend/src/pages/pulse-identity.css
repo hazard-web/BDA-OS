@@ -518,7 +518,7 @@
 .pulse-shell.pulse-id .pulse-maincol:has(.pulse-body-surface) {
   position: relative;
   overflow: hidden;
-  background-color: #4e7db8;
+  background-color: #bccde1;
   background-image: none;
 }
 
@@ -585,7 +585,7 @@
 }
 
 .pulse-shell.pulse-id:has(.pulse-body-surface) {
-  background-color: #4e7db8;
+  background-color: #bccde1;
   background-image: none;
 }
 
@@ -667,9 +667,9 @@
   max-width: 100%;
 }
 
-/* Overview stage — alpine peak, grounded toward the bottom of the pane. */
+/* Overview stage — soft sky match so refresh does not flash saturated blue before the photo paints. */
 .pulse-strip-root {
-  --pulse-stage: #4e7db8;
+  --pulse-stage: #bccde1;
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
@@ -724,7 +724,7 @@
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background-color: var(--pulse-stage, #4e7db8);
+  background-color: var(--pulse-stage, #bccde1);
 }
 
 .pulse-shell.pulse-id .pulse-maincol:has(.pulse-body-surface) .pulse-strip-root,

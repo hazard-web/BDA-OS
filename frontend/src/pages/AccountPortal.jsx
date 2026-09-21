@@ -371,6 +371,24 @@ export default function AccountPortal({ embedded = false }) {
     })
   }, [user])
 
+  // Pull latest profile (incl. onboarding phone backfill) — login payload used to omit mobilePhone.
+  useEffect(() => {
+    if (!user?._id) return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await api.get('/auth/profile', { __skipCache: true })
+        if (cancelled || !res.data?.user) return
+        updateProfile(res.data.user)
+      } catch {
+        /* keep session user */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?._id, updateProfile])
+
   useEffect(() => {
     const nextSection = params.get('section')
     if (nextSection && (findNavItem(nextSection) || PROFILE_SECTIONS.has(nextSection))) setSection(nextSection)
@@ -885,20 +903,10 @@ export default function AccountPortal({ embedded = false }) {
                   className={`acc-card acc-fill${embedded ? ' pulse-acc-att-card' : ''}`}
                   bordered={false}
                   title={embedded ? undefined : 'My Email Addresses'}
-                  extra={
-                    embedded ? null : (
-                    <Button type="link" icon={<PlusOutlined />} onClick={() => { setAddingEmail(true); setSection('email') }}>
-                      Add email
-                    </Button>
-                    )
-                  }
                 >
                   {embedded ? (
                     <header className="pulse-att-panel-head pulse-acc-att-card-head">
                       <h4>My Email Addresses</h4>
-                      <AccHeadBtn onClick={() => { setAddingEmail(true); setSection('email') }}>
-                        <PlusOutlined /> Add email
-                      </AccHeadBtn>
                     </header>
                   ) : null}
                   {embedded ? null : (
@@ -965,48 +973,10 @@ export default function AccountPortal({ embedded = false }) {
                   className={`acc-card acc-fill${embedded ? ' pulse-acc-att-card' : ''}`}
                   bordered={false}
                   title={embedded ? undefined : 'My Mobile Numbers'}
-                  extra={
-                    embedded ? null : (
-                    <Button
-                      type="link"
-                      icon={<PlusOutlined />}
-                      onClick={() => {
-                        setAddingMobile(true)
-                        setSection('mobile')
-                        const digits = String(user.mobilePhone || '').replace(/\D/g, '')
-                        const local =
-                          digits.length === 12 && digits.startsWith('91')
-                            ? digits.slice(2)
-                            : digits.length === 10
-                              ? digits
-                              : ''
-                        setNewMobile(local)
-                      }}
-                    >
-                      Add mobile
-                    </Button>
-                    )
-                  }
                 >
                   {embedded ? (
                     <header className="pulse-att-panel-head pulse-acc-att-card-head">
                       <h4>My Mobile Numbers</h4>
-                      <AccHeadBtn
-                        onClick={() => {
-                          setAddingMobile(true)
-                          setSection('mobile')
-                          const digits = String(user.mobilePhone || '').replace(/\D/g, '')
-                          const local =
-                            digits.length === 12 && digits.startsWith('91')
-                              ? digits.slice(2)
-                              : digits.length === 10
-                                ? digits
-                                : ''
-                          setNewMobile(local)
-                        }}
-                      >
-                        <PlusOutlined /> Add mobile
-                      </AccHeadBtn>
                     </header>
                   ) : null}
                   {embedded ? null : (
@@ -1137,52 +1107,6 @@ export default function AccountPortal({ embedded = false }) {
           </div>
         </Content>
       </AntLayout>
-
-      <Modal title="Add Mobile Number" open={addingMobile} onCancel={closeAddMobile} onOk={onAddMobile} okText={saving ? 'Adding…' : 'Add'} confirmLoading={saving} okButtonProps={{ disabled: newMobile.replace(/\D/g, '').length !== 10 }}>
-        <Typography.Paragraph type="secondary">
-          A one-time password (OTP) will be sent to your mobile number via SMS.
-        </Typography.Paragraph>
-        <Form layout="vertical">
-          <Form.Item label="Mobile Number">
-            <Input
-              addonBefore="+91"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              placeholder="12345 12345"
-              value={
-                newMobile.replace(/\D/g, '').length > 5
-                  ? `${newMobile.replace(/\D/g, '').slice(0, 5)} ${newMobile.replace(/\D/g, '').slice(5, 10)}`
-                  : newMobile.replace(/\D/g, '')
-              }
-              onChange={(e) => setNewMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              onPressEnter={onAddMobile}
-            />
-          </Form.Item>
-          <Checkbox checked={mobileMarketing} onChange={(e) => setMobileMarketing(e.target.checked)}>
-            Use this number for marketing-related communications.
-          </Checkbox>
-        </Form>
-      </Modal>
-
-      <Modal title="Add Email Address" open={addingEmail} onCancel={closeAddEmail} onOk={onAddEmail} okText={saving ? 'Adding…' : 'Add'} confirmLoading={saving}>
-        <Typography.Paragraph type="secondary">
-          A verification code will be sent to this email address.
-        </Typography.Paragraph>
-        <Form layout="vertical">
-          <Form.Item label="Email Address">
-            <Input
-              type="email"
-              placeholder="name@example.com"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              onPressEnter={onAddEmail}
-            />
-          </Form.Item>
-          <Checkbox checked={emailMarketing} onChange={(e) => setEmailMarketing(e.target.checked)}>
-            Use this email for marketing-related communications.
-          </Checkbox>
-        </Form>
-      </Modal>
 
       <Modal
         title="Modify Primary Number"
