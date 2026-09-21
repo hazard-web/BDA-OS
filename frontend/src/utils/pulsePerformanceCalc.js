@@ -85,6 +85,12 @@ export function formatInr(amount) {
   return `₹${n.toLocaleString('en-IN')}`
 }
 
+export function hasScoredAreas(row) {
+  const scores = row?.scores || {}
+  return Object.values(scores).some((value) => Number(value) > 0)
+    || Number(row?.weightedScore) > 0
+}
+
 export function statusTone(status) {
   switch (String(status || '')) {
     case 'Exceptional':

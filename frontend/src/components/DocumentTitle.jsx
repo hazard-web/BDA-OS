@@ -109,6 +109,7 @@ function setFavicon(href) {
 
 function baseTitleForPage(name) {
   if (name === 'Coming Soon') return 'Coming Soon | BDA OS'
+  if (name === 'Complete your details') return 'Complete your details | BDA Technologies'
   if (name === 'BDA OS') return 'BDA OS'
   if (name === 'Accounts') return 'Accounts'
   return name

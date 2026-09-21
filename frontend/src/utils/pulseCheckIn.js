@@ -42,15 +42,46 @@ function scheduleIdle(fn) {
 }
 
 let pendingRemoteSync = 0
+let remoteSyncBusy = false
+let pendingRemoteKind = null
+let pendingRemotePayload = null
 
-/** Delay desktop + API work so clicks / navigation stay smooth after check-in. */
-function scheduleRemoteSync(fn) {
+/**
+ * Queue the latest check-in/out intent. Cancels prior debounce timers and serializes
+ * in-flight POSTs so overlapping location waits cannot double-write events.
+ */
+function scheduleRemoteSync(kind, payload) {
   if (typeof window === 'undefined') return
+  pendingRemoteKind = kind
+  pendingRemotePayload = payload
   if (pendingRemoteSync) window.clearTimeout(pendingRemoteSync)
   pendingRemoteSync = window.setTimeout(() => {
     pendingRemoteSync = 0
-    scheduleIdle(fn)
+    scheduleIdle(() => {
+      void flushRemoteSync()
+    })
   }, 1400)
+}
+
+async function flushRemoteSync() {
+  if (remoteSyncBusy) return
+  remoteSyncBusy = true
+  try {
+    while (pendingRemoteKind) {
+      const kind = pendingRemoteKind
+      const payload = pendingRemotePayload
+      pendingRemoteKind = null
+      pendingRemotePayload = null
+      await syncPulseCheckInEvent(kind, payload)
+    }
+  } finally {
+    remoteSyncBusy = false
+    if (pendingRemoteKind) {
+      scheduleIdle(() => {
+        void flushRemoteSync()
+      })
+    }
+  }
 }
 
 export function pulseDayKey(date = new Date()) {
@@ -345,6 +376,17 @@ export function startCheckIn(email, timestamp = Date.now(), { baseActiveMs } = {
   const day = pulseDayKey()
   const now = Number(timestamp) || Date.now()
   const prev = readRawSession(email, day)
+  // Already active — keep one open session; do not schedule another check-in write.
+  if (prev?.status === 'active' && prev?.checkedInAt) {
+    const priorMs = Math.max(0, Number(prev.activeMs) || 0, Number(baseActiveMs) || 0)
+    if (priorMs > (Number(prev.activeMs) || 0)) {
+      const bumped = { ...prev, activeMs: priorMs }
+      writeRawSession(email, bumped, day)
+      emitCheckIn(email, bumped)
+      return bumped
+    }
+    return prev
+  }
   const priorMs = Math.max(
     0,
     Number(prev?.activeMs) || 0,
@@ -366,9 +408,7 @@ export function startCheckIn(email, timestamp = Date.now(), { baseActiveMs } = {
   emitCheckIn(email, session)
   // Desktop must react to the CTA immediately — do not wait for API debounce.
   void syncPulseDesktopCheckIn(email, session)
-  scheduleRemoteSync(() => {
-    void syncPulseCheckInEvent('check-in', { email, activeMs: session.activeMs, date: day })
-  })
+  scheduleRemoteSync('check-in', { email, activeMs: session.activeMs, date: day })
   return session
 }
 
@@ -380,10 +420,13 @@ export function stopCheckIn(email) {
   const day = pulseDayKey()
   const current = readRawSession(email, day)
   if (!current) return null
+  // Already stopped — do not schedule another check-out write.
+  if (current.status !== 'active') {
+    return current
+  }
 
   const now = Date.now()
-  const activeMs =
-    current.status === 'active' ? projectedActiveMs(current, now) : Math.max(0, current.activeMs || 0)
+  const activeMs = projectedActiveMs(current, now)
   const session = {
     ...current,
     activeMs,
@@ -396,9 +439,7 @@ export function stopCheckIn(email) {
   writeRawSession(email, session, day)
   emitCheckIn(email, session)
   void syncPulseDesktopCheckIn(email, null)
-  scheduleRemoteSync(() => {
-    void syncPulseCheckInEvent('check-out', { email, activeMs, date: day })
-  })
+  scheduleRemoteSync('check-out', { email, activeMs, date: day })
   return session
 }
 

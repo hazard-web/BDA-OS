@@ -4,16 +4,27 @@ import { broadcastPulseLogout, clearPulseLogoutOrigin } from '../utils/pulseAuth
 import { clearWelcomeCurtainSeen } from '../utils/pulseWelcomeCurtain'
 import { endCheckInOnLogout } from '../utils/pulseCheckIn'
 import { closeCheckInPip } from '../utils/pulseCheckInPip'
+import { acknowledgePulseLogin, consumePulseUnloadExit, forcePulseExit } from '../utils/pulseForceExit'
 
 const AuthContext = createContext()
 
 export const useAuth = () => useContext(AuthContext)
 
+function bootAfterTabClose() {
+  if (typeof window === 'undefined') return false
+  if (!consumePulseUnloadExit()) return false
+  forcePulseExit({ reason: 'tab-close' })
+  return true
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [exitBusy, setExitBusy] = useState(false)
   const [loading, setLoading] = useState(() => {
-    return typeof window !== 'undefined' ? !!localStorage.getItem('token') : false
+    if (typeof window === 'undefined') return false
+    // Close tab → Ctrl+T / new visit must sign out before profile loads.
+    if (bootAfterTabClose()) return false
+    return !!localStorage.getItem('token')
   })
   const userRef = useRef(null)
   userRef.current = user
@@ -37,6 +48,13 @@ export function AuthProvider({ children }) {
       /* keep logout resilient */
     }
     localStorage.removeItem('token')
+    try {
+      localStorage.removeItem('pulsePendingForceExit')
+      localStorage.removeItem('pulseSessionAliveAt')
+      sessionStorage.removeItem('pulseAuthTabSession')
+    } catch {
+      /* ignore */
+    }
     api.invalidateCache?.('/auth/')
     clearWelcomeCurtainSeen()
     setUser(null)
@@ -115,8 +133,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', token)
     api.invalidateCache?.('/auth/')
     clearPulseLogoutOrigin()
+    acknowledgePulseLogin()
     try {
-      localStorage.removeItem('pulsePendingForceExit')
       sessionStorage.removeItem('pulseSessionContinue')
     } catch {
       /* ignore */

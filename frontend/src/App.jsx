@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import DocumentTitle from './components/DocumentTitle'
 import PulseAuthSync from './components/PulseAuthSync'
@@ -6,6 +6,7 @@ import PulseLoading from './components/PulseLoading'
 import PulseCheckInHeartbeat from './components/PulseCheckInHeartbeat'
 import PulseForceExitGuard from './components/PulseForceExitGuard'
 import PulseToastProvider from './components/PulseToastProvider'
+import DesktopOnlyGate from './components/auth/DesktopOnlyGate'
 import { useAuth } from './context/AuthContext'
 import { lockPulsePageZoom } from './utils/pulsePageZoom'
 import { closePulseAuxiliaryTab } from './utils/pulseAuthSync'
@@ -17,6 +18,7 @@ import {
   PULSE_SHELL_PATHS,
 } from './utils/pulseOpenPage'
 import { APP_BASE, APP_NOTES, APP_TIMER, PULSE_HOME, isAppPath, toAppPath } from './utils/pulseEntry'
+import { isMobileClient } from './utils/pulseDesktopOnly'
 
 import Login from './pages/Login'
 import ComingSoon from './pages/ComingSoon'
@@ -44,10 +46,22 @@ import AccountPortal from './pages/AccountPortal'
 function ProtectedRoute({ children }) {
   const { user, loading, exitBusy } = useAuth()
   const location = useLocation()
+  const [mobile, setMobile] = useState(() => isMobileClient())
 
   useEffect(() => {
     capturePulseAuxiliaryFromSearch(location.search)
   }, [location.search])
+
+  useEffect(() => {
+    setMobile(isMobileClient())
+    const onResize = () => setMobile(isMobileClient())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  if (mobile) {
+    return <DesktopOnlyGate />
+  }
 
   if (loading) {
     if (isPulseOpenPath(location.pathname, location.search) || isPulseShellPath(location.pathname)) {

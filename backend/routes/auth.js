@@ -9,11 +9,13 @@ const { DEFAULT_GENDER, extractIndiaState } = require('../utils/indiaLocation');
 const { publicUserWithApps } = require('../utils/pulseAuth');
 const { assertAllowedCompanyEmail, resolveCompanyDomain, completeCompanyEmail } = require('../utils/companyDomain');
 const { ensureHttpsAvatar, isHttpsAvatar } = require('../utils/pulseAvatar');
+const { DESKTOP_ONLY_MESSAGE, isMobileRequest } = require('../utils/pulseDesktopOnly');
 const Staff = require('../models/Staff');
 const Candidate = require('../models/Candidate');
 
 function normalizeIndiaMobile(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
+  let digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
   if (digits.length === 10) return `+91${digits}`;
   if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
   if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
@@ -30,7 +32,12 @@ async function resolvePersonalMobile(user) {
   if (!email || !orgId) return '';
 
   const [staff, candidate] = await Promise.all([
-    Staff.findOne({ user: orgId, email }).select('phone').lean(),
+    Staff.findOne({
+      email,
+      $or: [{ user: orgId }, { user: user._id }],
+    })
+      .select('phone')
+      .lean(),
     Candidate.findOne({
       organizationId: orgId,
       $or: [{ officialEmail: email }, { email }],
@@ -42,7 +49,7 @@ async function resolvePersonalMobile(user) {
   const fromStaff = normalizeIndiaMobile(staff?.phone);
   if (fromStaff) return fromStaff;
 
-  const candDigits = String(candidate?.phone || '').replace(/\D/g, '');
+  const candDigits = String(candidate?.phone || '').replace(/\D/g, '').replace(/^0/, '');
   if (!candDigits) return '';
   if (candDigits.length === 10) {
     const cc = String(candidate.countryCode || '+91').replace(/\D/g, '') || '91';
@@ -131,6 +138,14 @@ const auth = async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────
 router.post('/register', async (req, res, next) => {
   try {
+    if (isMobileRequest(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'DESKTOP_ONLY',
+        message: DESKTOP_ONLY_MESSAGE,
+      });
+    }
+
     const existingCount = await User.countDocuments();
     if (existingCount > 0) {
       return res.status(403).json({
@@ -247,6 +262,14 @@ router.post('/check-email', async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────
 router.post('/login', async (req, res, next) => {
   try {
+    if (isMobileRequest(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'DESKTOP_ONLY',
+        message: DESKTOP_ONLY_MESSAGE,
+      });
+    }
+
     const email = completeCompanyEmail(req.body.email);
     const { password } = req.body;
 
@@ -298,6 +321,10 @@ router.post('/login', async (req, res, next) => {
     if (!user.organizationId) {
       user.organizationId = user._id;
       if (!user.role) user.role = 'admin';
+    }
+    if (!normalizeIndiaMobile(user.mobilePhone)) {
+      const personal = await resolvePersonalMobile(user);
+      if (personal) user.mobilePhone = personal;
     }
     if (user.isModified()) await user.save();
 

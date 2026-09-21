@@ -16,10 +16,10 @@ import {
   AREA_SHORT,
   AREA_WEIGHTS,
   formatInr,
+  hasScoredAreas,
   monthKey,
   statusTone,
 } from '../utils/pulsePerformanceCalc'
-import { buildPerfDemo, hasScoredAreas } from '../utils/pulsePerformanceDemo'
 import PulseFileTypeIcon from './PulseFileTypeIcon'
 import PulsePerformanceReveal from './PulsePerformanceReveal'
 import PulseSlideClose from './PulseSlideClose'
@@ -112,8 +112,6 @@ function areaTone(value) {
   if (n >= 60) return 'leave'
   return 'bad'
 }
-
-const DUMMY_PERF = buildPerfDemo()
 
 const AREA_ICONS = {
   outcomes: CheckOutlined,
@@ -224,30 +222,21 @@ export default function PulsePerformance() {
     }
   }
 
-  const display = useMemo(() => {
-    // Empty / locked-with-zeros rows from API → showcase dummy (unlocked).
-    if (!row || !hasScoredAreas(row)) return DUMMY_PERF
-    return {
-      ...DUMMY_PERF,
-      ...row,
-      scores: {
-        ...DUMMY_PERF.scores,
-        ...(row.scores || {}),
-      },
-    }
-  }, [row])
+  const scored = hasScoredAreas(row)
+  const display = scored ? row : null
+  const dash = loading ? '…' : '—'
 
-  const canCorrect = Boolean(row) && row.status !== 'locked' && !row.correctionRequested && hasScoredAreas(row)
-  const scores = display.scores || {}
+  const canCorrect = Boolean(row) && row.status !== 'locked' && !row.correctionRequested && scored
+  const scores = display?.scores || {}
   const cards = useMemo(() => areaCardsFromScores(scores), [scores])
   const totalShare = cards.reduce((sum, card) => sum + card.share, 0) || 1
 
   return (
     <div className="pulse-att-page pulse-perf-att">
       <PulsePerformanceReveal
-        status={display.performanceStatus}
+        status={display?.performanceStatus}
         month={month}
-        ready={!loading && Boolean(display.performanceStatus)}
+        ready={!loading && scored && Boolean(display?.performanceStatus)}
       />
       <div className="pulse-att-board">
         <header className="pulse-att-toolbar">
@@ -280,40 +269,52 @@ export default function PulsePerformance() {
         <section className="pulse-perf-cases" aria-label="Performance overview">
           <div className="pulse-perf-cases-summary">
             <p>Performance</p>
-            <strong>{display.weightedScore ?? '—'}</strong>
-            <span className={`pulse-perf-status-pill ${statusTone(display.performanceStatus)}`}>
-              {display.performanceStatus || '—'}
-            </span>
+            <strong>{display ? (display.weightedScore ?? dash) : dash}</strong>
+            {display?.performanceStatus ? (
+              <span className={`pulse-perf-status-pill ${statusTone(display.performanceStatus)}`}>
+                {display.performanceStatus}
+              </span>
+            ) : (
+              <span className="pulse-perf-status-pill is-low">{dash}</span>
+            )}
           </div>
 
           <div className="pulse-perf-cases-body">
-            <div className="pulse-perf-cases-bar" aria-hidden="true">
-              {cards.map((card) => (
-                <i
-                  key={card.key}
-                  className={`is-${card.tone}`}
-                  style={{ width: `${(card.share / totalShare) * 100}%` }}
-                />
-              ))}
-            </div>
+            {scored ? (
+              <>
+                <div className="pulse-perf-cases-bar" aria-hidden="true">
+                  {cards.map((card) => (
+                    <i
+                      key={card.key}
+                      className={`is-${card.tone}`}
+                      style={{ width: `${(card.share / totalShare) * 100}%` }}
+                    />
+                  ))}
+                </div>
 
-            <div className="pulse-perf-cases-grid">
-              {cards.map((card) => {
-                const Icon = card.Icon
-                return (
-                  <article key={card.key} className={`pulse-perf-case-card is-${card.tone}`}>
-                    <header>
-                      <span className="pulse-perf-case-ico" aria-hidden="true">
-                        <Icon />
-                      </span>
-                      <span>{card.label}</span>
-                    </header>
-                    <strong>{card.value}</strong>
-                    <em>{card.weightPct}% weight</em>
-                  </article>
-                )
-              })}
-            </div>
+                <div className="pulse-perf-cases-grid">
+                  {cards.map((card) => {
+                    const Icon = card.Icon
+                    return (
+                      <article key={card.key} className={`pulse-perf-case-card is-${card.tone}`}>
+                        <header>
+                          <span className="pulse-perf-case-ico" aria-hidden="true">
+                            <Icon />
+                          </span>
+                          <span>{card.label}</span>
+                        </header>
+                        <strong>{card.value}</strong>
+                        <em>{card.weightPct}% weight</em>
+                      </article>
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="pulse-att-empty">
+                {loading ? 'Loading…' : 'No performance scores for this month yet'}
+              </p>
+            )}
           </div>
         </section>
 
@@ -322,11 +323,11 @@ export default function PulsePerformance() {
             <p>Bonus</p>
             <div className="plive-metric-split">
               <div>
-                <strong>{formatInr(display.performanceBonus)}</strong>
+                <strong>{display ? formatInr(display.performanceBonus) : dash}</strong>
                 <span>Performance</span>
               </div>
               <div>
-                <strong>{formatInr(display.projectBonus)}</strong>
+                <strong>{display ? formatInr(display.projectBonus) : dash}</strong>
                 <span>Project</span>
               </div>
             </div>
@@ -335,11 +336,11 @@ export default function PulsePerformance() {
             <p>Extras</p>
             <div className="plive-metric-split">
               <div>
-                <strong>{formatInr(display.learningBonus)}</strong>
+                <strong>{display ? formatInr(display.learningBonus) : dash}</strong>
                 <span>Learning</span>
               </div>
               <div>
-                <strong>{formatInr(display.innovationBonus)}</strong>
+                <strong>{display ? formatInr(display.innovationBonus) : dash}</strong>
                 <span>Innovation</span>
               </div>
             </div>
@@ -348,11 +349,11 @@ export default function PulsePerformance() {
             <p>Total</p>
             <div className="plive-metric-split">
               <div>
-                <strong>{formatInr(display.totalBonus)}</strong>
+                <strong>{display ? formatInr(display.totalBonus) : dash}</strong>
                 <span>Variable</span>
               </div>
               <div>
-                <strong>{display.projectTier || '—'}</strong>
+                <strong>{display?.projectTier || dash}</strong>
                 <span>Project tier</span>
               </div>
             </div>
@@ -361,8 +362,16 @@ export default function PulsePerformance() {
             <p>Review</p>
             <div className="plive-metric-split">
               <div>
-                <strong>{display.status === 'locked' ? 'Locked' : 'Unlocked'}</strong>
-                <span>{display.status === 'locked' ? 'Final for payroll' : 'Still editable'}</span>
+                <strong>
+                  {display
+                    ? (display.status === 'locked' ? 'Locked' : 'Unlocked')
+                    : dash}
+                </strong>
+                <span>
+                  {display
+                    ? (display.status === 'locked' ? 'Final for payroll' : 'Still editable')
+                    : 'Awaiting scores'}
+                </span>
               </div>
               <div>
                 <strong>{format(parse(`${month}-01`, 'yyyy-MM-dd', new Date()), 'MMM yyyy')}</strong>
@@ -385,32 +394,38 @@ export default function PulsePerformance() {
             </div>
           </div>
 
-          <ul className="pulse-att-list pulse-perf-att-list" aria-label="Performance areas">
-            {AREA_KEYS.map((key) => {
-              const value = Number(scores[key]) || 0
-              const tone = areaTone(value)
-              const level = value >= 80
-                ? 'Strong'
-                : value >= 60
-                  ? 'Good'
-                  : value >= 50
-                    ? 'Fair'
-                    : 'Low'
-              return (
-                <li key={key} className={`pulse-att-row pulse-perf-att-row is-${tone}`}>
-                  <span className={`pulse-att-dot is-${tone}`} aria-hidden="true" />
-                  <div className="pulse-att-day">
-                    <strong>{AREA_SHORT[key]}</strong>
-                    <span className="pulse-perf-att-bar" aria-hidden="true">
-                      <i style={{ width: `${Math.min(100, value)}%` }} />
-                    </span>
-                  </div>
-                  <div className="pulse-att-hours">{value}</div>
-                  <span className={`pulse-att-status is-${tone}`}>{level}</span>
-                </li>
-              )
-            })}
-          </ul>
+          {scored ? (
+            <ul className="pulse-att-list pulse-perf-att-list" aria-label="Performance areas">
+              {AREA_KEYS.map((key) => {
+                const value = Number(scores[key]) || 0
+                const tone = areaTone(value)
+                const level = value >= 80
+                  ? 'Strong'
+                  : value >= 60
+                    ? 'Good'
+                    : value >= 50
+                      ? 'Fair'
+                      : 'Low'
+                return (
+                  <li key={key} className={`pulse-att-row pulse-perf-att-row is-${tone}`}>
+                    <span className={`pulse-att-dot is-${tone}`} aria-hidden="true" />
+                    <div className="pulse-att-day">
+                      <strong>{AREA_SHORT[key]}</strong>
+                      <span className="pulse-perf-att-bar" aria-hidden="true">
+                        <i style={{ width: `${Math.min(100, value)}%` }} />
+                      </span>
+                    </div>
+                    <div className="pulse-att-hours">{value}</div>
+                    <span className={`pulse-att-status is-${tone}`}>{level}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="pulse-att-empty">
+              {loading ? 'Loading…' : 'Scores appear here after your admin enters performance for this month'}
+            </p>
+          )}
 
           {row?.correctionRequested ? (
             <p className="pulse-perf-att-note">

@@ -5,7 +5,6 @@ import { DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import api from '../api'
 import { formatInr, monthKey } from '../utils/pulsePerformanceCalc'
-import { buildPayrollAdminDemoRow } from '../utils/pulsePerformanceDemo'
 import { personName } from '../utils/pulsePerson'
 import './pulse-performance.css'
 
@@ -142,9 +141,7 @@ export default function PulsePayrollAdmin() {
     0,
     rows.filter((r) => canGenerate(r) && !r.hasPayslip).length,
   )
-  const displayRows = !loading
-    ? (rows.length ? rows : [buildPayrollAdminDemoRow(month)])
-    : []
+  const displayRows = !loading ? rows : []
   const emptyTeam = !loading && !rows.length
   const peopleCount = displayRows.length
 
@@ -199,18 +196,15 @@ export default function PulsePayrollAdmin() {
           </div>
 
           <div className="pulse-org-admin-body">
-            {emptyTeam ? (
-              <p className="pulse-org-admin-note">
-                No team members yet - invite people, then lock Performance to create payslips. Showing a demo row.
-              </p>
-            ) : null}
-
             {loading && !displayRows.length ? (
               <p className="pulse-org-admin-empty">Loading…</p>
+            ) : emptyTeam ? (
+              <p className="pulse-org-admin-empty">
+                No team members yet. Invite people, then lock Performance to create payslips.
+              </p>
             ) : (
               <ul className="pulse-att-list" aria-label="Payroll people">
                 {displayRows.map((row) => {
-                  const isDemo = row.demoOverlay || row.user === 'demo-employee'
                   const chip = statusChipClass(row)
                   const tone = chip.replace(/^is-/, '')
                   const tag = statusLabel(row)
@@ -227,9 +221,7 @@ export default function PulsePayrollAdmin() {
                       <div className="pulse-pay-admin-var">{formatInr(suggestedNet(row))}</div>
                       <span className={`pulse-att-status ${chip}`}>{tag}</span>
                       <div className="pulse-org-admin-actions-cell">
-                        {isDemo ? (
-                          <span className="pulse-pay-admin-demo-hint">Invite to run payroll</span>
-                        ) : !row.hasPayslip ? (
+                        {!row.hasPayslip ? (
                           <Button
                             size="small"
                             loading={busy}
