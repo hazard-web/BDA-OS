@@ -79,6 +79,8 @@ async function createAndSendOrgInvite({
       role: inviteRole,
       invitedByName: invitedByName || 'BDA OS',
       loginEmail: address,
+      firstName: String(firstName || '').trim(),
+      lastName: String(lastName || '').trim(),
     })
   } catch (emailErr) {
     emailSent = false
