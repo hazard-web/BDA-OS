@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext'
 import AuthShell from '../components/auth/AuthShell'
 import { AuthLogoLoader, useAuthRedirect } from '../components/auth/AuthLogoLoader'
 import { getPostLoginPath } from '../utils/pulseEntry'
-import { pulseRoleLabel } from '../utils/pulseRoles'
 
 export default function AcceptInvite() {
   const { token } = useParams()
@@ -103,16 +102,7 @@ export default function AcceptInvite() {
       <AuthLogoLoader show={redirecting || saving} label={saving ? 'Creating account' : 'Opening BDA OS'} />
       <AuthShell
         title="Accept invite"
-        subtitle={
-          invite.companyName
-            ? `Join ${invite.companyName} as ${pulseRoleLabel(invite.role)}`
-            : `Join as ${pulseRoleLabel(invite.role)}`
-        }
-        footer={
-          <a href="/login" className="auth-link" onClick={onRedirectClick('/login')}>
-            Already have an account? Sign in
-          </a>
-        }
+        subtitle=""
       >
         <form onSubmit={onSubmit}>
           <div className="auth-email-chip">

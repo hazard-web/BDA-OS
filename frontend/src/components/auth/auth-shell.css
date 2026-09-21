@@ -33,7 +33,7 @@ body:has(.auth-page),
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 7vh 20px 72px;
+  padding: 7vh 20px 40px;
   box-sizing: border-box;
   color: var(--auth-text);
   background: transparent;
@@ -121,9 +121,9 @@ body:has(.auth-page),
 }
 
 .auth-logo-mark {
-  height: 40px;
+  height: 64px;
   width: auto;
-  max-width: 168px;
+  max-width: 240px;
   object-fit: contain;
 }
 
@@ -693,12 +693,14 @@ form > .auth-input {
 }
 
 .auth-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 18px;
+  position: relative;
   z-index: 1;
-  margin: 0;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 890px;
+  margin: 18px 0 0;
+  padding: 0 12px;
+  box-sizing: border-box;
   text-align: center;
   font-size: 13px;
   font-weight: 600;
