@@ -35,12 +35,28 @@ function lastCheckOutAt(row) {
   return session?.checkOutAt || null
 }
 
-function attendanceLabel(row) {
+function workedThatDay(row) {
+  return Boolean(
+    row?.checkInAt
+    || Number(row?.totalActiveMs) > 0
+    || row?.status === 'active'
+    || row?.status === 'stopped'
+    || row?.status === 'closed',
+  )
+}
+
+/** Today uses live presence. A finished day uses the day's outcome. */
+function attendanceLabel(row, { finished = false } = {}) {
+  if (!workedThatDay(row)) return 'Absent'
+  if (finished) return 'Present'
   if (row.status === 'active') return 'Active'
-  if (row.checkInAt || Number(row.totalActiveMs) > 0 || row.status === 'stopped' || row.status === 'closed') {
-    return 'Not active'
-  }
-  return 'Absent'
+  return 'Not active'
+}
+
+function statusTone(label) {
+  if (label === 'Active' || label === 'Present') return 'is-ok'
+  if (label === 'Absent') return 'is-open'
+  return 'is-bad'
 }
 
 function eventLabel(type) {
@@ -299,8 +315,9 @@ export default function PulseAttendanceAdmin() {
             ) : (
               <ul className="pulse-att-list" aria-label="Employee attendance">
                 {days.map((row) => {
-                  const label = attendanceLabel(row)
+                  const label = attendanceLabel(row, { finished: !isToday })
                   const active = label === 'Active'
+                  const tone = statusTone(label)
                   const checkOut = lastCheckOutAt(row)
                   return (
                     <li
@@ -316,7 +333,7 @@ export default function PulseAttendanceAdmin() {
                       role="button"
                       tabIndex={0}
                     >
-                      <span className={`pulse-att-dot ${active ? 'is-ok' : label === 'Absent' ? 'is-open' : 'is-bad'}`} aria-hidden="true" />
+                      <span className={`pulse-att-dot ${tone}`} aria-hidden="true" />
                       <div className="pulse-att-day">
                         <strong>{personName(row)}</strong>
                         <span>{row.email || 'No email'}</span>
@@ -335,7 +352,7 @@ export default function PulseAttendanceAdmin() {
                           </em>
                         ) : null}
                       </div>
-                      <span className={`pulse-att-status ${active ? 'is-ok' : label === 'Absent' ? 'is-open' : 'is-bad'}`}>
+                      <span className={`pulse-att-status ${tone}`}>
                         {label}
                       </span>
                     </li>
@@ -373,16 +390,8 @@ export default function PulseAttendanceAdmin() {
                     .join(' · ')}
                 </p>
               </div>
-              <span
-                className={`pulse-att-status ${
-                  attendanceLabel(selected) === 'Active'
-                    ? 'is-ok'
-                    : attendanceLabel(selected) === 'Absent'
-                      ? 'is-open'
-                      : 'is-bad'
-                }`}
-              >
-                {attendanceLabel(selected)}
+              <span className={`pulse-att-status ${statusTone(attendanceLabel(selected, { finished: !isToday }))}`}>
+                {attendanceLabel(selected, { finished: !isToday })}
               </span>
             </header>
 

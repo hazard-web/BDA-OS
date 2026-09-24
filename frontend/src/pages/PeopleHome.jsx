@@ -185,21 +185,23 @@ function HeaderAssignedApps({ apps, user }) {
   return (
     <>
       <div className="pulse-head-apps" role="navigation" aria-label="Assigned apps">
-        {apps.map((app) => (
-          <button
-            key={app.id || app.appId || app.url || app.name}
-            type="button"
-            className="pulse-head-app"
-            title={app.name}
-            aria-label={`Open ${app.name}`}
-            onClick={() => openAssignedApp(app, user)}
-          >
-            {app.iconUrl ? (
-              <img src={app.iconUrl} alt="" />
-            ) : (
-              <span>{String(app.name || '?').charAt(0)}</span>
-            )}
-          </button>
+        {apps.map((app, index) => (
+          <span key={app.id || app.appId || app.url || app.name} className="pulse-head-app-slot">
+            {index > 0 ? <span className="pulse-head-app-rule" aria-hidden="true" /> : null}
+            <button
+              type="button"
+              className="pulse-head-app"
+              title={app.name}
+              aria-label={`Open ${app.name}`}
+              onClick={() => openAssignedApp(app, user)}
+            >
+              {app.iconUrl ? (
+                <img src={app.iconUrl} alt="" />
+              ) : (
+                <span>{String(app.name || '?').charAt(0)}</span>
+              )}
+            </button>
+          </span>
         ))}
       </div>
       <span className="pulse-top-rule" aria-hidden="true" />
