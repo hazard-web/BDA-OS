@@ -463,7 +463,24 @@
 }
 
 .pulse-shell.pulse-id .pulse-top-rule {
-  background: var(--pulse-chrome-line, rgba(120, 175, 163, 0.35));
+  background: rgba(232, 241, 238, 0.55);
+}
+
+.pulse-shell.pulse-id .pulse-head-apps {
+  gap: 0;
+}
+
+.pulse-shell.pulse-id .pulse-head-app-slot {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pulse-shell.pulse-id .pulse-head-app-rule {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  flex: 0 0 auto;
+  background: rgba(232, 241, 238, 0.55);
 }
 
 .pulse-shell.pulse-id .pulse-sider-left.ant-layout-sider {
