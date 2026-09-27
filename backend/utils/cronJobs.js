@@ -59,17 +59,11 @@ async function runShiftCheck() {
   const loginUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://rohit98k-payroll-portal.vercel.app';
   const now = new Date();
 
-  const previousDayAutoPunchOut = await autoPunchOutMissedSessions(now);
+  const { autoClosed } = await autoPunchOutMissedSessions(now);
   const nineHalfAgo     = new Date(now - 9.5  * 60 * 60 * 1000);
   const eightHalfAgo    = new Date(now - 8.5  * 60 * 60 * 1000);
 
-  // ── 1. Auto-close overdue shifts on PREVIOUS days ──────────────────────────
-  // todayStart must be declared before use. autoPunchOutMissedSessions (called
-  // above) already handles this for ALL previous-day open records, so this
-  // block is a safety net - declare todayStart to avoid ReferenceError.
-  const todayStart = getDayStart(now);
-
-  // ── 2. Reminder: shifts between 8.5 h and 9.5 h (still active TODAY) ──────
+  // ── Reminder: shifts between 8.5 h and 9.5 h (still active TODAY) ──────
   const reminderShifts = await Attendance.find({
     status:   'incomplete',
     punchOut: notPunchedOut,
@@ -122,8 +116,8 @@ async function runShiftCheck() {
     remindersSent++;
   }
 
-  console.log(`[cronJobs] autoClosed=${autoClosed} remindersSent=${remindersSent} priorDayAutoPunchOut=${previousDayAutoPunchOut.autoClosed}`);
-  return { autoClosed, remindersSent, priorDayAutoPunchOut: previousDayAutoPunchOut.autoClosed };
+  console.log(`[cronJobs] autoClosed=${autoClosed} remindersSent=${remindersSent}`);
+  return { autoClosed, remindersSent };
 }
 
 // ──────────────────────────────────────────────────────────────────

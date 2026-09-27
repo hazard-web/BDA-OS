@@ -21,8 +21,8 @@ export function leaveByDay(teamLeave = []) {
     (row.days || []).forEach((day) => {
       const list = map.get(day) || []
       list.push(row)
+      map.set(day, list)
     })
-    map.set(day, list)
   })
   return map
 }
