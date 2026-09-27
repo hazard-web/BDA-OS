@@ -4611,14 +4611,9 @@ body:has(.pulse-shell),
   color: #183B35;
 }
 
-.pulse-people-confirm-role.is-to.is-admin,
-.pulse-people-confirm-role.is-to.is-superadmin {
+.pulse-people-confirm-role.is-to.is-admin {
   background: #E8F1EE;
   border-color: #c5ddd2;
-}
-
-.pulse-people-confirm-role.is-to.is-superadmin strong {
-  color: #8a6a12;
 }
 
 .pulse-people-confirm-role.is-to.is-admin strong {

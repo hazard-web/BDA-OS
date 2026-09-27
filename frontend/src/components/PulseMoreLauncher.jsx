@@ -32,7 +32,7 @@ export const MORE_SERVICES = [
   { id: 'okr', name: 'OKR', Icon: Target, kind: 'service' },
 ]
 
-/** Company modules for admin / super admin in the More slide. */
+/** Company modules for admin in the More slide. */
 export const COMPANY_MORE_ITEMS = [
   {
     id: 'onboarding',
@@ -146,7 +146,7 @@ function ServiceIcon({ Icon, tone, reduce }) {
   )
 }
 
-/** Slide-out More launcher — admin / super admin company modules. */
+/** Slide-out More launcher — admin company modules. */
 export default function PulseMoreLauncher({
   open,
   onClose,

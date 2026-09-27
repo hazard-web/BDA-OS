@@ -488,7 +488,7 @@ router.post('/admin/generate', auth, async (req, res) => {
   }
 })
 
-// Admin / superadmin: set standing net pay (persists until hike / promotion change)
+// Admin: set standing net pay (persists until hike / promotion change)
 router.put('/admin/:userId/net-pay', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {

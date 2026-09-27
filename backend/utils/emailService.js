@@ -1428,7 +1428,7 @@ async function sendPulseRoleChangedEmail({
   const transporter = await createSMTPTransporter();
   const org = companyName || 'BDA Technologies';
   const roleLabel = (role) =>
-    role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
+    role === 'admin' ? 'Admin' : 'Member';
   const fromLabel = changedByName || 'an administrator';
   const who = personName || to;
 

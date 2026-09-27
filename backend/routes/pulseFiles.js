@@ -472,7 +472,7 @@ router.get('/company', auth, async (req, res) => {
   }
 })
 
-// POST /api/pulse-files/company — admin/superadmin upload
+// POST /api/pulse-files/company — admin upload
 router.post('/company', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {

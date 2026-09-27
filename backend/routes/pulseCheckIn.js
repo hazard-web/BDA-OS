@@ -476,7 +476,7 @@ router.get('/today', auth, async (req, res) => {
   }
 });
 
-// GET /api/pulse-checkin/admin/presence — who is checked in right now (admin / superadmin)
+// GET /api/pulse-checkin/admin/presence — who is checked in right now (admin)
 router.get('/admin/presence', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -2371,7 +2371,7 @@ router.get('/leaves/team', auth, async (req, res) => {
   }
 });
 
-// POST /api/pulse-checkin/leaves/:id/respond — admin/superadmin approve or reject
+// POST /api/pulse-checkin/leaves/:id/respond — admin approve or reject
 router.post('/leaves/:id/respond', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -2457,7 +2457,7 @@ router.get('/holidays', auth, async (req, res) => {
   }
 });
 
-// PUT /api/pulse-checkin/holidays — admin/superadmin year holiday plan
+// PUT /api/pulse-checkin/holidays — admin year holiday plan
 router.put('/holidays', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
