@@ -17,6 +17,8 @@ import {
   Timer,
   Users,
   Wallet,
+  Workflow,
+  Radar,
 } from 'lucide-react'
 import PulseSlideClose from './PulseSlideClose'
 
@@ -121,6 +123,24 @@ export const COMPANY_MORE_ITEMS = [
     blurb: 'Tools assigned to people',
     Icon: LayoutGrid,
     tone: 'slate',
+    kind: 'company',
+    group: 'access',
+  },
+  {
+    id: 'projectStatus',
+    name: 'Project Status',
+    blurb: 'Daily plan, updates and hours',
+    Icon: Radar,
+    tone: 'indigo',
+    kind: 'company',
+    group: 'access',
+  },
+  {
+    id: 'bms',
+    name: 'BMS',
+    blurb: 'Flowlu sync and people mapping',
+    Icon: Workflow,
+    tone: 'violet',
     kind: 'company',
     group: 'access',
   },

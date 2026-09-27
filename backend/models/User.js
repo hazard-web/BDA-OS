@@ -178,6 +178,16 @@ const userSchema = new mongoose.Schema({
       createdAt: { type: Date, default: Date.now },
     },
   ],
+  // BMS (Flowlu) user this person maps to; 'manual' links survive re-syncs
+  flowluUserId: {
+    type: Number,
+    default: null,
+  },
+  flowluLinkSource: {
+    type: String,
+    enum: ['', 'auto', 'manual'],
+    default: '',
+  },
   googleWorkspace: {
     refreshToken: { type: String, select: false, default: '' },
     connected: { type: Boolean, default: false },
