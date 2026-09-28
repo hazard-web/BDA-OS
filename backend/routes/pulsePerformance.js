@@ -457,7 +457,7 @@ router.put('/admin/:userId', auth, async (req, res) => {
   }
 })
 
-// Admin / superadmin: lock month for payroll
+// Admin: lock month for payroll
 router.post('/admin/:userId/lock', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -508,7 +508,7 @@ router.post('/admin/:userId/lock', auth, async (req, res) => {
   }
 })
 
-// Admin / superadmin: unlock after typing the employee name
+// Admin: unlock after typing the employee name
 router.post('/admin/:userId/unlock', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {

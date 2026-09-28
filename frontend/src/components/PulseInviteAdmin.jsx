@@ -41,7 +41,7 @@ function memberDisplayName(row) {
   return personName(row, '')
 }
 
-/** Admin / Super Admin: invite Admins/Super Admins and manage roles. */
+/** Admin: invite Admins and manage roles. */
 export default function PulseInviteAdmin({ embedded = false } = {}) {
   const { message } = App.useApp()
   const { user } = useAuth()
@@ -63,7 +63,6 @@ export default function PulseInviteAdmin({ embedded = false } = {}) {
       : [
           { value: 'member', label: 'Member' },
           { value: 'admin', label: 'Admin' },
-          { value: 'superadmin', label: 'Super Admin' },
         ]
   }, [user])
 
@@ -182,7 +181,7 @@ export default function PulseInviteAdmin({ embedded = false } = {}) {
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="Only Admin or Super Admin can manage people and roles."
+        description="Only Admin can manage people and roles."
       />
     )
   }

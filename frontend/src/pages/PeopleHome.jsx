@@ -813,9 +813,11 @@ export default function PeopleHome() {
   const showOrgPerformance = space === 'organization' && sub === 'performance'
   const showOrgPayroll = space === 'organization' && sub === 'payroll'
   const showOrgApps = space === 'organization' && sub === 'apps'
+  const showOrgBms = space === 'organization' && sub === 'bms'
+  const showOrgStatus = space === 'organization' && sub === 'status'
   const showOrgPeople = space === 'organization' && sub === 'people'
   const showOrgFiles = space === 'organization' && sub === 'files'
-  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgPayroll || showOrgApps || showOrgPeople || showOrgFiles
+  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgPayroll || showOrgApps || showOrgBms || showOrgStatus || showOrgPeople || showOrgFiles
   const showCompanyLeaveShell = showLeave && (leaveTab === 'team' || leaveTab === 'holidays')
   const showCompanyShell =
     isPulseAdmin &&
@@ -827,6 +829,8 @@ export default function PeopleHome() {
       showOrgPerformance ||
       showOrgPayroll ||
       showOrgApps ||
+      showOrgBms ||
+      showOrgStatus ||
       showCompanyLeaveShell)
   const liveKind = space === 'myspace' && ({
     onboarding: 'onboarding',
@@ -1120,7 +1124,7 @@ export default function PeopleHome() {
             variant="pane"
             label={serviceGateLabel || bootView?.label || 'Opening BDA OS'}
           />
-          {!(showAccount || showTimesheet || showPerformance || showPayroll) ? (
+          {!(showAccount || showTimesheet || showPerformance || showPayroll || showOrgBms || showOrgStatus) ? (
           <div
             className={`pulse-sub${
               showOverview ||

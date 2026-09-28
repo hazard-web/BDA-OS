@@ -4611,14 +4611,9 @@ body:has(.pulse-shell),
   color: #183B35;
 }
 
-.pulse-people-confirm-role.is-to.is-admin,
-.pulse-people-confirm-role.is-to.is-superadmin {
+.pulse-people-confirm-role.is-to.is-admin {
   background: #E8F1EE;
   border-color: #c5ddd2;
-}
-
-.pulse-people-confirm-role.is-to.is-superadmin strong {
-  color: #8a6a12;
 }
 
 .pulse-people-confirm-role.is-to.is-admin strong {
@@ -6710,6 +6705,10 @@ body:has(.pulse-shell),
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+:is(.pulse-scroll-surface, .pulse-scroll-plain) .pulse-org-att-page.pulse-att-page.is-bms {
+  padding-top: 0;
 }
 
 :is(.pulse-scroll-surface, .pulse-scroll-plain) .pulse-org-att-page .pulse-att-page,
@@ -9680,4 +9679,118 @@ body.pulse-dash-dragging * {
   .pulse-dash-card:hover {
     background: rgba(255, 255, 255, 0.82);
   }
+}
+
+/* Timesheet rows: General text or a BMS ticket */
+.pulse-ts-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pulse-ts-row-main .ant-segmented {
+  align-self: flex-start;
+}
+
+.pulse-ts-row-ticket {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 8px;
+}
+
+.pulse-ts-row-ticket .ant-select {
+  width: 100%;
+  min-height: 40px;
+}
+
+.pulse-ts-row-ticket .ant-select .ant-select-selector {
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.pulse-ts-rows .pulse-ts-row:not(.is-head) {
+  align-items: end;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef2f0;
+}
+
+.pulse-ts-add-row {
+  display: flex;
+  gap: 18px;
+}
+
+.pulse-ts-bms-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+/* Timesheet: BMS retry + my tickets */
+.pulse-ts-retry.ant-btn {
+  height: 40px;
+  border-radius: 10px;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+.pulse-ts-tickets {
+  margin-top: 16px;
+}
+
+/* Beats the shared 4-column timesheet row grid (dot · day · hours · status) */
+.pulse-ts-att .pulse-ts-tickets .pulse-att-row.pulse-ts-ticket-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 200px;
+  align-items: center;
+  gap: 14px;
+}
+
+.pulse-ts-ticket-key {
+  display: inline-block;
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.pulse-ts-ticket-key.is-agile {
+  background: #f3e8ff;
+  color: #6d28d9;
+}
+
+.pulse-ts-ticket-key.is-task {
+  background: #ecfeff;
+  color: #0e7490;
+}
+
+.pulse-ts-ticket-stage {
+  width: 100%;
+}
+
+.pulse-ts-admin-ticket-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+.pulse-ts-admin-ticket-meta .is-sent {
+  color: #047857;
+}
+
+.pulse-ts-admin-ticket-meta .is-failed {
+  color: #b91c1c;
+}
+
+.pulse-ts-task-select.ant-select {
+  width: 100%;
+  min-height: 40px;
+}
+
+.pulse-ts-task-select.ant-select .ant-select-selector {
+  min-height: 40px;
+  border-radius: 10px;
 }

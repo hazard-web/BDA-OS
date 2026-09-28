@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import dayjs from 'dayjs'
-import { App, Button, DatePicker, Drawer, Input, Select, Tooltip } from 'antd'
+import { App, Button, DatePicker, Drawer, Input, Segmented, Select, Tooltip } from 'antd'
 import { CheckOutlined, CloseOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
 import api from '../api'
@@ -21,8 +21,23 @@ function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function newRow() {
-  return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, description: '', hours: '', minutes: '' }
+const SOURCE_LABEL = { agile: 'Agile', task: 'Projects' }
+
+const ticketKeyOf = (ticket) => (ticket ? `${ticket.source}:${ticket.flowluId}` : '')
+const projectKeyOf = (ticket) => `${ticket.source}:${ticket.projectId}`
+
+function newRow(kind = 'general') {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    kind,
+    description: '',
+    taskId: '',
+    projectKey: '',
+    ticketKey: '',
+    ticketLabel: '',
+    hours: '',
+    minutes: '',
+  }
 }
 
 function rowsFromEntries(entries) {
@@ -30,28 +45,51 @@ function rowsFromEntries(entries) {
   if (!list.length) return [newRow()]
   return list.map((item, index) => {
     const minutes = Math.max(0, Number(item.minutes) || 0)
+    const isTicket = item.kind === 'ticket' && item.ticket
     return {
       id: item._id || `entry-${index}`,
-      description: item.description || '',
+      kind: isTicket ? 'ticket' : 'general',
+      description: isTicket ? '' : item.description || '',
+      taskId: !isTicket && item.task ? String(item.task) : '',
+      projectKey: '',
+      ticketKey: isTicket ? ticketKeyOf(item.ticket) : '',
+      ticketLabel: isTicket ? `${item.ticket.key} · ${item.ticket.name}` : '',
       hours: String(Math.floor(minutes / 60) || ''),
       minutes: String(minutes % 60 || ''),
+      bmsSent: Boolean(item.flowluTimelogId),
+      bmsError: item.flowluError || '',
     }
   })
 }
 
+function rowMinutes(row) {
+  return (Number(row.hours) || 0) * 60 + (Number(row.minutes) || 0)
+}
+
 function toEntries(rows) {
   return rows
-    .map((row) => ({
-      description: String(row.description || '').trim(),
-      project: 'BDA OS',
-      minutes: (Number(row.hours) || 0) * 60 + (Number(row.minutes) || 0),
-    }))
-    .filter((item) => item.description && item.minutes > 0)
+    .map((row) => {
+      const minutes = rowMinutes(row)
+      if (row.kind === 'ticket') {
+        const [source, flowluId] = String(row.ticketKey || '').split(':')
+        return row.ticketKey ? { kind: 'ticket', ticket: { source, flowluId: Number(flowluId) }, minutes } : null
+      }
+      const description = String(row.description || '').trim()
+      if (!description) return null
+      return row.taskId
+        ? { kind: 'general', task: row.taskId, description, minutes }
+        : { kind: 'general', description, project: 'General', minutes }
+    })
+    .filter((item) => item && item.minutes > 0)
+}
+
+function rowLabel(row) {
+  return row.kind === 'ticket' ? row.ticketLabel : String(row.description || '').trim()
 }
 
 const SAMPLE_ROWS = [
-  { id: 's1', description: 'Internal product review', hours: '2', minutes: '30' },
-  { id: 's2', description: 'Onboarding notes', hours: '1', minutes: '15' },
+  { ...newRow(), id: 's1', description: 'Internal product review', hours: '2', minutes: '30' },
+  { ...newRow(), id: 's2', description: 'Onboarding notes', hours: '1', minutes: '15' },
 ]
 
 const WEEK_TARGET_H = 45
@@ -86,6 +124,12 @@ export default function PulseTimesheetForm({
   const [clockMs, setClockMs] = useState(Math.max(0, Number(elapsed) || 0))
   const [saving, setSaving] = useState(false)
   const [period, setPeriod] = useState('week')
+  const [bms, setBms] = useState({ linked: false, tickets: [], pendingLogs: 0 })
+  const [retrying, setRetrying] = useState(false)
+  const [movingKey, setMovingKey] = useState('')
+  const [myTasks, setMyTasks] = useState({ linked: false, tasks: [] })
+  const [taskSearch, setTaskSearch] = useState({ rowId: '', text: '' })
+  const [creatingTask, setCreatingTask] = useState('')
   const [customRange, setCustomRange] = useState(() => [dayjs().startOf('week'), dayjs()])
   const [history, setHistory] = useState({
     records: [],
@@ -124,6 +168,105 @@ export default function PulseTimesheetForm({
   useEffect(() => {
     if (checkedInAt) setCheckInAt(checkedInAt)
   }, [checkedInAt])
+
+  const loadBms = useCallback(() => (
+    api.get('/flowlu/my-tickets')
+      .then((res) => setBms(res.data?.data || { linked: false, tickets: [], pendingLogs: 0 }))
+      .catch(() => {})
+  ), [])
+
+  useEffect(() => {
+    if (!sample) loadBms()
+  }, [sample, loadBms])
+
+  useEffect(() => {
+    if (sample) return undefined
+    let cancelled = false
+    api.get('/pulse-checkin/my-tasks')
+      .then((res) => {
+        if (!cancelled) setMyTasks(res.data?.data || { linked: false, tasks: [] })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [sample])
+
+  const taskOptionsFor = (row) => {
+    const options = myTasks.tasks.map((t) => ({ value: t.id, label: t.title }))
+    if (row.taskId && !options.some((o) => o.value === row.taskId)) {
+      options.unshift({ value: row.taskId, label: row.description || 'Task' })
+    }
+    const typed = taskSearch.rowId === row.id ? taskSearch.text.trim() : ''
+    if (typed && !options.some((o) => o.label.toLowerCase() === typed.toLowerCase())) {
+      options.push({ value: `new:${typed}`, label: `+ Create task "${typed}"` })
+    }
+    return options
+  }
+
+  const pickTask = async (row, value) => {
+    if (!String(value).startsWith('new:')) {
+      const task = myTasks.tasks.find((t) => t.id === value)
+      updateRow(row.id, { taskId: value, description: task?.title || row.description })
+      return
+    }
+    const title = String(value).slice(4)
+    setCreatingTask(row.id)
+    try {
+      const res = await api.post('/pulse-checkin/my-tasks', { title })
+      const task = res.data?.data
+      if (task) {
+        setMyTasks((prev) => ({ ...prev, tasks: [task, ...prev.tasks] }))
+        updateRow(row.id, { taskId: task.id, description: task.title })
+        message.success(res.data?.message || 'Task created')
+      }
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not create task')
+    } finally {
+      setCreatingTask('')
+      setTaskSearch({ rowId: '', text: '' })
+    }
+  }
+
+  const retryBms = async () => {
+    setRetrying(true)
+    try {
+      const res = await api.post('/flowlu/retry-logs', { scope: 'mine' })
+      message.success(res.data?.message || 'Retried')
+      const today = await fetchTimesheetToday(date)
+      if (today?.taskEntries?.length) setRows(rowsFromEntries(today.taskEntries))
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Retry failed')
+    } finally {
+      setRetrying(false)
+      loadBms()
+    }
+  }
+
+  const moveTicket = async (ticket, stageId) => {
+    const key = ticketKeyOf(ticket)
+    setMovingKey(key)
+    try {
+      const res = await api.put(`/flowlu/tickets/${ticket.source}/${ticket.flowluId}/stage`, { stageId })
+      message.success(res.data?.message || 'Stage updated')
+      await loadBms()
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not move the ticket')
+    } finally {
+      setMovingKey('')
+    }
+  }
+
+  const projectOptions = useMemo(() => {
+    const map = new Map()
+    bms.tickets.forEach((t) => {
+      const key = projectKeyOf(t)
+      if (!map.has(key)) map.set(key, { value: key, label: `${SOURCE_LABEL[t.source]} · ${t.projectName}` })
+    })
+    return [...map.values()]
+  }, [bms.tickets])
+
+  const ticketsByKey = useMemo(() => new Map(bms.tickets.map((t) => [ticketKeyOf(t), t])), [bms.tickets])
 
   useEffect(() => {
     if (sample) return undefined
@@ -304,15 +447,20 @@ export default function PulseTimesheetForm({
   ])
 
   const submittedBoard = useMemo(() => (
-    entries.map((item, index) => ({
-      key: `done-${index}`,
-      task: item.description,
-      owner: name,
-      due: hoursLabel(item.minutes / 60),
-      status: 'Done',
-      done: true,
-    }))
-  ), [entries, name])
+    rows
+      .filter((row) => rowLabel(row) && rowMinutes(row) > 0)
+      .map((row) => {
+        const ticket = row.kind === 'ticket'
+        return {
+          key: `done-${row.id}`,
+          task: rowLabel(row),
+          owner: ticket ? (row.bmsSent ? 'BMS ticket · logged in BMS' : `BMS ticket · ${row.bmsError || 'not sent yet'}`) : row.taskId ? 'Task' : 'General',
+          due: hoursLabel(rowMinutes(row) / 60),
+          status: ticket ? (row.bmsSent ? 'Sent' : 'Not sent') : 'Done',
+          done: true,
+        }
+      })
+  ), [rows])
 
   const tableRows = submitted && period === 'week' ? submittedBoard : periodRows
   const panelTitle = submitted && period === 'week' ? 'Today’s tasks' : periodLabel
@@ -322,9 +470,29 @@ export default function PulseTimesheetForm({
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
   }
 
-  const addRow = () => {
+  const addRow = (kind = 'general') => {
     if (submitted || rows.length >= 20) return
-    setRows((prev) => [...prev, newRow()])
+    setRows((prev) => [...prev, newRow(kind)])
+  }
+
+  const pickTicket = (row, key) => {
+    const ticket = ticketsByKey.get(key)
+    updateRow(row.id, {
+      ticketKey: key,
+      ticketLabel: ticket ? `${ticket.key} · ${ticket.name}` : '',
+      projectKey: ticket ? projectKeyOf(ticket) : row.projectKey,
+    })
+  }
+
+  const ticketOptionsFor = (row) => {
+    const projectKey = row.projectKey || (ticketsByKey.get(row.ticketKey) ? projectKeyOf(ticketsByKey.get(row.ticketKey)) : '')
+    const options = bms.tickets
+      .filter((t) => !projectKey || projectKeyOf(t) === projectKey)
+      .map((t) => ({ value: ticketKeyOf(t), label: `${t.key} · ${t.name}` }))
+    if (row.ticketKey && !ticketsByKey.has(row.ticketKey)) {
+      options.unshift({ value: row.ticketKey, label: row.ticketLabel || row.ticketKey })
+    }
+    return options
   }
 
   const removeRow = (id) => {
@@ -357,6 +525,11 @@ export default function PulseTimesheetForm({
       if (!sample) {
         const data = await submitTimesheet({ date, email: user?.email, entries })
         if (data?.taskEntries) setRows(rowsFromEntries(data.taskEntries))
+        if (data?.bms?.failed) {
+          message.warning(`${data.bms.failed} ticket log${data.bms.failed === 1 ? '' : 's'} could not be sent to BMS`)
+        } else if (data?.bms?.sent) {
+          message.info(`${data.bms.sent} ticket log${data.bms.sent === 1 ? '' : 's'} sent to BMS`)
+        }
       }
       setSubmitted(true)
       setOpen(false)
@@ -398,6 +571,11 @@ export default function PulseTimesheetForm({
               />
             ) : null}
           </div>
+          {bms.pendingLogs > 0 ? (
+            <Button className="pulse-ts-retry" loading={retrying} onClick={retryBms}>
+              Retry BMS logs ({bms.pendingLogs})
+            </Button>
+          ) : null}
           {submitted ? (
             <span className="pulse-ts-sent">Submitted</span>
           ) : (
@@ -517,9 +695,9 @@ export default function PulseTimesheetForm({
             <ul className="pulse-att-list pulse-ts-att-list" aria-label={panelTitle}>
               {tableRows.map((row) => {
                 const tone = String(row.status || '').toLowerCase()
-                const statusTone = ['done', 'logged', 'submitted'].includes(tone)
+                const statusTone = ['done', 'logged', 'submitted', 'sent'].includes(tone)
                   ? 'ok'
-                  : tone === 'missing' || tone === 'absent'
+                  : tone === 'missing' || tone === 'absent' || tone === 'not sent'
                     ? 'bad'
                     : tone.includes('leave')
                       ? 'leave'
@@ -539,12 +717,47 @@ export default function PulseTimesheetForm({
             </ul>
           )}
         </section>
+
+        {bms.tickets.length ? (
+          <section className="pulse-att-panel pulse-ts-tickets" aria-label="My BMS tickets">
+            <div className="pulse-att-panel-chrome">
+              <header className="pulse-att-panel-head">
+                <h4>My BMS tickets</h4>
+                <span>{bms.tickets.length} open</span>
+              </header>
+            </div>
+            <ul className="pulse-att-list">
+              {bms.tickets.map((t) => (
+                <li key={ticketKeyOf(t)} className="pulse-att-row pulse-ts-ticket-row">
+                  <span className={`pulse-ts-ticket-key is-${t.source}`}>{t.key}</span>
+                  <div className="pulse-att-day">
+                    <strong>{t.name}</strong>
+                    <span>
+                      {SOURCE_LABEL[t.source]} · {t.projectName}
+                      {t.sprintName ? ` · ${t.sprintName}` : ''}
+                    </span>
+                  </div>
+                  <Select
+                    className="pulse-ts-ticket-stage"
+                    value={t.stageId || undefined}
+                    placeholder="Stage"
+                    loading={movingKey === ticketKeyOf(t)}
+                    disabled={Boolean(movingKey) || !t.stageOptions?.length}
+                    options={(t.stageOptions || []).map((s) => ({ value: s.id, label: s.name }))}
+                    popupMatchSelectWidth={false}
+                    onChange={(stageId) => moveTicket(t, stageId)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
 
       <Drawer
         title="Submit timesheet"
         placement="right"
-        width={520}
+        width={680}
         open={open}
         onClose={closeForm}
         destroyOnHidden
@@ -579,20 +792,75 @@ export default function PulseTimesheetForm({
 
           <div className="pulse-ts-rows">
             <div className="pulse-ts-row is-head">
-              <span>Task</span>
+              <span>Work</span>
               <span>Hrs</span>
               <span>Min</span>
               <span className="pulse-ts-row-action" />
             </div>
             {rows.map((row, index) => (
               <div key={row.id} className="pulse-ts-row">
-                <Input
-                  value={row.description}
-                  placeholder={index === 0 ? 'e.g. Product review' : 'Another task'}
-                  disabled={saving}
-                  onChange={(event) => updateRow(row.id, { description: event.target.value })}
-                  onBlur={persistDraft}
-                />
+                <div className="pulse-ts-row-main">
+                  <Segmented
+                    size="small"
+                    value={row.kind}
+                    disabled={saving}
+                    onChange={(kind) => updateRow(row.id, { kind })}
+                    options={[
+                      { value: 'general', label: 'General' },
+                      { value: 'ticket', label: 'Ticket', disabled: !bms.tickets.length && row.kind !== 'ticket' },
+                    ]}
+                  />
+                  {row.kind === 'ticket' ? (
+                    <div className="pulse-ts-row-ticket">
+                      <Select
+                        value={row.projectKey || (ticketsByKey.get(row.ticketKey) ? projectKeyOf(ticketsByKey.get(row.ticketKey)) : undefined)}
+                        placeholder="Project"
+                        options={projectOptions}
+                        disabled={saving}
+                        popupMatchSelectWidth={false}
+                        onChange={(projectKey) => updateRow(row.id, { projectKey, ticketKey: '', ticketLabel: '' })}
+                      />
+                      <Select
+                        showSearch
+                        optionFilterProp="label"
+                        value={row.ticketKey || undefined}
+                        placeholder="Ticket"
+                        options={ticketOptionsFor(row)}
+                        disabled={saving}
+                        popupMatchSelectWidth={false}
+                        onChange={(key) => pickTicket(row, key)}
+                        onBlur={persistDraft}
+                      />
+                    </div>
+                  ) : myTasks.linked ? (
+                    <Select
+                      showSearch
+                      className="pulse-ts-task-select"
+                      value={row.taskId || undefined}
+                      placeholder={index === 0 ? 'Pick or create a task' : 'Another task'}
+                      options={taskOptionsFor(row)}
+                      optionFilterProp="label"
+                      filterOption={(input, option) => String(option.value).startsWith('new:')
+                        || String(option.label).toLowerCase().includes(input.toLowerCase())}
+                      searchValue={taskSearch.rowId === row.id ? taskSearch.text : undefined}
+                      onSearch={(text) => setTaskSearch({ rowId: row.id, text })}
+                      loading={creatingTask === row.id}
+                      disabled={saving || creatingTask === row.id}
+                      popupMatchSelectWidth={false}
+                      notFoundContent="Type a name to create a task"
+                      onChange={(value) => pickTask(row, value)}
+                      onBlur={persistDraft}
+                    />
+                  ) : (
+                    <Input
+                      value={row.description}
+                      placeholder={index === 0 ? 'e.g. Team meeting, admin work' : 'Another task'}
+                      disabled={saving}
+                      onChange={(event) => updateRow(row.id, { description: event.target.value })}
+                      onBlur={persistDraft}
+                    />
+                  )}
+                </div>
                 <Input
                   inputMode="numeric"
                   value={row.hours}
@@ -626,17 +894,34 @@ export default function PulseTimesheetForm({
             ))}
           </div>
 
-          <button
-            type="button"
-            className="pulse-ts-add"
-            onClick={addRow}
-            disabled={saving || rows.length >= 20}
-          >
-            <PlusOutlined /> Add task
-          </button>
+          <div className="pulse-ts-add-row">
+            <button
+              type="button"
+              className="pulse-ts-add"
+              onClick={() => addRow('general')}
+              disabled={saving || rows.length >= 20}
+            >
+              <PlusOutlined /> General
+            </button>
+            <button
+              type="button"
+              className="pulse-ts-add"
+              onClick={() => addRow('ticket')}
+              disabled={saving || rows.length >= 20 || !bms.tickets.length}
+            >
+              <PlusOutlined /> Ticket
+            </button>
+          </div>
+          {!sample && !bms.tickets.length ? (
+            <p className="pulse-ts-bms-note">
+              {bms.linked
+                ? 'No open BMS tickets are assigned to you.'
+                : 'Your account is not linked to BMS yet, so only General time can be logged. Ask an admin to link you.'}
+            </p>
+          ) : null}
         </div>
       </Drawer>
-      <PulseSlideClose open={open} onClose={closeForm} width={520} />
+      <PulseSlideClose open={open} onClose={closeForm} width={680} />
     </div>
   )
 }
