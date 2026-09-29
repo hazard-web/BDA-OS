@@ -61,6 +61,8 @@ const taskEntrySchema = new mongoose.Schema(
     minutes: { type: Number, required: true, min: 1 },
     ticket: { type: ticketRefSchema, default: undefined },
     task: { type: mongoose.Schema.Types.ObjectId, ref: 'AssignedTask', default: null },
+    // Daily-plan item these hours were moved onto (Project Status "Move to plan item")
+    planTarget: { type: mongoose.Schema.Types.ObjectId, default: null },
     flowluTimelogId: { type: Number, default: null },
     flowluError: { type: String, default: '' },
   },

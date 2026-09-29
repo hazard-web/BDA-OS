@@ -134,7 +134,7 @@ const IMPORT_TEMPLATE_HEADERS = [
 const SUPPORTED_LEAVE_TYPES = ['Casual Leave', 'Sick Leave', 'Custom']
 
 /** Addresses that can be notified about a leave request; the server has the same allowlist. */
-const TEAM_NOTIFY_EMAILS = ['office@bda.co.in', 'hello@ambesh.com']
+const TEAM_NOTIFY_EMAILS = ['office@bda.co.in', 'hello@ambesh.com', 'shivam@bda.co.in']
 
 const IMPORT_LEAVE_TYPE_ALIASES = new Set([
   'casual',
@@ -822,6 +822,13 @@ export default function PulseLeaveTracker({
   const [pendingLeaves, setPendingLeaves] = useState([])
   const [teamOnLeave, setTeamOnLeave] = useState([])
   const [teamLoading, setTeamLoading] = useState(false)
+  const focusRequestId = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('request') || ''
+    } catch {
+      return ''
+    }
+  }, [])
   const [holidaySaving, setHolidaySaving] = useState(false)
   const [casual, setCasual] = useState(
     sample ? SAMPLE_CASUAL : casualBalance || { used: 0, total: CASUAL_ANNUAL, remaining: CASUAL_ANNUAL },
@@ -977,6 +984,16 @@ export default function PulseLeaveTracker({
       setTeamLoading(false)
     }
   }, [sample, teamRange.from, teamRange.to])
+
+  useEffect(() => {
+    if (!focusRequestId || !pendingLeaves.length) return
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector('.pulse-leave-focus-row')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [focusRequestId, pendingLeaves])
 
   const loadHolidays = useCallback(async () => {
     if (sample) {
@@ -2111,6 +2128,11 @@ export default function PulseLeaveTracker({
                   columns={pendingColumns}
                   dataSource={pendingLeaves}
                   className="pulse-leave-table"
+                  rowClassName={(row) =>
+                    focusRequestId && String(row.id) === String(focusRequestId)
+                      ? 'pulse-leave-focus-row'
+                      : ''
+                  }
                 />
               )}
             </div>

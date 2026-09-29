@@ -2174,6 +2174,10 @@ body:has(.pulse-shell),
   font-weight: 700;
 }
 
+.pulse-leave-table .ant-table-tbody > tr.pulse-leave-focus-row > td {
+  background: color-mix(in srgb, var(--pulse-primary, #176b5b) 8%, #fff);
+}
+
 .pulse-leave-table .ant-table-tbody > tr > td {
   padding-top: 14px;
   padding-bottom: 14px;
