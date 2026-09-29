@@ -28,6 +28,7 @@ const {
   policyHolidayEntries,
   OPEN_TASK_STATUSES,
 } = require('./pulseCheckIn')
+const { pushTimesheetToFlowlu } = require('./flowlu')
 
 const router = express.Router()
 
@@ -257,18 +258,25 @@ function updateDialog(user, date, plan) {
 }
 
 function timesheetDialog(user, date, plan) {
-  const sections = plan.targets.map((target) => ({
-    widgets: [{
-      textInput: {
-        name: `hours_${target._id}`,
-        label: `${target.title}${target.projectName ? ` · ${target.projectName}` : ''}`,
-        hintText: 'Hours, e.g. 2 or 1.5',
-        type: 'SINGLE_LINE',
-      },
-    }],
-  }))
+  const sections = []
+  if (plan.targets.length) {
+    sections.push({
+      header: 'Hours on your plan',
+      widgets: [
+        para('Enter hours for each item you planned today. Enter <b>0</b> for items you did not work on.'),
+        ...plan.targets.map((target) => ({
+          textInput: {
+            name: `hours_${target._id}`,
+            label: `${target.title}${target.projectName ? ` · ${target.projectName}` : ''}`,
+            hintText: 'Hours, e.g. 2 or 1.5 (0 if not worked on)',
+            type: 'SINGLE_LINE',
+          },
+        })),
+      ],
+    })
+  }
   sections.push({
-    header: 'Other work',
+    header: plan.targets.length ? 'Extra work not in today’s plan (optional)' : 'What you worked on',
     widgets: [
       { textInput: { name: 'general_desc', label: 'Description', type: 'SINGLE_LINE' } },
       { textInput: { name: 'general_hours', label: 'Hours', hintText: 'e.g. 1', type: 'SINGLE_LINE' } },
@@ -399,6 +407,14 @@ function minutesFrom(raw) {
 
 async function handleTimesheet(user, event, date) {
   const plan = await getPlan(user, date)
+  // Planned items must be answered (0 is fine) so extra-work hours can't silently replace them
+  const planAnswered = plan.targets.some((target) => formValue(event, `hours_${target._id}`) !== '')
+  if (plan.targets.length && !planAnswered) {
+    throw Object.assign(
+      new Error('Add hours against your planned items (enter 0 for the ones you did not work on). Use extra work only for things you did not plan.'),
+      { status: 400 },
+    )
+  }
   const entries = []
   plan.targets.forEach((target) => {
     const minutes = minutesFrom(formValue(event, `hours_${target._id}`))
@@ -768,6 +784,7 @@ router.post('/send', auth, requireAdmin, async (req, res) => {
 })
 
 function entryMatchesTarget(entry, target) {
+  if (entry.planTarget) return String(entry.planTarget) === String(target._id)
   if (target.kind === 'ticket') {
     return entry.kind === 'ticket' && entry.ticket?.source === target.ticket.source && entry.ticket?.flowluId === target.ticket.flowluId
   }
@@ -819,6 +836,7 @@ async function computeStatus(organizationId, date, excludedUsers = []) {
         loggedMinutes,
       })
       return {
+        id: String(target._id),
         title: target.title,
         kind: target.kind,
         key: target.ticket?.key || '',
@@ -847,6 +865,8 @@ async function computeStatus(organizationId, date, excludedUsers = []) {
       avatarUrl: member.avatarUrl || '',
       targets,
       unplanned: unplanned.map((e) => ({
+        id: String(e._id),
+        movable: e.kind !== 'ticket',
         title: e.ticket?.key ? `${e.ticket.key} ${e.ticket.name || ''}`.trim() : e.description,
         projectName: e.project,
         minutes: e.minutes,
@@ -873,6 +893,55 @@ async function computeStatus(organizationId, date, excludedUsers = []) {
       .sort((a, b) => b.loggedMinutes - a.loggedMinutes),
   }
 }
+
+// POST /api/chat-bot/reassign — { userId, date, entryId, targetId }: count logged hours against a plan item
+router.post('/reassign', auth, async (req, res) => {
+  try {
+    const { userId, date, entryId, targetId } = req.body || {}
+    if (![userId, entryId, targetId].every((id) => mongoose.Types.ObjectId.isValid(id)) || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+      return res.status(400).json({ success: false, message: 'Invalid request' })
+    }
+    const self = String(req.user._id) === String(userId)
+    if (!self && !isPulseAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: 'Only an admin or the person can move their hours' })
+    }
+    const organizationId = orgObjectId(req.user)
+    const person = await User.findOne({ _id: userId, $or: [{ organizationId }, { _id: organizationId }] })
+    if (!person) return res.status(404).json({ success: false, message: 'Person not found in this organization' })
+    const [plan, day] = await Promise.all([
+      PulseDailyPlan.findOne({ user: person._id, date }),
+      PulseWorkDay.findOne({ user: person._id, date }),
+    ])
+    const target = plan?.targets.id(targetId)
+    const entry = day?.taskEntries.id(entryId)
+    if (!target || !entry) return res.status(404).json({ success: false, message: 'Plan item or logged row not found' })
+    if (entry.kind === 'ticket') {
+      return res.status(400).json({ success: false, message: 'BMS ticket rows are already logged against their ticket' })
+    }
+
+    entry.planTarget = target._id
+    if (target.kind === 'task') {
+      entry.task = target.task
+    } else if (target.kind === 'ticket') {
+      entry.kind = 'ticket'
+      entry.task = null
+      entry.ticket = { source: target.ticket.source, flowluId: target.ticket.flowluId, key: target.ticket.key, name: target.title }
+      entry.project = target.projectName || entry.project
+      entry.flowluTimelogId = null
+      entry.flowluError = ''
+    }
+    await day.save()
+    const bms = target.kind === 'ticket' && day.timesheetSubmitted
+      ? await pushTimesheetToFlowlu(person, day).catch(() => ({ sent: 0, failed: 1 }))
+      : null
+    res.json({
+      success: true,
+      message: `${Math.round((entry.minutes / 60) * 100) / 100}h now counted against “${target.title}”${bms ? (bms.sent ? ' · logged in BMS' : ' · BMS log pending, retry from the Timesheet page') : ''}`,
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Could not move the hours' })
+  }
+})
 
 // GET /api/chat-bot/status?date=yyyy-MM-dd
 router.get('/status', auth, requireAdmin, async (req, res) => {
