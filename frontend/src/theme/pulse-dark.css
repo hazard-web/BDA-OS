@@ -1034,6 +1034,26 @@
   filter: saturate(0.8) brightness(0.7);
 }
 
+:root[data-theme='dark'] .pulse-scroll-surface .pulse-day-hello {
+  background: rgba(22, 26, 24, 0.92);
+  border-color: transparent;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .pulse-scroll-surface .pulse-day-copy strong,
+:root[data-theme='dark'] .pulse-scroll-surface .pulse-checkin-greet.is-closed {
+  color: #f5f2ec;
+}
+
+:root[data-theme='dark'] .pulse-scroll-surface .pulse-day-aside,
+:root[data-theme='dark'] .pulse-scroll-surface .pulse-day-dismiss {
+  color: rgba(245, 242, 236, 0.62);
+}
+
+:root[data-theme='dark'] .pulse-scroll-surface .pulse-day-note + .pulse-day-note {
+  border-top-color: rgba(245, 242, 236, 0.1);
+}
+
 :root[data-theme='dark'] .pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card,
 :root[data-theme='dark'] .pulse-scroll-surface .pulse-ov-tile.is-dash .pulse-dash-card:hover {
   background: rgba(22, 26, 24, 0.78) !important;

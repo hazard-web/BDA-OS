@@ -234,7 +234,7 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, live
 
   if (tab === 'status') {
     return (
-      <div className="pulse-att-page pulse-org-att-page is-bms">
+      <div className="pulse-att-page pulse-org-att-page">
         <PulseProjectStatus />
       </div>
     )
@@ -242,7 +242,7 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, live
 
   if (tab === 'bms') {
     return (
-      <div className="pulse-att-page pulse-org-att-page is-bms">
+      <div className="pulse-att-page pulse-org-att-page">
         <PulseBmsAdmin />
       </div>
     )

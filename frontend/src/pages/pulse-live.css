@@ -1910,6 +1910,11 @@
   gap: 14px;
 }
 
+/* Closer under the green panel head — same rhythm as company Attendance / App access */
+.pulse-bms .pulse-apps-assign-well {
+  padding: 10px 18px 16px;
+}
+
 .pulse-bms-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

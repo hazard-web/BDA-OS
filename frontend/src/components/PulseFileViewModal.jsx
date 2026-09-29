@@ -243,7 +243,9 @@ export default function PulseFileViewModal({ open, file, onClose }) {
       width={920}
       centered
       destroyOnClose
+      zIndex={2100}
       className="pulse-file-view-modal"
+      rootClassName="pulse-file-view-root"
       styles={{ body: { padding: 0 } }}
     >
       <div className="pulse-file-view">
