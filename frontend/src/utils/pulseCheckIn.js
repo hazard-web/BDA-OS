@@ -250,7 +250,8 @@ export function alignLocalToServerTotal(email, serverActiveMs) {
 }
 
 /**
- * Credit only awake time. Sleep / shutdown gaps (> PULSE_IDLE_GAP_MS) are skipped.
+ * Credit only awake time. Sleep / shutdown gaps (> PULSE_IDLE_GAP_MS) check out
+ * so the person shows as not active instead of staying on a paused live session.
  */
 export function reconcileCheckInSession(email) {
   const day = pulseDayKey()
@@ -260,7 +261,9 @@ export function reconcileCheckInSession(email) {
   const now = Date.now()
   const lastTickAt = current.lastTickAt || current.checkedInAt || now
   const delta = Math.max(0, now - lastTickAt)
-  const interrupted = delta >= PULSE_IDLE_GAP_MS
+  if (delta >= PULSE_IDLE_GAP_MS) {
+    return stopCheckIn(email, { reason: 'sleep' })
+  }
   const activeMs = projectedActiveMs(current, now)
   const targetMs = PULSE_TARGET_HOURS * 3_600_000
   const targetLogged = current.targetLogged || activeMs >= targetMs
@@ -268,7 +271,7 @@ export function reconcileCheckInSession(email) {
     ...current,
     activeMs: Math.min(PULSE_DAILY_CAP_MS, activeMs),
     lastTickAt: now,
-    interrupted,
+    interrupted: false,
     targetLogged,
     dayKey: day,
   }
@@ -348,6 +351,15 @@ export async function hydrateCheckInFromServer(email) {
   try {
     const day = await fetchPulseWorkDayToday(pulseDayKey())
     const serverMs = Math.max(0, Number(day?.totalActiveMs) || 0)
+    // Server has no time and is not live — clear stale local timer (e.g. after a DB reset).
+    if (serverMs <= 0 && day?.status !== 'active') {
+      const prev = readRawSession(email)
+      if (prev) {
+        writeRawSession(email, null)
+        emitCheckIn(email, null)
+      }
+      return null
+    }
     const firstAt = day?.checkInAt ? new Date(day.checkInAt).getTime() : null
     const merged = serverMs > 0 ? mergeServerActiveMs(email, serverMs) : readRawSession(email)
     if (firstAt && Number.isFinite(firstAt) && firstAt > 0) {
@@ -418,8 +430,9 @@ export function startCheckIn(email, timestamp = Date.now(), { baseActiveMs } = {
 
 /**
  * Check out — freeze timer at current elapsed; hide desktop widget immediately.
+ * Pass reason `sleep` or `shutdown` so the UI can explain an automatic check-out.
  */
-export function stopCheckIn(email) {
+export function stopCheckIn(email, { reason } = {}) {
   if (!email) return null
   const day = pulseDayKey()
   const current = readRawSession(email, day)
@@ -431,6 +444,7 @@ export function stopCheckIn(email) {
 
   const now = Date.now()
   const activeMs = projectedActiveMs(current, now)
+  const autoOut = reason === 'sleep' || reason === 'shutdown'
   const session = {
     ...current,
     activeMs,
@@ -438,7 +452,7 @@ export function stopCheckIn(email) {
     status: 'stopped',
     stoppedAt: now,
     dayKey: day,
-    interrupted: false,
+    interrupted: autoOut,
   }
   writeRawSession(email, session, day)
   emitCheckIn(email, session)
@@ -567,7 +581,7 @@ export function supportsDocumentPip() {
 
 /** Keep session heartbeats while the browser is open.
  * Switching to another app/tab does NOT pause time.
- * Only sleep / shutdown / killed tab (JS frozen) skips the gap on wake.
+ * Sleep / shutdown / killed tab checks out so the person is not active.
  */
 export function startCheckInHeartbeat(getEmail) {
   if (typeof window === 'undefined') return () => {}
@@ -655,7 +669,7 @@ export function startCheckInHeartbeat(getEmail) {
     pulse({ broadcast: true, syncDesktop: true, forceSync: true })
   }
 
-  /** Real close / shutdown / discard — stamp so frozen time is not credited on reopen. */
+  /** Real close / shutdown / discard — check out so admin presence shows not active. */
   const onPageHide = (event) => {
     const email = emailOf()
     if (!email) return
@@ -664,15 +678,14 @@ export function startCheckInHeartbeat(getEmail) {
       onHide()
       return
     }
-    const paused = pauseCheckInClock(email, { reason: 'shutdown' })
-    if (paused?.status === 'active') flushSync(paused, { force: true })
+    if (!readCheckInAt(email)) return
+    stopCheckIn(email, { reason: 'shutdown' })
   }
 
   const onFreeze = () => {
     const email = emailOf()
-    if (!email) return
-    const paused = pauseCheckInClock(email, { reason: 'sleep' })
-    if (paused?.status === 'active') flushSync(paused, { force: true })
+    if (!email || !readCheckInAt(email)) return
+    stopCheckIn(email, { reason: 'sleep' })
   }
 
   pulse({ syncDesktop: true, forceSync: true })

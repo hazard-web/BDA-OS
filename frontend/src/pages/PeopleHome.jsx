@@ -62,6 +62,10 @@ import {
 import { useCheckInReply } from '../utils/pulseCheckInReply'
 import { closeCheckInPip } from '../utils/pulseCheckInPip'
 import { prefetchPulseLocation } from '../utils/pulseLocation'
+import {
+  startScreenLockCheckOutWatch,
+  stopScreenLockCheckOutWatch,
+} from '../utils/pulseForceExit'
 import PulseUserAvatar from '../components/PulseUserAvatar'
 import './pulse-myspace.css'
 import './pulse-antd.css'
@@ -307,7 +311,13 @@ function presenceSeconds(row, now = Date.now()) {
 
 function presenceTimeLabel(row, now) {
   if (!row?.live && !(Number(row?.activeMs) > 0)) return '—'
-  return formatElapsed(presenceSeconds(row, now))
+  const total = Math.max(0, presenceSeconds(row, now))
+  const hours = Math.floor(total / 3600)
+  const mins = Math.floor((total % 3600) / 60)
+  if (hours > 0 && mins > 0) return `${hours} hr${hours === 1 ? '' : 's'} ${mins} min${mins === 1 ? '' : 's'}`
+  if (hours > 0) return `${hours} hr${hours === 1 ? '' : 's'}`
+  if (mins > 0) return `${mins} min${mins === 1 ? '' : 's'}`
+  return '0 mins'
 }
 
 /** Instant header counts while the check-in API sync (~1.4s) is still in flight. */
@@ -748,7 +758,7 @@ export default function PeopleHome() {
       setCheckedInAt((prev) => (prev === nextAt ? prev : nextAt))
       setElapsed((prev) => (prev === nextElapsed ? prev : nextElapsed))
       if (event?.detail?.interrupted && allowInterruptedToast) {
-        pulseToast.info('Timer paused', 'Your system was asleep or off', { duration: 2500 })
+        pulseToast.info('Checked out', 'Your system was asleep or shut down', { duration: 2500 })
       }
     }
     window.addEventListener(PULSE_CHECKIN_EVENT, onChange)
@@ -779,6 +789,7 @@ export default function PeopleHome() {
     try {
       if (isActive || checkedInAt) {
         const session = stopCheckIn(user.email)
+        stopScreenLockCheckOutWatch()
         closeCheckInPip()
         setCheckGesture((n) => n + 1)
         setCheckedInAt(null)
@@ -805,6 +816,8 @@ export default function PeopleHome() {
         }
         const resuming = baseActiveMs > 0
         const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
+        // User gesture → request IdleDetector so Mac screen lock can check out.
+        startScreenLockCheckOutWatch(user.email)
         setCheckGesture((n) => n + 1)
         setCheckedInAt(session?.checkedInAt || Date.now())
         const secs = getElapsedSeconds(user.email)

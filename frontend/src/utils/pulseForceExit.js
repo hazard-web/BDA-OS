@@ -4,6 +4,7 @@ import {
   pulseDayKey,
   readCheckInAt,
   readCheckInActiveEmail,
+  stopCheckIn,
 } from './pulseCheckIn'
 import { broadcastPulseLogout } from './pulseAuthSync'
 import { closeCheckInPip } from './pulseCheckInPip'
@@ -329,7 +330,7 @@ function postCheckOutKeepalive({ token, email, activeMs }) {
  * Used for sleep / screen-lock so people are not bounced to login after a break.
  * @returns {boolean} true if a check-out was attempted
  */
-export function forcePulseCheckOutOnly({ email: emailHint } = {}) {
+export function forcePulseCheckOutOnly({ email: emailHint, reason = 'sleep' } = {}) {
   if (typeof window === 'undefined') return false
 
   const token = localStorage.getItem('token')
@@ -348,13 +349,72 @@ export function forcePulseCheckOutOnly({ email: emailHint } = {}) {
   postCheckOutKeepalive({ token, email, activeMs })
 
   try {
-    endCheckInOnLogout(email)
+    stopCheckIn(email, { reason })
     closeCheckInPip()
   } catch {
     /* ignore */
   }
 
   return true
+}
+
+let screenLockStop = null
+
+/** Stop an active screen-lock watcher. */
+export function stopScreenLockCheckOutWatch() {
+  if (typeof screenLockStop === 'function') {
+    screenLockStop()
+    screenLockStop = null
+  }
+}
+
+/**
+ * Watch Mac/Chrome screen lock via IdleDetector and check out immediately.
+ * Call from check-in (user gesture) so permission can be granted.
+ */
+export function startScreenLockCheckOutWatch(email) {
+  stopScreenLockCheckOutWatch()
+  if (typeof window === 'undefined' || !email) return () => {}
+  if (!('IdleDetector' in window)) return () => {}
+
+  let stopped = false
+  const ac = new AbortController()
+  let pollId = 0
+
+  const checkOut = () => {
+    if (stopped) return
+    if (!readCheckInAt(email)) return
+    forcePulseCheckOutOnly({ email, reason: 'sleep' })
+  }
+
+  const run = async () => {
+    try {
+      const request = window.IdleDetector.requestPermission
+      const permission = request ? await request() : 'granted'
+      if (stopped || permission !== 'granted') return
+
+      const detector = new window.IdleDetector()
+      const onChange = () => {
+        if (detector.screenState === 'locked') checkOut()
+      }
+      detector.addEventListener('change', onChange)
+      await detector.start({ threshold: 60_000, signal: ac.signal })
+      if (stopped) return
+      onChange()
+      // Some Chromium builds are late to fire `change` on lock — poll while checked in.
+      pollId = window.setInterval(onChange, 2000)
+    } catch {
+      /* unsupported / denied */
+    }
+  }
+  void run()
+
+  screenLockStop = () => {
+    stopped = true
+    ac.abort()
+    if (pollId) window.clearInterval(pollId)
+  }
+  return screenLockStop
 }
 
 /**
