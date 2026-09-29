@@ -25,3 +25,6 @@ npm-debug.log*
 .env*
 !.env.production
 !frontend/.env.production
+
+# Local ponytail install (Cursor hooks)
+ponytail/

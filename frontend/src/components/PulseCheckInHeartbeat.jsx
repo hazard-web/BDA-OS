@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { startCheckInHeartbeat } from '../utils/pulseCheckIn'
 
-/** Keeps check-in heartbeats alive app-wide so sleep/shutdown gaps are excluded. */
+/** Keeps check-in heartbeats alive app-wide. Sleep / shutdown checks out. */
 export default function PulseCheckInHeartbeat() {
   const { user } = useAuth()
 
