@@ -2276,7 +2276,7 @@ router.post('/leaves/apply', auth, async (req, res) => {
       toDate: formatLeaveDate(leave.endDate),
       days,
       reason: leave.reason,
-      reviewUrl: `${getProductionBaseUrl()}/bda-os`,
+      reviewUrl: `${getProductionBaseUrl()}/bda-os/leave/team?request=${encodeURIComponent(String(leave._id))}`,
       companyName: req.user.companyName || '',
       attachments: fileName && fileData
         ? [{ filename: fileName, content: fileData }]
@@ -2472,7 +2472,17 @@ router.get('/leaves/team', auth, async (req, res) => {
       .lean();
 
     const mapped = rows.map(serializeTeamLeave);
-    const pending = admin ? mapped.filter((row) => row.status === 'Pending') : [];
+    // Pending approvals are never week-scoped — email Review links and the
+    // approvals board need every open request, not only the selected week.
+    let pending = [];
+    if (admin) {
+      const pendingRows = await LeaveRequest.find({ admin: orgId, status: 'Pending' })
+        .populate('staff', 'fullName email employeeId leaveBalance')
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean();
+      pending = pendingRows.map(serializeTeamLeave);
+    }
     const approved = mapped.filter((row) => row.status === 'Approved');
     const onLeave = approved.filter((row) => {
       if (!from || !to) return true;

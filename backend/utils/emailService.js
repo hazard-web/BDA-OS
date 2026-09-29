@@ -1349,65 +1349,68 @@ async function sendLeaveRequestEmail({
   }
 
   const transporter = await createSMTPTransporter();
+  const logo = bdaLogoAttachment();
+  const org = brandOrgName(companyName);
   const name = escapeHtml(employeeName || employeeEmail || 'A team member');
   const dayLabel = `${days} day${days === 1 ? '' : 's'}`;
-  const org = escapeHtml(companyName || 'your organization');
+  const emailValue = escapeHtml(employeeEmail || '—');
+  const fileRow = attachments?.length
+    ? ['Attachment', escapeHtml(attachments[0].filename || 'File attached')]
+    : null;
 
-  const rows = [
+  const detailRows = [
     ['Employee', name],
-    ['Email', escapeHtml(employeeEmail || '—')],
+    ['Email', emailValue],
     ['Leave type', escapeHtml(leaveType || 'Casual')],
     ['From', escapeHtml(fromDate)],
     ['To', escapeHtml(toDate)],
     ['Duration', dayLabel],
     ['Reason', escapeHtml(reason || '—')],
-    attachments?.length ? ['Attachment', escapeHtml(attachments[0].filename || 'File attached')] : null,
-  ].filter(Boolean)
-    .map(([label, value]) => `
-                <tr>
-                  <td style="padding:8px 0;font-size:13px;color:#777;width:120px;vertical-align:top;">${label}</td>
-                  <td style="padding:8px 0;font-size:13px;color:#1a1a1a;">${value}</td>
-                </tr>`)
+    fileRow,
+  ]
+    .filter(Boolean)
+    .map(
+      ([label, value]) => `
+        <tr>
+          <td style="padding:10px 0;font-size:13px;font-weight:600;color:#6b778c;width:120px;vertical-align:top;">${label}</td>
+          <td style="padding:10px 0;font-size:15px;color:#172b4d;vertical-align:top;">${value}</td>
+        </tr>`,
+    )
     .join('');
 
+  const fileAttachments = [
+    ...(logo ? [logo] : []),
+    ...(Array.isArray(attachments) && attachments.length ? attachments : []),
+  ];
+
   const mailOptions = {
-    from: buildFromAddress(companyName || 'BDA Technologies'),
+    from: buildFromAddress('BDA Technologies'),
     to,
     replyTo: isValidEmail(employeeEmail) ? employeeEmail : undefined,
     subject: `Leave approval needed — ${employeeName || employeeEmail} (${fromDate} to ${toDate})`,
-    attachments: Array.isArray(attachments) && attachments.length ? attachments : undefined,
-    html: `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f5f0e8;font-family:Segoe UI,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d4;">
-          <tr>
-            <td style="background:#1A5F4A;padding:28px 32px;">
-              <p style="margin:0;color:#c8e6d9;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;">${org}</p>
-              <h1 style="margin:8px 0 0;color:#fff;font-size:22px;font-weight:600;">Leave request awaiting approval</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:28px 32px;color:#1a1a1a;font-size:15px;line-height:1.55;">
-              <p style="margin:0 0 20px;"><strong>${name}</strong> requested ${dayLabel} of leave at ${org} and needs your approval.</p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee9e0;border-bottom:1px solid #eee9e0;margin:0 0 24px;">${rows}
-              </table>
-              <p style="margin:0 0 24px;">
-                <a href="${reviewUrl}" style="display:inline-block;background:#1A5F4A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;">Review request</a>
-              </p>
-              <p style="margin:0;font-size:12px;color:#888;word-break:break-all;">Or open this link:<br/>${reviewUrl}</p>
-            </td>
-          </tr>
+    html: buildBdaTrustEmailHtml({
+      orgName: org,
+      title: 'Leave request awaiting approval',
+      bodyHtml: `
+        <p style="margin:0 0 14px;">
+          <strong>${name}</strong> requested ${dayLabel} of leave at ${escapeHtml(org)} and needs your approval.
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;border-top:1px solid #e8ebef;border-bottom:1px solid #e8ebef;">
+          ${detailRows}
         </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `,
+      `,
+      ctaLabel: 'Review request',
+      ctaUrl: reviewUrl,
+      closing: `
+        <p style="margin:0 0 14px;font-size:13px;color:#6b778c;word-break:break-all;">
+          Or open this link:<br/>
+          <a href="${escapeHtml(reviewUrl || '#')}" style="color:#465a27;font-weight:600;text-decoration:none;">${escapeHtml(reviewUrl || '#')}</a>
+        </p>
+        <p style="margin:0;">Regards,<br/>BDA Technologies</p>
+      `,
+      poweredBy: 'Powered by BDA OS',
+    }),
+    ...(fileAttachments.length ? { attachments: fileAttachments } : {}),
   };
 
   const info = await sendMailWithRetry(transporter, mailOptions);
