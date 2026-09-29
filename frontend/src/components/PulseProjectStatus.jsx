@@ -83,6 +83,7 @@ function BotSettings() {
       message.error(err?.response?.data?.message || 'Could not post')
     } finally {
       setSending('')
+      load()
     }
   }
 
@@ -93,7 +94,7 @@ function BotSettings() {
           type="warning"
           showIcon
           message="Google Chat is not connected"
-          description="Set GOOGLE_CHAT_SA_JSON and GOOGLE_CHAT_PROJECT_NUMBER on the backend, and point the Chat app to /api/chat-bot/events."
+          description={settings.chatConfigError || 'Set GOOGLE_CHAT_SA_EMAIL, GOOGLE_CHAT_SA_PRIVATE_KEY and GOOGLE_CHAT_PROJECT_NUMBER on the backend.'}
         />
       ) : null}
       {!settings.schedulerOn ? (
@@ -108,7 +109,7 @@ function BotSettings() {
       <p className="pulse-ps-conn">
         Endpoint <code>{settings.endpointUrl || 'not set'}</code> · {settings.addonMode ? 'Workspace add-on' : 'classic'} format ·{' '}
         {settings.lastEvent
-          ? `last Chat event ${format(new Date(settings.lastEvent.at), 'd MMM, h:mm:ss a')} — ${settings.lastEvent.type} from ${settings.lastEvent.email || 'unknown'} (${settings.lastEvent.format}, ${settings.lastEvent.verified ? 'signature OK' : 'signature rejected'})`
+          ? `last Chat event ${format(new Date(settings.lastEvent.at), 'd MMM, h:mm:ss a')} — ${settings.lastEvent.type} from ${settings.lastEvent.email || 'unknown'} (${settings.lastEvent.format}, ${settings.lastEvent.verified ? 'signature OK' : `signature rejected: ${settings.lastEvent.reason || 'unknown reason'}`})`
           : 'no Chat events received since the server started'}
       </p>
 
@@ -170,7 +171,16 @@ function BotSettings() {
       <ul className="pulse-ps-slots">
         {SLOTS.map((slot) => (
           <li key={slot.key} className={slot.key === 'summary' ? 'has-date' : undefined}>
-            <strong>{slot.label}</strong>
+            <div className="pulse-ps-slot-name">
+              <strong>{slot.label}</strong>
+              {settings.lastResult?.[slot.key] ? (
+                <span className={settings.lastResult[slot.key].ok ? 'is-ok' : 'is-bad'}>
+                  Last run {format(new Date(settings.lastResult[slot.key].at), 'd MMM, h:mm a')} · {settings.lastResult[slot.key].message}
+                </span>
+              ) : (
+                <span>No run recorded yet</span>
+              )}
+            </div>
             <Input
               type="time"
               className="pulse-ps-time"

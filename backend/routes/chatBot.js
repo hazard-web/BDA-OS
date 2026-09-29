@@ -13,6 +13,7 @@ const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
 const { personName } = require('../utils/pulsePerson')
 const {
   isChatConfigured,
+  chatConfigError,
   isAddonMode,
   chatEndpointUrl,
   sendChatMessage,
@@ -507,7 +508,7 @@ async function runSlot(organizationId, slot, date, { ignoreCalendar = false } = 
   const members = await workingMembers(organizationId, date, settings.excludedUsers, { ignoreCalendar })
   if (!members.length) return { posted: false, reason: 'Not a working day or nobody is working' }
   if (slot === 'summary') return sendSummary(organizationId, settings, date, members)
-  if (!isChatConfigured()) return { posted: false, reason: 'Google Chat is not configured (GOOGLE_CHAT_SA_JSON)' }
+  if (!isChatConfigured()) return { posted: false, reason: `Google Chat is not usable: ${chatConfigError()}` }
   if (!settings.teamSpace) return { posted: false, reason: 'No team space set' }
   if (slot === 'reminder') {
     const done = await submittedUserIds(members, date)
@@ -526,6 +527,17 @@ async function runSlot(organizationId, slot, date, { ignoreCalendar = false } = 
 }
 
 let ticking = false
+
+function describeResult(result) {
+  return result.posted ? `sent for ${result.people} people${result.to ? ` to ${result.to}` : ''}` : `not posted: ${result.reason}`
+}
+
+async function recordResult(settingsId, slot, ok, message) {
+  await ChatBotSettings.updateOne(
+    { _id: settingsId },
+    { $set: { [`lastResult.${slot}`]: { at: new Date(), ok, message: String(message).slice(0, 500) } } },
+  )
+}
 
 async function schedulerTick() {
   if (ticking) return
@@ -546,9 +558,11 @@ async function schedulerTick() {
         if (!claimed) continue
         try {
           const result = await runSlot(s.organizationId, slot, date)
-          console.log(`[chat-bot] ${slot} ${date}:`, result.posted ? `sent for ${result.people}${result.to ? ` to ${result.to}` : ''}` : result.reason)
+          console.log(`[chat-bot] ${slot} ${date}:`, describeResult(result))
+          await recordResult(s._id, slot, result.posted, describeResult(result))
         } catch (err) {
           console.error(`[chat-bot] ${slot} ${date} failed:`, err.message)
+          await recordResult(s._id, slot, false, `failed: ${err.message}`)
         }
       }
     }
@@ -580,13 +594,14 @@ router.post('/events', async (req, res) => {
   const event = normalizeEvent(req.body || {})
   const reply = responder(event.addon)
   try {
-    const verified = await verifyChatRequest(req)
+    const { ok: verified, reason } = await verifyChatRequest(req)
     lastEvent = {
       at: new Date(),
       format: event.addon ? 'Workspace add-on' : 'classic',
       type: event.fn ? `${event.type} · ${event.fn}` : event.type,
       email: event.user.email || '',
       verified,
+      reason,
     }
     if (!verified) return res.status(401).json({ text: 'Unauthorized' })
     if (event.type === 'ADDED_TO_SPACE') {
@@ -672,6 +687,8 @@ router.get('/settings', auth, requireAdmin, async (req, res) => {
         summaryEmails: settings.summaryEmails || [],
         ...Object.fromEntries(SETTING_FIELDS.map((f) => [f, settings[f]])),
         chatConfigured: isChatConfigured(),
+        chatConfigError: chatConfigError(),
+        lastResult: settings.lastResult || {},
         addonMode: isAddonMode(),
         endpointUrl: chatEndpointUrl(),
         lastEvent,
@@ -732,11 +749,19 @@ router.post('/send', auth, requireAdmin, async (req, res) => {
     if (date !== today && slot !== 'summary') {
       return res.status(400).json({ success: false, message: 'Only the manager summary can be sent for a past day' })
     }
-    const result = await runSlot(orgObjectId(req.user), slot, date, { ignoreCalendar: slot === 'summary' })
-    res.status(result.posted ? 200 : 400).json({
-      success: result.posted,
-      message: result.posted ? `${slot} sent for ${result.people} people${result.to ? ` to ${result.to}` : ''}` : result.reason,
-    })
+    const organizationId = orgObjectId(req.user)
+    const settings = await settingsFor(organizationId)
+    try {
+      const result = await runSlot(organizationId, slot, date, { ignoreCalendar: slot === 'summary' })
+      await recordResult(settings._id, slot, result.posted, `${describeResult(result)} (manual)`)
+      res.status(result.posted ? 200 : 400).json({
+        success: result.posted,
+        message: result.posted ? `${slot} ${describeResult(result)}` : result.reason,
+      })
+    } catch (err) {
+      await recordResult(settings._id, slot, false, `failed: ${err.message} (manual)`)
+      throw err
+    }
   } catch (err) {
     res.status(502).json({ success: false, message: err.message || 'Post failed' })
   }
