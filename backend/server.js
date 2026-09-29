@@ -56,9 +56,10 @@ app.use((req, res, next) => {
   const ts = new Date().toISOString();
   console.log(`\n📥 [${ts}] ${req.method} ${req.originalUrl}`);
   if (req.body && Object.keys(req.body).length > 0) {
-    // Mask the password field before logging
+    // Mask passwords and Google Chat ID tokens before logging
     const safeBody = { ...req.body };
     if (safeBody.password) safeBody.password = '****';
+    if (safeBody.authorizationEventObject) safeBody.authorizationEventObject = '****';
     console.log('   📦 Body:', JSON.stringify(safeBody));
   }
   res.on('finish', () => {

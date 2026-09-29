@@ -27,6 +27,8 @@ const chatBotSettingsSchema = new mongoose.Schema(
       reminder: { type: String, default: '' },
       summary: { type: String, default: '' },
     },
+    // Outcome of the latest run per slot: { at, ok, message } — shown in Bot settings
+    lastResult: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true },
 )
