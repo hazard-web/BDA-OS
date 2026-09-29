@@ -6,13 +6,6 @@ import { CheckCircle2, Minus, RefreshCw, Send, XCircle } from 'lucide-react'
 import api from '../api'
 import { hoursLabel } from '../utils/pulseCalendar'
 
-const STATUS_TAG = {
-  planned: { color: 'default', label: 'Planned' },
-  on_track: { color: 'blue', label: 'On track' },
-  blocked: { color: 'red', label: 'Blocked' },
-  done: { color: 'green', label: 'Done' },
-}
-
 const SLOTS = [
   { key: 'morning', label: 'Morning plan' },
   { key: 'afternoon', label: 'Afternoon check' },
@@ -258,31 +251,102 @@ function eveningCell(p) {
   return { state: 'idle', text: 'Not asked yet' }
 }
 
-function PersonDetail({ person: p }) {
-  if (!p.targets.length && !p.unplanned.length) {
-    return <p className="pulse-ps-detail-empty">Nothing planned or logged{p.checkIn.at ? ` · checked in ${timeOf(p.checkIn.at)}` : ''}.</p>
-  }
+const PROGRESS_TEXT = { on_track: 'On track', blocked: 'Blocked', done: 'Done', planned: 'No answer' }
+
+function StepCard({ icon, title, when, children }) {
   return (
-    <div className="pulse-ps-detail">
-      <ul>
-        {p.targets.map((t, index) => (
-          <li key={`${t.title}-${index}`}>
-            <Tag color={STATUS_TAG[t.status]?.color}>{STATUS_TAG[t.status]?.label}</Tag>
-            <strong>{t.title}</strong>
-            <span>{t.projectName} · {t.loggedMinutes ? `${hoursLabel(t.loggedMinutes / 60)} logged` : 'not logged'}</span>
-            {t.note ? <em>“{t.note}”</em> : null}
-          </li>
-        ))}
-        {p.unplanned.map((u, index) => (
-          <li key={`u-${index}`}>
-            <Tag color="purple">Not planned</Tag>
-            <strong>{u.title}</strong>
-            <span>{u.projectName} · {hoursLabel(u.minutes / 60)} logged</span>
-          </li>
-        ))}
-      </ul>
-      <p className="pulse-ps-detail-meta">
-        {p.checkIn.at ? `Checked in ${timeOf(p.checkIn.at)} · ${hoursLabel(p.checkIn.activeHours)} active` : 'No check-in'}
+    <section className="pulse-ps-step">
+      <header>
+        <span aria-hidden="true">{icon}</span>
+        <strong>{title}</strong>
+        {when ? <em>{when}</em> : null}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+/** One person's day as three steps: what they planned, their afternoon progress, what they logged. */
+function PersonDetail({ person: p, onMove, moving }) {
+  const planned = p.targets.length > 0
+  const updated = Boolean(p.slots.afternoon.answeredAt)
+  const submitted = p.timesheet.submitted
+  return (
+    <div className="pulse-ps-steps">
+      <StepCard icon="☀️" title="Morning · planned" when={planned ? timeOf(p.slots.morning.answeredAt) : ''}>
+        {planned ? (
+          <ol className="pulse-ps-step-list">
+            {p.targets.map((t) => (
+              <li key={t.id}>
+                <strong>{t.title}</strong>
+                <span>{t.projectName || 'General'}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="pulse-ps-step-empty">{p.slots.morning.sentAt ? 'Did not plan anything' : 'Not asked yet'}</p>
+        )}
+      </StepCard>
+
+      <StepCard icon="🌤" title="Afternoon · progress" when={updated ? timeOf(p.slots.afternoon.answeredAt) : ''}>
+        {updated && planned ? (
+          <ol className="pulse-ps-step-list">
+            {p.targets.map((t) => (
+              <li key={t.id}>
+                <strong>{t.title}</strong>
+                <span className={`pulse-ps-progress is-${t.status}`}>{PROGRESS_TEXT[t.status] || t.status}</span>
+                {t.note ? <em>“{t.note}”</em> : null}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="pulse-ps-step-empty">
+            {!planned ? 'Nothing planned to update' : p.slots.afternoon.sentAt ? 'No update given' : 'Not asked yet'}
+          </p>
+        )}
+      </StepCard>
+
+      <StepCard
+        icon="🌙"
+        title="Evening · logged"
+        when={submitted ? `${timeOf(p.slots.evening.answeredAt)} · ${hoursLabel(p.timesheet.hours)} total` : ''}
+      >
+        {submitted ? (
+          <ol className="pulse-ps-step-list">
+            {p.targets.map((t) => (
+              <li key={t.id} className={t.loggedMinutes ? undefined : 'is-zero'}>
+                <strong>{t.title}</strong>
+                <span className="pulse-ps-hours">{t.loggedMinutes ? hoursLabel(t.loggedMinutes / 60) : '0h'}</span>
+              </li>
+            ))}
+            {p.unplanned.map((u) => (
+              <li key={u.id} className="is-extra">
+                <strong>{u.title}</strong>
+                <span className="pulse-ps-hours">{hoursLabel(u.minutes / 60)}</span>
+                <em>Extra work (not in plan)</em>
+                {u.movable && planned ? (
+                  <Select
+                    size="small"
+                    className="pulse-ps-move"
+                    placeholder="Move to plan item"
+                    loading={moving === u.id}
+                    disabled={Boolean(moving)}
+                    popupMatchSelectWidth={false}
+                    options={p.targets.map((t) => ({ value: t.id, label: t.title }))}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(targetId) => onMove(p, u, targetId)}
+                  />
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="pulse-ps-step-empty">{p.slots.evening.sentAt ? 'Timesheet not submitted' : 'Not asked yet'}</p>
+        )}
+      </StepCard>
+
+      <p className="pulse-ps-steps-meta">
+        {p.checkIn.at ? `Checked in ${timeOf(p.checkIn.at)} · ${hoursLabel(p.checkIn.activeHours)} active on the timer` : 'No check-in today'}
       </p>
     </div>
   )
@@ -296,6 +360,7 @@ export default function PulseProjectStatus() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({ people: [], projects: [] })
   const [showEveryone, setShowEveryone] = useState(false)
+  const [moving, setMoving] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -308,6 +373,24 @@ export default function PulseProjectStatus() {
       setLoading(false)
     }
   }, [date, message])
+
+  const moveHours = async (person, row, targetId) => {
+    setMoving(row.id)
+    try {
+      const res = await api.post('/chat-bot/reassign', {
+        userId: person.user,
+        date: date.format('YYYY-MM-DD'),
+        entryId: row.id,
+        targetId,
+      })
+      message.success(res.data?.message || 'Hours moved')
+      await load()
+    } catch (err) {
+      message.error(err?.response?.data?.message || 'Could not move the hours')
+    } finally {
+      setMoving('')
+    }
+  }
 
   useEffect(() => {
     load()
@@ -424,7 +507,7 @@ export default function PulseProjectStatus() {
                   dataSource={people}
                   className="pulse-ps-people"
                   expandable={{
-                    expandedRowRender: (p) => <PersonDetail person={p} />,
+                    expandedRowRender: (p) => <PersonDetail person={p} onMove={moveHours} moving={moving} />,
                     expandRowByClick: true,
                   }}
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No one in this organization yet." /> }}

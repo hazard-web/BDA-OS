@@ -2418,3 +2418,120 @@
 .pulse-ps-slot-name span.is-bad {
   color: #b91c1c;
 }
+
+.pulse-ps-move.ant-select {
+  min-width: 180px;
+}
+
+/* Project Status · expanded row: morning → afternoon → evening */
+.pulse-ps-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.pulse-ps-step {
+  border: 1px solid var(--pulse-border);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.pulse-ps-step header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fafbfa;
+  border-bottom: 1px solid var(--pulse-border);
+  font-size: 13px;
+  color: var(--pulse-heading);
+}
+
+.pulse-ps-step header em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+.pulse-ps-step-list {
+  margin: 0;
+  padding: 10px 14px 12px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.pulse-ps-step-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.pulse-ps-step-list li strong {
+  flex: 1 1 100%;
+  font-weight: 600;
+  color: var(--pulse-heading);
+}
+
+.pulse-ps-step-list li span,
+.pulse-ps-step-list li em {
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+.pulse-ps-step-list li.is-zero strong,
+.pulse-ps-step-list li.is-zero .pulse-ps-hours {
+  color: #9ca3af;
+}
+
+.pulse-ps-step-list li.is-extra em {
+  color: #6d28d9;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.pulse-ps-hours {
+  font-weight: 700;
+  color: var(--pulse-heading) !important;
+}
+
+.pulse-ps-progress {
+  font-weight: 700;
+}
+
+.pulse-ps-progress.is-on_track {
+  color: #1d4ed8 !important;
+}
+
+.pulse-ps-progress.is-blocked {
+  color: #b91c1c !important;
+}
+
+.pulse-ps-progress.is-done {
+  color: #047857 !important;
+}
+
+.pulse-ps-step-empty {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.pulse-ps-steps-meta {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+@media (max-width: 900px) {
+  .pulse-ps-steps {
+    grid-template-columns: 1fr;
+  }
+}
