@@ -1,3 +1,7 @@
+.pulse-file-view-root {
+  z-index: 2100;
+}
+
 .pulse-file-view-modal.ant-modal {
   max-width: 94vw;
 }

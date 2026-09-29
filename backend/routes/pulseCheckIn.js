@@ -26,10 +26,13 @@ const {
 } = require('../utils/requestMeta');
 const {
   TARGET_HOURS,
+  DAILY_CAP_MS,
+  HEARTBEAT_STALE_MS,
   assertWritableDate,
   applyTrustedActiveMs,
   closeOpenSession,
   findOpenSession,
+  sessionWallMs,
   touchHeartbeat,
   msToHours: trustedMsToHours,
 } = require('../utils/pulseTrustedTime');
@@ -484,6 +487,26 @@ router.get('/today', auth, async (req, res) => {
   }
 });
 
+/** Today's worked time for the admin presence list. Live rows keep counting from asOf. */
+function presenceTime(day, now = new Date()) {
+  if (!day) return { activeMs: 0, live: false };
+  const stored = Math.max(0, Number(day.totalActiveMs) || 0);
+  const open = findOpenSession(day);
+  if (day.status !== 'active' || !open?.checkInAt) {
+    return { activeMs: stored, live: false };
+  }
+  const wall = sessionWallMs(day, now);
+  const start = new Date(open.checkInAt).getTime();
+  const lastBeat = day.lastHeartbeatAt ? new Date(day.lastHeartbeatAt).getTime() : 0;
+  const anchor = lastBeat > start ? lastBeat : start;
+  const fresh = Number.isFinite(anchor) && now.getTime() - anchor <= HEARTBEAT_STALE_MS;
+  const extra = fresh ? Math.max(0, now.getTime() - anchor) : 0;
+  return {
+    activeMs: Math.min(DAILY_CAP_MS, Math.max(stored, wall) + extra),
+    live: fresh,
+  };
+}
+
 // GET /api/pulse-checkin/admin/presence — who is checked in right now (admin)
 router.get('/admin/presence', auth, async (req, res) => {
   try {
@@ -501,23 +524,29 @@ router.get('/admin/presence', auth, async (req, res) => {
       .lean();
 
     const today = todayKey();
+    const asOf = new Date();
     const userIds = members.map((m) => m._id);
     const days = userIds.length
       ? await PulseWorkDay.find({ user: { $in: userIds }, date: today })
-        .select('user status')
+        .select('user status totalActiveMs lastHeartbeatAt sessions.checkInAt sessions.checkOutAt sessions.durationMs')
         .lean()
       : [];
-    const statusByUser = new Map(days.map((row) => [String(row.user), row.status]));
+    const dayByUser = new Map(days.map((row) => [String(row.user), row]));
 
     const active = [];
     const inactive = [];
     members.forEach((member) => {
+      const day = dayByUser.get(String(member._id));
+      const snap = presenceTime(day, asOf);
       const row = {
         id: String(member._id),
         name: personName(member),
         email: member.email || '',
+        activeMs: snap.activeMs,
+        live: snap.live,
+        asOf: asOf.toISOString(),
       };
-      if (statusByUser.get(String(member._id)) === 'active') active.push(row);
+      if (day?.status === 'active') active.push(row);
       else inactive.push(row);
     });
 
@@ -1983,10 +2012,12 @@ router.get('/dashboard', auth, async (req, res) => {
         const join = new Date(joinParts.year, joinParts.month, joinParts.day);
         const joinKey = dateToKey(join);
         if (join >= hireCutoff && joinKey <= today) {
+          const ageDays = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - join) / 86400000);
           newHires.push(dashRow(
             `n-${person._id}`,
             name,
             `Joined ${joinParts.day} ${MONTH_LABELS[joinParts.month]} · ${dept}`,
+            { on: joinKey, fresh: ageDays >= 0 && ageDays <= 6 },
           ));
         }
         if (joinParts.month === thisMonth) {
