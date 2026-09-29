@@ -7,9 +7,9 @@ const { listActiveGrantsForEmail } = require('./appCatalog')
 
 /**
  * Pulse org roles — invite-only workspace.
- * superadmin ≥ admin ≥ member
+ * admin ≥ member
  */
-const PULSE_ROLES = ['superadmin', 'admin', 'member']
+const PULSE_ROLES = ['admin', 'member']
 
 function orgIdOf(user) {
   if (!user) return null
@@ -19,7 +19,6 @@ function orgIdOf(user) {
 
 function normalizePulseRole(role) {
   const value = String(role || '').trim().toLowerCase()
-  if (value === 'superadmin' || value === 'super_admin' || value === 'super-admin') return 'superadmin'
   if (value === 'admin') return 'admin'
   if (value === 'member') return 'member'
   return null
@@ -31,14 +30,8 @@ function effectiveRole(user) {
   return normalizePulseRole(user.role) || 'member'
 }
 
-function isPulseSuperAdmin(user) {
-  return effectiveRole(user) === 'superadmin'
-}
-
 function isPulseAdmin(user) {
-  if (!user) return false
-  const role = effectiveRole(user)
-  return role === 'admin' || role === 'superadmin'
+  return effectiveRole(user) === 'admin'
 }
 
 function isPulseMember(user) {
@@ -47,7 +40,6 @@ function isPulseMember(user) {
 
 function pulseRoleLabel(role) {
   const normalized = normalizePulseRole(role) || (role == null || role === '' ? 'admin' : null)
-  if (normalized === 'superadmin') return 'Super Admin'
   if (normalized === 'admin') return 'Admin'
   if (normalized === 'member') return 'Member'
   return 'Member'
@@ -56,7 +48,7 @@ function pulseRoleLabel(role) {
 /** Roles the actor may assign when inviting or changing people. */
 function assignableRolesFor(actor) {
   if (!isPulseAdmin(actor)) return []
-  return ['member', 'admin', 'superadmin']
+  return ['member', 'admin']
 }
 
 function canAssignRole(actor, role) {
@@ -118,7 +110,6 @@ module.exports = {
   orgIdOf,
   normalizePulseRole,
   effectiveRole,
-  isPulseSuperAdmin,
   isPulseAdmin,
   isPulseMember,
   pulseRoleLabel,

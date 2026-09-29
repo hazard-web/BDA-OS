@@ -280,6 +280,10 @@
   color: rgba(232, 241, 238, 0.78);
 }
 
+.pulse-shell.pulse-id .pulse-head-timer.is-closed .pulse-head-timer-label {
+  color: #fff;
+}
+
 .pulse-shell.pulse-id .pulse-head-timer.is-idle .pulse-head-timer-time {
   display: inline;
   opacity: 0.7;

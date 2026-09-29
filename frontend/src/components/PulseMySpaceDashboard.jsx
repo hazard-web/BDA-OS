@@ -116,7 +116,7 @@ export function buildDemo(now = new Date()) {
     { id: 'b6', title: 'Karan Joshi', meta: 'Sales', on: d(Math.min(28, todayDay + 11)), when: label(Math.min(28, todayDay + 11)) },
   ],
   newHires: [
-    { id: 'n1', title: 'Ananya Gupta', meta: 'Joined 11 Aug · Product' },
+    { id: 'n1', title: 'Ananya Gupta', meta: 'Joined this week · Product', fresh: true },
     { id: 'n2', title: 'Rohan Das', meta: 'Joined 4 Aug · Engineering' },
     { id: 'n3', title: 'Meera Iyer', meta: 'Joined 28 Jul · Design' },
     { id: 'n4', title: 'Dev Patel', meta: 'Joined 21 Jul · Sales' },
@@ -320,6 +320,7 @@ export function DashListWidget({
   onRow,
   index = 0,
   loading = false,
+  celebrate = false,
 }) {
   const visibleItems = fileTabs
     ? items.filter((item) => (item.section || 'org') === fileTab)
@@ -384,6 +385,7 @@ export function DashListWidget({
         showAvatar ? 'is-people' : '',
         total === 0 ? 'is-empty' : '',
         loading ? 'is-loading' : '',
+        celebrate ? 'is-celebrate' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -939,7 +941,7 @@ export default function PulseMySpaceDashboard({ onSoon, useSample = true, onOpen
                 tone={widget.tone}
                 isPlaceholder={isSlot}
                 placeholderHeight={ghost?.height}
-                onRow={openRow}
+                onRow={widget.id === 'birthday' ? undefined : openRow}
                 cardRef={(el) => {
                   if (el) cardRefs.current.set(widget.id, el)
                   else cardRefs.current.delete(widget.id)

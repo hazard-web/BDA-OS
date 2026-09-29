@@ -197,6 +197,9 @@ export default function PulseTimesheetAdmin() {
                           <em className="pulse-org-admin-task-hint">
                             {' '}
                             · {tasks.length} task{tasks.length === 1 ? '' : 's'}
+                            {tasks.some((t) => t.kind === 'ticket')
+                              ? ` (${tasks.filter((t) => t.kind === 'ticket').length} ticket)`
+                              : ''}
                           </em>
                         ) : null}
                       </div>
@@ -268,7 +271,28 @@ export default function PulseTimesheetAdmin() {
                   {(selected.taskEntries || []).map((task, index) => (
                     <li key={task._id || `${task.description}-${index}`}>
                       <div>
-                        <strong>{task.description || 'Task'}</strong>
+                        {task.kind === 'ticket' && task.ticket ? (
+                          <>
+                            <strong>
+                              <span className={`pulse-ts-ticket-key is-${task.ticket.source}`}>{task.ticket.key}</span>
+                              {' '}
+                              {task.ticket.name}
+                            </strong>
+                            <span className="pulse-ts-admin-ticket-meta">
+                              {task.project || 'BMS'} ·{' '}
+                              {task.flowluTimelogId ? (
+                                <span className="is-sent">Logged in BMS</span>
+                              ) : (
+                                <span className="is-failed">Not sent{task.flowluError ? ` · ${task.flowluError}` : ''}</span>
+                              )}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <strong>{task.description || 'Task'}</strong>
+                            <span className="pulse-ts-admin-ticket-meta">{task.task ? 'Task system' : 'General'}</span>
+                          </>
+                        )}
                       </div>
                       <em>{hoursLabel((Number(task.minutes) || 0) / 60)}</em>
                     </li>

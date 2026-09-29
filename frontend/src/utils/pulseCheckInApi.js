@@ -76,5 +76,5 @@ export async function submitTimesheet({ date, entries, email } = {}) {
     email,
     entries,
   })
-  return res.data?.data || null
+  return res.data?.data ? { ...res.data.data, bms: res.data.bms } : null
 }

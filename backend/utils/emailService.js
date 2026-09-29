@@ -1428,7 +1428,7 @@ async function sendPulseRoleChangedEmail({
   const transporter = await createSMTPTransporter();
   const org = companyName || 'BDA Technologies';
   const roleLabel = (role) =>
-    role === 'superadmin' ? 'Super Admin' : role === 'admin' ? 'Admin' : 'Member';
+    role === 'admin' ? 'Admin' : 'Member';
   const fromLabel = changedByName || 'an administrator';
   const who = personName || to;
 
@@ -1474,7 +1474,65 @@ async function sendPulseRoleChangedEmail({
   return info;
 }
 
+const STATUS_TEXT = { planned: 'Planned', on_track: 'On track', blocked: 'Blocked', done: 'Done' };
+
+function hoursText(minutes) {
+  const total = Math.round(Number(minutes) || 0);
+  if (!total) return '0h';
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
+}
+
+/** Plain lines for the end-of-day report; the HTML version is the same text with light formatting. */
+function projectStatusLines(summary) {
+  const lines = [];
+  lines.push(`Timesheets: ${summary.totals.submitted} of ${summary.totals.people} submitted · ${hoursText(summary.totals.minutes)} logged`);
+  if (summary.blocked.length) {
+    lines.push('', 'Blocked:');
+    summary.blocked.forEach((b) => lines.push(`- ${b.name}: ${b.title}${b.note ? ` (${b.note})` : ''}`));
+  }
+  summary.people.forEach((p) => {
+    lines.push('', `${p.name}: ${p.submitted ? `${p.hours}h logged` : 'no timesheet'}`);
+    p.targets.forEach((t) => lines.push(`- ${t.title} [${t.projectName || 'General'}]: ${STATUS_TEXT[t.status] || t.status}, ${t.loggedMinutes ? hoursText(t.loggedMinutes) : 'not logged'}${t.note ? ` (${t.note})` : ''}`));
+    p.unplanned.forEach((u) => lines.push(`- ${u.title} [${u.projectName || 'General'}]: unplanned, ${hoursText(u.minutes)}`));
+  });
+  if (!summary.people.length) lines.push('', 'No plans or timesheets today.');
+  if (summary.missing.length) lines.push('', `No timesheet: ${summary.missing.join(', ')}`);
+  return lines;
+}
+
+/**
+ * End-of-day project status report (Google Chat update bot) — plain and simple.
+ * summary: { dateLabel, people: [{ name, submitted, hours, targets, unplanned }], blocked, missing, totals }
+ */
+async function sendProjectStatusEmail({ to, companyName, summary, statusUrl }) {
+  const org = companyName || 'BDA Technologies';
+  const lines = projectStatusLines(summary);
+  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">
+<p>Daily project status for <strong>${escapeHtml(summary.dateLabel)}</strong> (${escapeHtml(org)})</p>
+${lines.map((line) => {
+    if (!line) return '<br>';
+    const text = escapeHtml(line);
+    const heading = !line.startsWith('- ') && !line.startsWith('Timesheets:');
+    return heading ? `<div><strong>${text}</strong></div>` : `<div>${text}</div>`;
+  }).join('\n')}
+${statusUrl ? `<p><a href="${escapeHtml(statusUrl)}">Open Project Status in BDA OS</a></p>` : ''}
+</div>`;
+  const text = [`Daily project status for ${summary.dateLabel} (${org})`, '', ...lines, ...(statusUrl ? ['', statusUrl] : [])].join('\n');
+
+  const transporter = await createSMTPTransporter();
+  return sendMailWithRetry(transporter, {
+    from: buildFromAddress(org),
+    to,
+    subject: `Daily project status · ${summary.dateLabel}`,
+    html,
+    text,
+  });
+}
+
 module.exports = {
+  sendProjectStatusEmail,
   sendPayslipEmail,
   sendVerificationEmail,
   sendPasswordResetEmail,

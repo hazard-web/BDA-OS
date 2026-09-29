@@ -14,6 +14,8 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import PulseAppGrantsAdmin from './PulseAppGrantsAdmin'
+import PulseBmsAdmin from './PulseBmsAdmin'
+import PulseProjectStatus from './PulseProjectStatus'
 import PulseOnboarding from './PulseOnboarding'
 import PulseInviteAdmin from './PulseInviteAdmin'
 import PulseCompanyFiles from './PulseCompanyFiles'
@@ -226,6 +228,22 @@ export default function PulseOrganization({ user, tab = 'overview', onSoon, live
     return (
       <div className="pulse-att-page pulse-org-att-page">
         <PulseAppGrantsAdmin />
+      </div>
+    )
+  }
+
+  if (tab === 'status') {
+    return (
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseProjectStatus />
+      </div>
+    )
+  }
+
+  if (tab === 'bms') {
+    return (
+      <div className="pulse-att-page pulse-org-att-page">
+        <PulseBmsAdmin />
       </div>
     )
   }

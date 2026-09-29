@@ -52,12 +52,14 @@ import {
   formatElapsed,
   getElapsedSeconds,
   hydrateCheckInFromServer,
+  isFullDay,
   PULSE_CHECKIN_EVENT,
   readCheckInAt,
   rolloverCheckInDayIfNeeded,
   startCheckIn,
   stopCheckIn,
 } from '../utils/pulseCheckIn'
+import { useCheckInReply } from '../utils/pulseCheckInReply'
 import { closeCheckInPip } from '../utils/pulseCheckInPip'
 import { prefetchPulseLocation } from '../utils/pulseLocation'
 import PulseUserAvatar from '../components/PulseUserAvatar'
@@ -102,6 +104,8 @@ const COMPANY_SHELL_SUB_TABS = [
   { id: 'companyPerformance', label: 'Performance' },
   { id: 'companyPayroll', label: 'Payroll' },
   { id: 'apps', label: 'App access' },
+  { id: 'projectStatus', label: 'Project Status' },
+  { id: 'bms', label: 'BMS' },
 ]
 
 function activeCompanyShellTab({ space, sub, leaveTab, showLeave }) {
@@ -118,6 +122,8 @@ function activeCompanyShellTab({ space, sub, leaveTab, showLeave }) {
       if (item.id === 'companyPerformance') return sub === 'performance'
       if (item.id === 'companyPayroll') return sub === 'payroll'
       if (item.id === 'apps') return sub === 'apps'
+      if (item.id === 'projectStatus') return sub === 'status'
+      if (item.id === 'bms') return sub === 'bms'
       return false
     }) || null
   )
@@ -209,14 +215,16 @@ function HeaderAssignedApps({ apps, user }) {
   )
 }
 
-function headerCheckInMode(checkedInAt, elapsed) {
+function headerCheckInMode(checkedInAt, elapsed, birthday = false) {
   if (checkedInAt) return 'live'
+  if (isFullDay(elapsed) && !birthday) return 'closed'
   if (elapsed > 0) return 'paused'
   return 'idle'
 }
 
-function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, onCheckIn, checkBusy }) {
+function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, onCheckIn, checkBusy, gesture = 0, birthday = false }) {
   const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
+  const reply = useCheckInReply(checkedInAt, Math.max(Number(elapsedProp) || 0, elapsed), gesture)
 
   useEffect(() => {
     setElapsed(Number(elapsedProp) || 0)
@@ -233,11 +241,13 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, 
     return () => window.clearInterval(id)
   }, [checkedInAt, email])
 
-  const mode = headerCheckInMode(checkedInAt, elapsed)
-  const stamp = formatElapsed(elapsed)
+  const mode = headerCheckInMode(checkedInAt, elapsed, birthday)
+  const stamp = formatElapsed(reply.shown)
   const idle = mode === 'idle'
-  const label =
-    mode === 'live'
+  const dayClosed = reply.dayClosed || mode === 'closed'
+  const label = dayClosed
+    ? `Day closed, ${stamp}`
+    : mode === 'live'
       ? `On the clock, ${stamp}`
       : mode === 'paused'
         ? `Paused, ${stamp}`
@@ -245,7 +255,12 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, 
   return (
     <button
       type="button"
-      className={`pulse-head-timer is-${mode}`}
+      className={[
+        'pulse-head-timer',
+        `is-${mode}`,
+        reply.waking ? 'is-waking' : '',
+        dayClosed ? 'is-closed' : '',
+      ].filter(Boolean).join(' ')}
       onClick={() => {
         if (idle && typeof onCheckIn === 'function') {
           onCheckIn()
@@ -260,7 +275,9 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, 
       <span className="pulse-head-timer-mark" aria-hidden="true">
         <ClockCircleOutlined className="pulse-head-timer-ico" />
       </span>
-      {idle ? (
+      {dayClosed ? (
+        <span className="pulse-head-timer-label">Closed</span>
+      ) : idle ? (
         <span className="pulse-head-timer-cta">Check-in</span>
       ) : (
         <span className="pulse-head-timer-label">{mode === 'paused' ? 'Paused' : 'Today'}</span>
@@ -280,8 +297,22 @@ function presenceRowKey(row) {
   return String(row?.email || row?.id || '').toLowerCase()
 }
 
+function presenceSeconds(row, now = Date.now()) {
+  const base = Math.max(0, Number(row?.activeMs) || 0)
+  if (!row?.live) return Math.floor(base / 1000)
+  const asOf = row.asOf ? new Date(row.asOf).getTime() : now
+  const extra = Number.isFinite(asOf) ? Math.max(0, now - asOf) : 0
+  return Math.floor((base + extra) / 1000)
+}
+
+function presenceTimeLabel(row, now) {
+  if (!row?.live && !(Number(row?.activeMs) > 0)) return '—'
+  return formatElapsed(presenceSeconds(row, now))
+}
+
 /** Instant header counts while the check-in API sync (~1.4s) is still in flight. */
-function applySelfPresence(board, selfEmail, status) {
+function applySelfPresence(board, selfEmail, detail) {
+  const status = detail?.status
   const email = String(selfEmail || '').toLowerCase()
   if (!email || (status !== 'active' && status !== 'stopped')) return board
 
@@ -292,9 +323,17 @@ function applySelfPresence(board, selfEmail, status) {
   const self = fromActive || fromInactive
   if (!self) return board
 
+  const stamped = {
+    ...self,
+    activeMs: Math.max(0, Number(detail?.activeMs) || Number(self.activeMs) || 0),
+    live: status === 'active',
+    asOf: new Date().toISOString(),
+  }
+
   if (status === 'active') {
-    if (fromActive) return board
-    const nextActive = [...active, self].sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+    const nextActive = (fromActive ? active : [...active, stamped])
+      .map((row) => (presenceRowKey(row) === email ? stamped : row))
+      .sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
     const nextInactive = inactive.filter((row) => presenceRowKey(row) !== email)
     return {
       active: nextActive,
@@ -304,8 +343,9 @@ function applySelfPresence(board, selfEmail, status) {
     }
   }
 
-  if (fromInactive) return board
-  const nextInactive = [...inactive, self].sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+  const nextInactive = (fromInactive ? inactive : [...inactive, stamped])
+    .map((row) => (presenceRowKey(row) === email ? stamped : row))
+    .sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
   const nextActive = active.filter((row) => presenceRowKey(row) !== email)
   return {
     active: nextActive,
@@ -317,6 +357,7 @@ function applySelfPresence(board, selfEmail, status) {
 
 function HeaderTeamPresence({ enabled, selfEmail }) {
   const [board, setBoard] = useState({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (!enabled) return undefined
@@ -347,10 +388,9 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
 
     const onCheckInChange = (event) => {
       const email = String(event?.detail?.email || '').toLowerCase()
-      const status = event?.detail?.status
       const self = String(selfEmail || '').toLowerCase()
       if (self && email === self) {
-        setBoard((prev) => applySelfPresence(prev, self, status))
+        setBoard((prev) => applySelfPresence(prev, self, event.detail))
       }
       // Remote sync is debounced ~1.4s — confirm from server after it lands.
       if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
@@ -366,10 +406,12 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
 
     window.addEventListener(PULSE_CHECKIN_EVENT, onCheckInChange)
     document.addEventListener('visibilitychange', onVisible)
+    const clock = window.setInterval(() => setNow(Date.now()), 1000)
 
     return () => {
       live = false
       window.clearInterval(timer)
+      window.clearInterval(clock)
       if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
       window.removeEventListener(PULSE_CHECKIN_EVENT, onCheckInChange)
       document.removeEventListener('visibilitychange', onVisible)
@@ -390,7 +432,10 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
         {board.active.length ? (
           <ul>
             {board.active.map((row) => (
-              <li key={row.id}>{presenceName(row)}</li>
+              <li key={row.id}>
+                <span className="pulse-head-presence-name">{presenceName(row)}</span>
+                <time className="pulse-head-presence-time">{presenceTimeLabel(row, now)}</time>
+              </li>
             ))}
           </ul>
         ) : (
@@ -405,7 +450,10 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
         {board.inactive.length ? (
           <ul>
             {board.inactive.map((row) => (
-              <li key={row.id}>{presenceName(row)}</li>
+              <li key={row.id}>
+                <span className="pulse-head-presence-name">{presenceName(row)}</span>
+                <time className="pulse-head-presence-time">{presenceTimeLabel(row, now)}</time>
+              </li>
             ))}
           </ul>
         ) : (
@@ -469,6 +517,8 @@ export default function PeopleHome() {
   const [checkedInAt, setCheckedInAt] = useState(null)
   const [elapsed, setElapsed] = useState(0)
   const [checkBusy, setCheckBusy] = useState(false)
+  const [checkGesture, setCheckGesture] = useState(0)
+  const [birthdayToday, setBirthdayToday] = useState(false)
   // Single gate so chrome can stay up on refresh while welcome still hides chrome on first login.
   // 'boot' → waiting session (shell + pane loader) | 'logo' → full-page | 'welcome' → curtain | 'app' → shell
   const [entryPhase, setEntryPhase] = useState(() => {
@@ -730,10 +780,15 @@ export default function PeopleHome() {
       if (isActive || checkedInAt) {
         const session = stopCheckIn(user.email)
         closeCheckInPip()
+        setCheckGesture((n) => n + 1)
         setCheckedInAt(null)
         const secs = Math.floor((session?.activeMs || getElapsedSeconds(user.email) || 0) / 1000)
         setElapsed(secs)
-        pulseToast.success('Checked out', formatElapsed(secs), { duration: 2000 })
+        pulseToast.success(
+          isFullDay(secs) || (birthdayToday && secs > 0) ? 'Day closed' : 'Checked out',
+          formatElapsed(secs),
+          { duration: 2000 },
+        )
       } else {
         closeCheckInPip()
         // Resume from server day total so timer matches calendar (e.g. 3h 45m), not 00:00.
@@ -743,8 +798,14 @@ export default function PeopleHome() {
           Number(hydrated?.activeMs) || 0,
           getElapsedSeconds(user.email) * 1000,
         )
+        if (isFullDay(baseActiveMs / 1000) && !birthdayToday) {
+          setElapsed(Math.floor(baseActiveMs / 1000))
+          pulseToast.info('Day closed', formatElapsed(Math.floor(baseActiveMs / 1000)), { duration: 2000 })
+          return
+        }
         const resuming = baseActiveMs > 0
         const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
+        setCheckGesture((n) => n + 1)
         setCheckedInAt(session?.checkedInAt || Date.now())
         const secs = getElapsedSeconds(user.email)
         setElapsed(secs)
@@ -813,9 +874,11 @@ export default function PeopleHome() {
   const showOrgPerformance = space === 'organization' && sub === 'performance'
   const showOrgPayroll = space === 'organization' && sub === 'payroll'
   const showOrgApps = space === 'organization' && sub === 'apps'
+  const showOrgBms = space === 'organization' && sub === 'bms'
+  const showOrgStatus = space === 'organization' && sub === 'status'
   const showOrgPeople = space === 'organization' && sub === 'people'
   const showOrgFiles = space === 'organization' && sub === 'files'
-  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgPayroll || showOrgApps || showOrgPeople || showOrgFiles
+  const showOrgSurface = showOrgOverview || showOnboarding || showOrgTime || showOrgAttendance || showOrgPerformance || showOrgPayroll || showOrgApps || showOrgBms || showOrgStatus || showOrgPeople || showOrgFiles
   const showCompanyLeaveShell = showLeave && (leaveTab === 'team' || leaveTab === 'holidays')
   const showCompanyShell =
     isPulseAdmin &&
@@ -827,6 +890,8 @@ export default function PeopleHome() {
       showOrgPerformance ||
       showOrgPayroll ||
       showOrgApps ||
+      showOrgBms ||
+      showOrgStatus ||
       showCompanyLeaveShell)
   const liveKind = space === 'myspace' && ({
     onboarding: 'onboarding',
@@ -1021,6 +1086,8 @@ export default function PeopleHome() {
             checkedInAt={checkedInAt}
             email={user?.email}
             checkBusy={checkBusy}
+            gesture={checkGesture}
+            birthday={birthdayToday}
             onCheckIn={onCheckIn}
             onOpen={() => {
               setMoreOpen(false)
@@ -1303,10 +1370,12 @@ export default function PeopleHome() {
                 checkedInAt={checkedInAt}
                 elapsed={elapsed}
                 checkBusy={checkBusy}
+                checkGesture={checkGesture}
                 onCheckIn={onCheckIn}
                 isPulseAdmin={isPulseAdmin}
                 onOpen={openDashTarget}
                 onSoon={soon}
+                onBirthday={setBirthdayToday}
               />
             )}
             </>

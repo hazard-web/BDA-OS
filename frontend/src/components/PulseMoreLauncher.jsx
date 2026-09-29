@@ -17,6 +17,8 @@ import {
   Timer,
   Users,
   Wallet,
+  Workflow,
+  Radar,
 } from 'lucide-react'
 import PulseSlideClose from './PulseSlideClose'
 
@@ -32,7 +34,7 @@ export const MORE_SERVICES = [
   { id: 'okr', name: 'OKR', Icon: Target, kind: 'service' },
 ]
 
-/** Company modules for admin / super admin in the More slide. */
+/** Company modules for admin in the More slide. */
 export const COMPANY_MORE_ITEMS = [
   {
     id: 'onboarding',
@@ -124,6 +126,24 @@ export const COMPANY_MORE_ITEMS = [
     kind: 'company',
     group: 'access',
   },
+  {
+    id: 'projectStatus',
+    name: 'Project Status',
+    blurb: 'Daily plan, updates and hours',
+    Icon: Radar,
+    tone: 'indigo',
+    kind: 'company',
+    group: 'access',
+  },
+  {
+    id: 'bms',
+    name: 'BMS',
+    blurb: 'Flowlu sync and people mapping',
+    Icon: Workflow,
+    tone: 'violet',
+    kind: 'company',
+    group: 'access',
+  },
 ]
 
 function ServiceIcon({ Icon, tone, reduce }) {
@@ -146,7 +166,7 @@ function ServiceIcon({ Icon, tone, reduce }) {
   )
 }
 
-/** Slide-out More launcher — admin / super admin company modules. */
+/** Slide-out More launcher — admin company modules. */
 export default function PulseMoreLauncher({
   open,
   onClose,

@@ -9,7 +9,7 @@ const pulseInviteSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['superadmin', 'admin', 'member'],
+    enum: ['admin', 'member'],
     default: 'member',
   },
   organizationId: {

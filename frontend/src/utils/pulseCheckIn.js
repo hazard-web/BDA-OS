@@ -14,6 +14,10 @@ export const PULSE_IDLE_GAP_MS = 180_000
 /** Standard workday target used for admin "target reached" logging. */
 export const PULSE_TARGET_HOURS = 9
 
+export function isFullDay(seconds) {
+  return Math.floor(Number(seconds) || 0) >= PULSE_TARGET_HOURS * 3600
+}
+
 /** Match server daily cap so the UI cannot run past 14h locally. */
 export const PULSE_DAILY_CAP_MS = 14 * 3_600_000
 

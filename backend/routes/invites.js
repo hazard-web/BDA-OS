@@ -47,7 +47,7 @@ function inviterName(user) {
 
 function isManagerRole(role) {
   const value = normalizePulseRole(role) || (role == null || role === '' ? 'admin' : 'member')
-  return value === 'admin' || value === 'superadmin'
+  return value === 'admin'
 }
 
 async function countOrgManagers(organizationId, excludeUserId) {
@@ -110,7 +110,7 @@ router.get('/', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /api/invites — send invite (admin / superadmin)
+// POST /api/invites — send invite (admin)
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
     const email = String(req.body.email || '')
@@ -163,7 +163,7 @@ router.patch('/members/:id/role', auth, requireAdmin, async (req, res) => {
     const organizationId = orgIdOf(req.user)
     const nextRole = normalizePulseRole(req.body.role)
     if (!nextRole || !canAssignRole(req.user, nextRole)) {
-      return res.status(400).json({ success: false, message: 'Choose Member, Admin, or Super Admin' })
+      return res.status(400).json({ success: false, message: 'Choose Member or Admin' })
     }
 
     const member = await User.findById(req.params.id)
@@ -202,7 +202,7 @@ router.patch('/members/:id/role', auth, requireAdmin, async (req, res) => {
     if (isOrgOwner(member, organizationId) && nextRole === 'member') {
       return res.status(400).json({
         success: false,
-        message: 'The organization owner must stay Admin or Super Admin',
+        message: 'The organization owner must stay Admin',
       })
     }
 
@@ -211,7 +211,7 @@ router.patch('/members/:id/role', auth, requireAdmin, async (req, res) => {
       if (remaining < 1) {
         return res.status(400).json({
           success: false,
-          message: 'Keep at least one Admin or Super Admin in the organization',
+          message: 'Keep at least one Admin in the organization',
         })
       }
     }

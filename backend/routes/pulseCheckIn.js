@@ -17,6 +17,7 @@ const { sendLeaveRequestEmail } = require('../utils/emailService');
 const { uploadBase64 } = require('../utils/cloudinary');
 const { getProductionBaseUrl } = require('../utils/urlHelper');
 const { collectMyFiles } = require('./pulseFiles');
+const { resolveTicketEntries, pushTimesheetToFlowlu } = require('./flowlu');
 const {
   clientIp,
   clientUserAgent,
@@ -25,10 +26,13 @@ const {
 } = require('../utils/requestMeta');
 const {
   TARGET_HOURS,
+  DAILY_CAP_MS,
+  HEARTBEAT_STALE_MS,
   assertWritableDate,
   applyTrustedActiveMs,
   closeOpenSession,
   findOpenSession,
+  sessionWallMs,
   touchHeartbeat,
   msToHours: trustedMsToHours,
 } = require('../utils/pulseTrustedTime');
@@ -221,9 +225,16 @@ function parseTaskEntries(raw) {
         0,
         Math.round(Number(item?.minutes) || ((Number(item?.hours) || 0) * 60)),
       );
-      return { description, project, minutes };
+      const flowluId = Number(item?.ticket?.flowluId);
+      const source = item?.ticket?.source;
+      if (item?.kind === 'ticket') {
+        const valid = ['agile', 'task'].includes(source) && Number.isInteger(flowluId) && flowluId > 0;
+        return valid ? { kind: 'ticket', description, project, minutes, ticket: { source, flowluId } } : null;
+      }
+      const task = mongoose.Types.ObjectId.isValid(item?.task) ? String(item.task) : null;
+      return { kind: 'general', description, project, minutes, task };
     })
-    .filter((item) => item.description && item.minutes > 0)
+    .filter((item) => item && (item.description || item.kind === 'ticket' || item.task) && item.minutes > 0)
     .slice(0, 20);
 }
 
@@ -476,7 +487,27 @@ router.get('/today', auth, async (req, res) => {
   }
 });
 
-// GET /api/pulse-checkin/admin/presence — who is checked in right now (admin / superadmin)
+/** Today's worked time for the admin presence list. Live rows keep counting from asOf. */
+function presenceTime(day, now = new Date()) {
+  if (!day) return { activeMs: 0, live: false };
+  const stored = Math.max(0, Number(day.totalActiveMs) || 0);
+  const open = findOpenSession(day);
+  if (day.status !== 'active' || !open?.checkInAt) {
+    return { activeMs: stored, live: false };
+  }
+  const wall = sessionWallMs(day, now);
+  const start = new Date(open.checkInAt).getTime();
+  const lastBeat = day.lastHeartbeatAt ? new Date(day.lastHeartbeatAt).getTime() : 0;
+  const anchor = lastBeat > start ? lastBeat : start;
+  const fresh = Number.isFinite(anchor) && now.getTime() - anchor <= HEARTBEAT_STALE_MS;
+  const extra = fresh ? Math.max(0, now.getTime() - anchor) : 0;
+  return {
+    activeMs: Math.min(DAILY_CAP_MS, Math.max(stored, wall) + extra),
+    live: fresh,
+  };
+}
+
+// GET /api/pulse-checkin/admin/presence — who is checked in right now (admin)
 router.get('/admin/presence', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -493,23 +524,29 @@ router.get('/admin/presence', auth, async (req, res) => {
       .lean();
 
     const today = todayKey();
+    const asOf = new Date();
     const userIds = members.map((m) => m._id);
     const days = userIds.length
       ? await PulseWorkDay.find({ user: { $in: userIds }, date: today })
-        .select('user status')
+        .select('user status totalActiveMs lastHeartbeatAt sessions.checkInAt sessions.checkOutAt sessions.durationMs')
         .lean()
       : [];
-    const statusByUser = new Map(days.map((row) => [String(row.user), row.status]));
+    const dayByUser = new Map(days.map((row) => [String(row.user), row]));
 
     const active = [];
     const inactive = [];
     members.forEach((member) => {
+      const day = dayByUser.get(String(member._id));
+      const snap = presenceTime(day, asOf);
       const row = {
         id: String(member._id),
         name: personName(member),
         email: member.email || '',
+        activeMs: snap.activeMs,
+        live: snap.live,
+        asOf: asOf.toISOString(),
       };
-      if (statusByUser.get(String(member._id)) === 'active') active.push(row);
+      if (day?.status === 'active') active.push(row);
       else inactive.push(row);
     });
 
@@ -624,7 +661,7 @@ router.get('/admin/days', auth, async (req, res) => {
 
     const daysSelect = cardsView
       ? 'user date status totalActiveMs anomaly.flagged anomaly.reason sessions.checkInAt sessions.checkOutAt sessions.durationMs'
-      : 'user date status totalActiveMs anomaly.flagged anomaly.reason timesheetSubmitted timesheetSubmittedAt taskEntries.description taskEntries.minutes taskEntries.project events.type events.at events._id events.activeMsAtEvent sessions.checkInAt sessions.checkOutAt sessions.durationMs';
+      : 'user date status totalActiveMs anomaly.flagged anomaly.reason timesheetSubmitted timesheetSubmittedAt taskEntries.description taskEntries.minutes taskEntries.project taskEntries.kind taskEntries.ticket taskEntries.task taskEntries.flowluTimelogId taskEntries.flowluError events.type events.at events._id events.activeMsAtEvent sessions.checkInAt sessions.checkOutAt sessions.durationMs';
 
     const [onboardingEmails, days] = await Promise.all([
       emailsWithOnboardingPhoto(orgObjectId, needOnboarding),
@@ -822,6 +859,78 @@ function emptyTimesheet(date) {
 }
 
 // GET /api/pulse-checkin/timesheet/today
+const OPEN_TASK_STATUSES = ['Pending', 'Accepted', 'In Progress'];
+
+function serializeTask(task) {
+  return {
+    id: String(task._id),
+    title: task.title,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate || null,
+  };
+}
+
+/** General rows that point at a task must use one of the person's own tasks; title becomes the description. */
+async function resolveTaskEntries(user, entries) {
+  const ids = entries.filter((e) => e.kind !== 'ticket' && e.task).map((e) => e.task);
+  if (!ids.length) return entries;
+  const staff = await linkedStaff(user);
+  const tasks = staff
+    ? await AssignedTask.find({ _id: { $in: ids }, staff: staff._id }).select('title').lean()
+    : [];
+  const titleById = new Map(tasks.map((t) => [String(t._id), t.title]));
+  return entries.map((entry) => {
+    if (entry.kind === 'ticket' || !entry.task) return entry;
+    const title = titleById.get(entry.task);
+    if (!title) {
+      const err = new Error('That task is not assigned to you. Pick it again.');
+      err.status = 400;
+      throw err;
+    }
+    return { ...entry, description: title, project: 'Tasks' };
+  });
+}
+
+// GET /api/pulse-checkin/my-tasks — open tasks from the task system for the signed-in person
+router.get('/my-tasks', auth, async (req, res) => {
+  try {
+    const staff = await linkedStaff(req.user);
+    if (!staff) return res.json({ success: true, data: { linked: false, tasks: [] } });
+    const tasks = await AssignedTask.find({ staff: staff._id, status: { $in: OPEN_TASK_STATUSES } })
+      .sort({ dueDate: 1, createdAt: -1 })
+      .limit(100)
+      .lean();
+    res.json({ success: true, data: { linked: true, tasks: tasks.map(serializeTask) } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to load your tasks' });
+  }
+});
+
+// POST /api/pulse-checkin/my-tasks — { title }; self-assigned task created from the timesheet
+router.post('/my-tasks', auth, async (req, res) => {
+  try {
+    const title = String(req.body?.title || '').trim().slice(0, 200);
+    if (!title) return res.status(400).json({ success: false, message: 'Task title is required' });
+    const staff = await linkedStaff(req.user);
+    if (!staff) {
+      return res.status(400).json({ success: false, message: 'No employee profile is linked to this BDA OS account yet.' });
+    }
+    const now = new Date();
+    const task = await AssignedTask.create({
+      staff: staff._id,
+      title,
+      description: 'Created from the timesheet',
+      status: 'In Progress',
+      assignedDate: now,
+      startedAt: now,
+    });
+    res.status(201).json({ success: true, message: `Task "${title}" created`, data: serializeTask(task) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to create task' });
+  }
+});
+
 router.get('/timesheet/today', auth, async (req, res) => {
   try {
     const date = todayKey(req.query.date);
@@ -837,7 +946,7 @@ router.put('/timesheet/today', auth, async (req, res) => {
   try {
     const date = todayKey(req.body?.date);
     const email = String(req.body?.email || req.user.email || '').toLowerCase();
-    const entries = parseTaskEntries(req.body?.entries);
+    const entries = await resolveTaskEntries(req.user, await resolveTicketEntries(req.user, parseTaskEntries(req.body?.entries)));
     const totalMinutes = entries.reduce((sum, item) => sum + item.minutes, 0);
     if (totalMinutes > 16 * 60) {
       return res.status(400).json({ success: false, message: 'Task time cannot exceed 16 hours' });
@@ -852,52 +961,63 @@ router.put('/timesheet/today', auth, async (req, res) => {
     await doc.save();
     res.json({ success: true, data: serializeDay(doc) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message || 'Failed to save timesheet' });
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to save timesheet' });
   }
 });
 
 // POST /api/pulse-checkin/timesheet/submit
+/** Submit a day's timesheet for `user`; shared by the web form and the Google Chat evening card. */
+async function submitTimesheetFor(user, { date: rawDate, email: rawEmail, entries: rawEntries } = {}) {
+  const fail = (status, message) => Object.assign(new Error(message), { status });
+  const date = todayKey(rawDate);
+  const email = String(rawEmail || user.email || '').toLowerCase();
+  const entries = await resolveTaskEntries(user, await resolveTicketEntries(user, parseTaskEntries(rawEntries)));
+  if (!entries.length) throw fail(400, 'Add at least one task with time');
+  const totalMinutes = entries.reduce((sum, item) => sum + item.minutes, 0);
+  if (totalMinutes > 16 * 60) throw fail(400, 'Task time cannot exceed 16 hours');
+
+  const doc = await getOrCreateDay(user._id, email, date);
+  if (doc.timesheetSubmitted) throw fail(400, 'Timesheet already submitted');
+  const now = new Date();
+  doc.email = email;
+  doc.taskEntries = entries;
+  doc.timesheetSubmitted = true;
+  doc.timesheetSubmittedAt = now;
+  doc.timesheetHours = Math.round((totalMinutes / 60) * 100) / 100;
+  await doc.save();
+
+  await logActivity(
+    user._id,
+    'PULSE_TIMESHEET_SUBMIT',
+    `${email} submitted timesheet for ${date}: ${entries.length} task${entries.length === 1 ? '' : 's'}, ${doc.timesheetHours}h`,
+    {
+      date,
+      email,
+      hours: doc.timesheetHours,
+      tasks: entries.length,
+      workDayId: doc._id,
+    },
+  );
+
+  const loggedTaskIds = entries.filter((e) => e.task).map((e) => e.task);
+  if (loggedTaskIds.length) {
+    await AssignedTask.updateMany(
+      { _id: { $in: loggedTaskIds }, status: { $in: ['Pending', 'Accepted'] } },
+      { $set: { status: 'In Progress', startedAt: now } },
+    );
+  }
+
+  // A BMS outage must not undo the submit; failed rows keep flowluError for a retry.
+  const bms = await pushTimesheetToFlowlu(user, doc).catch(() => ({ sent: 0, failed: 0 }));
+  return { doc, bms };
+}
+
 router.post('/timesheet/submit', auth, async (req, res) => {
   try {
-    const date = todayKey(req.body?.date);
-    const email = String(req.body?.email || req.user.email || '').toLowerCase();
-    const entries = parseTaskEntries(req.body?.entries);
-    if (!entries.length) {
-      return res.status(400).json({ success: false, message: 'Add at least one task with time' });
-    }
-    const totalMinutes = entries.reduce((sum, item) => sum + item.minutes, 0);
-    if (totalMinutes > 16 * 60) {
-      return res.status(400).json({ success: false, message: 'Task time cannot exceed 16 hours' });
-    }
-
-    const doc = await getOrCreateDay(req.user._id, email, date);
-    if (doc.timesheetSubmitted) {
-      return res.status(400).json({ success: false, message: 'Timesheet already submitted' });
-    }
-    const now = new Date();
-    doc.email = email;
-    doc.taskEntries = entries;
-    doc.timesheetSubmitted = true;
-    doc.timesheetSubmittedAt = now;
-    doc.timesheetHours = Math.round((totalMinutes / 60) * 100) / 100;
-    await doc.save();
-
-    await logActivity(
-      req.user._id,
-      'PULSE_TIMESHEET_SUBMIT',
-      `${email} submitted timesheet for ${date}: ${entries.length} task${entries.length === 1 ? '' : 's'}, ${doc.timesheetHours}h`,
-      {
-        date,
-        email,
-        hours: doc.timesheetHours,
-        tasks: entries.length,
-        workDayId: doc._id,
-      },
-    );
-
-    res.json({ success: true, data: serializeDay(doc) });
+    const { doc, bms } = await submitTimesheetFor(req.user, req.body || {});
+    res.json({ success: true, data: serializeDay(doc), bms });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message || 'Failed to submit timesheet' });
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to submit timesheet' });
   }
 });
 
@@ -1892,10 +2012,12 @@ router.get('/dashboard', auth, async (req, res) => {
         const join = new Date(joinParts.year, joinParts.month, joinParts.day);
         const joinKey = dateToKey(join);
         if (join >= hireCutoff && joinKey <= today) {
+          const ageDays = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - join) / 86400000);
           newHires.push(dashRow(
             `n-${person._id}`,
             name,
             `Joined ${joinParts.day} ${MONTH_LABELS[joinParts.month]} · ${dept}`,
+            { on: joinKey, fresh: ageDays >= 0 && ageDays <= 6 },
           ));
         }
         if (joinParts.month === thisMonth) {
@@ -2371,7 +2493,7 @@ router.get('/leaves/team', auth, async (req, res) => {
   }
 });
 
-// POST /api/pulse-checkin/leaves/:id/respond — admin/superadmin approve or reject
+// POST /api/pulse-checkin/leaves/:id/respond — admin approve or reject
 router.post('/leaves/:id/respond', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -2457,7 +2579,7 @@ router.get('/holidays', auth, async (req, res) => {
   }
 });
 
-// PUT /api/pulse-checkin/holidays — admin/superadmin year holiday plan
+// PUT /api/pulse-checkin/holidays — admin year holiday plan
 router.put('/holidays', auth, async (req, res) => {
   try {
     if (!isPulseAdmin(req.user)) {
@@ -2522,3 +2644,8 @@ router.put('/holidays', auth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.submitTimesheetFor = submitTimesheetFor;
+module.exports.linkedStaff = linkedStaff;
+module.exports.pulseWorkDaysOf = pulseWorkDaysOf;
+module.exports.policyHolidayEntries = policyHolidayEntries;
+module.exports.OPEN_TASK_STATUSES = OPEN_TASK_STATUSES;

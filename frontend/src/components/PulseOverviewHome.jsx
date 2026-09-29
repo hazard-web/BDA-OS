@@ -16,11 +16,13 @@ import {
   EMPTY_DASH,
   filterWidgetData,
 } from './PulseMySpaceDashboard'
-import { formatElapsed, getElapsedSeconds } from '../utils/pulseCheckIn'
+import { formatElapsed, getElapsedSeconds, isFullDay } from '../utils/pulseCheckIn'
+import { useCheckInReply } from '../utils/pulseCheckInReply'
 import { hiResAvatarUrl } from '../utils/hiResAvatar'
 import { isPulseFileRow } from '../utils/pulseOpenFile'
 import { DRAG_THRESHOLD, SWAP_LOCK_PX, crossedSwapMid, hitIdFromPoint, moveId } from '../utils/pulseWidgetDrag'
 import PulseFileViewModal from './PulseFileViewModal'
+import PulsePartyCrackers from './PulsePartyCrackers'
 
 const STORAGE_KEY = 'pulseOverviewCards.v5'
 const LEGACY_STORAGE_KEYS = ['pulseOverviewCards.v4', 'pulseOverviewCards.v2', 'pulseOverviewCards.v1']
@@ -48,6 +50,84 @@ const MOVABLE_IDS = MOVABLE_TILES.map((tile) => tile.id)
 const DASH_BY_ID = Object.fromEntries(DASH_TILES.map((tile) => [tile.id, tile]))
 const DEFAULT_ORDER = [...MOVABLE_IDS]
 const DEFAULT_ENABLED = Object.fromEntries(MOVABLE_TILES.map((tile) => [tile.id, true]))
+
+function overviewDayKey(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function isTodayRow(item, todayKey) {
+  return Boolean(
+    item?.today
+    || item?.on === 'today'
+    || item?.on === todayKey
+    || item?.when === 'Today',
+  )
+}
+
+function personFirst(title) {
+  return String(title || '').trim().split(/\s+/)[0] || 'there'
+}
+
+function personMark(title) {
+  return personFirst(title).charAt(0).toUpperCase() || 'B'
+}
+
+function samePerson(who, viewer) {
+  const left = String(who || '').trim().toLowerCase()
+  const right = String(viewer || '').trim().toLowerCase()
+  if (!left || !right) return false
+  if (left === right) return true
+  const leftFirst = left.split(/\s+/)[0]
+  const rightFirst = right.split(/\s+/)[0]
+  return leftFirst.length > 2 && leftFirst === rightFirst
+}
+
+function buildDayNotes(data, todayKey) {
+  if (!data) return []
+  const notes = []
+  const birthdays = (data.birthday || []).filter((row) => isTodayRow(row, todayKey))
+  const annivs = (data.workAnniv || []).filter((row) => isTodayRow(row, todayKey))
+  const hires = (data.newHires || []).filter((row) => row.fresh)
+  if (birthdays[0]) {
+    const extra = birthdays.length - 1
+    const name = personFirst(birthdays[0].title)
+    notes.push({
+      id: 'birthday',
+      kind: 'birthday',
+      kicker: 'Birthday',
+      title: `Happy birthday, ${name}`,
+      note: extra ? `And ${extra} more today` : 'From the team',
+      mark: personMark(birthdays[0].title),
+      who: birthdays[0].title,
+    })
+  }
+  if (annivs[0]) {
+    const years = Number(annivs[0].years) || 0
+    const extra = annivs.length - 1
+    const name = personFirst(annivs[0].title)
+    notes.push({
+      id: 'anniv',
+      kind: 'anniv',
+      kicker: 'Work anniversary',
+      title: years > 0 ? `${years} ${years === 1 ? 'year' : 'years'} today` : `Happy anniversary, ${name}`,
+      note: extra ? `${name}, and ${extra} more` : name,
+      mark: personMark(annivs[0].title),
+    })
+  }
+  if (hires[0]) {
+    const extra = hires.length - 1
+    const name = personFirst(hires[0].title)
+    notes.push({
+      id: 'hire',
+      kind: 'hire',
+      kicker: 'New teammate',
+      title: `Welcome, ${name}`,
+      note: extra ? `And ${extra} more this week` : 'Joined this week',
+      mark: personMark(hires[0].title),
+    })
+  }
+  return notes
+}
 
 export function PulseStripBackdrop() {
   return (
@@ -300,13 +380,21 @@ function PortraitCard({ name, role, portraitSrc, user, initial, onPointerDown })
   )
 }
 
-function checkInView(checkedInAt, elapsed) {
+function checkInView(checkedInAt, elapsed, birthday = false) {
   if (checkedInAt) {
     return {
       mode: 'live',
       status: 'On the clock',
       action: 'Check out',
       busy: 'Checking out',
+    }
+  }
+  if (isFullDay(elapsed) && !birthday) {
+    return {
+      mode: 'closed',
+      status: 'Day closed',
+      action: 'Day closed',
+      busy: 'Day closed',
     }
   }
   if (elapsed > 0) {
@@ -325,23 +413,29 @@ function checkInView(checkedInAt, elapsed) {
   }
 }
 
-function ElapsedFace({ seconds, mode }) {
+function ElapsedFace({ seconds, mode, waking, locked }) {
   const stamp = formatElapsed(seconds)
   const [hours, minutes, secs] = stamp.split(':')
-  const spoken =
-    mode === 'live'
+  const spoken = locked || mode === 'closed'
+    ? `Day closed, ${stamp}`
+    : mode === 'live'
       ? `On the clock, ${stamp} elapsed`
       : mode === 'paused'
         ? `Paused, ${stamp} worked so far`
         : `Not started, ${stamp}`
   return (
     <p
-      className={`pulse-checkin-time is-${mode}`}
+      className={[
+        'pulse-checkin-time',
+        `is-${mode}`,
+        waking ? 'is-waking' : '',
+        locked ? 'is-locked' : '',
+      ].filter(Boolean).join(' ')}
       role="timer"
-      aria-live={mode === 'live' ? 'polite' : 'off'}
+      aria-live={mode === 'live' || locked ? 'polite' : 'off'}
       aria-label={spoken}
     >
-      {mode === 'paused' ? <Pause className="pulse-checkin-pause" weight="fill" size={18} aria-hidden="true" /> : null}
+      {mode === 'paused' && !locked ? <Pause className="pulse-checkin-pause" weight="fill" size={18} aria-hidden="true" /> : null}
       <span>{hours}</span>
       <span className="pulse-checkin-colon" aria-hidden="true">:</span>
       <span>{minutes}</span>
@@ -351,8 +445,9 @@ function ElapsedFace({ seconds, mode }) {
   )
 }
 
-function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elapsed: elapsedProp, checkBusy, onCheckIn }) {
+function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elapsed: elapsedProp, checkBusy, onCheckIn, gesture = 0, birthday = false }) {
   const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
+  const reply = useCheckInReply(checkedInAt, Math.max(Number(elapsedProp) || 0, elapsed), gesture)
 
   useEffect(() => {
     setElapsed(Number(elapsedProp) || 0)
@@ -369,7 +464,7 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
     return () => window.clearInterval(id)
   }, [checkedInAt, email])
 
-  const view = checkInView(checkedInAt, elapsed)
+  const view = checkInView(checkedInAt, elapsed, birthday)
   const period = periodForHour(hour)
   return (
     <Card
@@ -383,7 +478,12 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
         <div className="pulse-checkin-alpine-haze" />
       </div>
       <PulsePeriodMark hour={hour} />
-      <PulseCheckinBuddy checkedIn={Boolean(checkedInAt)} />
+      <PulseCheckinBuddy
+        checkedIn={Boolean(checkedInAt)}
+        gesture={gesture}
+        birthday={birthday}
+        name={personFirst(name)}
+      />
       <div className="pulse-checkin-head">
         <PulseUserAvatar
           size={40}
@@ -403,8 +503,10 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
       </div>
       <div className="pulse-checkin-main">
         <div className="pulse-checkin-clock">
-          <ElapsedFace seconds={elapsed} mode={view.mode} />
-          <span className="pulse-checkin-greet">{greetingTitle(period)}</span>
+          <ElapsedFace seconds={reply.shown} mode={view.mode} waking={reply.waking} locked={reply.dayClosed} />
+          <span className={`pulse-checkin-greet${reply.dayClosed || view.mode === 'closed' ? ' is-closed' : ''}`}>
+            {reply.dayClosed || view.mode === 'closed' ? 'Day closed' : greetingTitle(period)}
+          </span>
         </div>
         <div className="pulse-checkin-cta-wrap">
           <ConfigProvider wave={{ disabled: true }}>
@@ -413,13 +515,14 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
               size="large"
               block
               aria-busy={checkBusy}
-              icon={view.mode === 'live' ? <LogoutOutlined /> : <LoginOutlined />}
-              className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}`}
+              disabled={view.mode === 'closed'}
+              icon={view.mode === 'closed' ? null : view.mode === 'live' ? <LogoutOutlined /> : <LoginOutlined />}
+              className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}${view.mode === 'closed' ? ' is-closed' : ''}${reply.settling ? ' is-settling' : ''}`}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
                 event.currentTarget.blur()
-                if (checkBusy) return
+                if (checkBusy || view.mode === 'closed') return
                 onCheckIn()
               }}
             >
@@ -475,9 +578,11 @@ function PulseOverviewHome({
   elapsed,
   checkBusy,
   onCheckIn,
+  checkGesture = 0,
   isPulseAdmin,
   onOpen,
   onSoon,
+  onBirthday,
 }) {
   const role = workWeek.profile?.designation || (isPulseAdmin ? 'HR Manager' : 'Member')
   const portraitSrc = hiResAvatarUrl(user?.avatarUrl, 800)
@@ -537,6 +642,52 @@ function PulseOverviewHome({
     if (sample) return filterWidgetData(buildDemo())
     return liveData
   }, [sample, liveData, tick])
+
+  const dayNotes = useMemo(
+    () => buildDayNotes(dashData, overviewDayKey()),
+    [dashData, tick],
+  )
+  const helloKey = dayNotes.map((note) => note.id).join('|')
+  const [helloPlay, setHelloPlay] = useState(false)
+  const [helloHidden, setHelloHidden] = useState(false)
+
+  const hideHello = useCallback(() => {
+    setHelloHidden(true)
+    setHelloPlay(false)
+  }, [])
+
+  const birthdayArrival = !sample && dayNotes.some((note) => note.kind === 'birthday' && samePerson(note.who, name))
+
+  useEffect(() => {
+    onBirthday?.(birthdayArrival)
+  }, [birthdayArrival, onBirthday])
+  const [partyOn, setPartyOn] = useState(false)
+
+  useEffect(() => {
+    if (!birthdayArrival) {
+      setPartyOn(false)
+      return undefined
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+    setPartyOn(true)
+    const timer = window.setTimeout(() => setPartyOn(false), 4800)
+    return () => window.clearTimeout(timer)
+  }, [birthdayArrival])
+
+  useEffect(() => {
+    if (!helloKey) {
+      setHelloPlay(false)
+      return undefined
+    }
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) {
+      setHelloPlay(false)
+      return undefined
+    }
+    setHelloHidden(false)
+    setHelloPlay(true)
+    return undefined
+  }, [helloKey])
 
   const openDashRow = useCallback((item) => {
     if (isPulseFileRow(item)) {
@@ -717,6 +868,8 @@ function PulseOverviewHome({
           checkedInAt={checkedInAt}
           elapsed={elapsed}
           checkBusy={checkBusy}
+          gesture={checkGesture}
+          birthday={birthdayArrival}
           onCheckIn={onCheckIn}
         />
       )
@@ -747,8 +900,9 @@ function PulseOverviewHome({
           onFileTabChange={dash.fileTabs ? setFileTab : undefined}
           scrollable
           tone={dash.tone}
+          celebrate={helloPlay && dayNotes.some((note) => note.kind === (id === 'birthday' ? 'birthday' : id === 'workAnniv' ? 'anniv' : ''))}
           floating={floating}
-          onRow={openDashRow}
+          onRow={dash.showAvatar ? undefined : openDashRow}
           onGripPointerDown={floating ? undefined : (event) => startCardDrag(id, event)}
         />
       )
@@ -836,6 +990,30 @@ function PulseOverviewHome({
                 {movableVisible.map((id) => renderTile(id))}
               </div>
             ) : null}
+            {dayNotes.length && !helloHidden ? (
+              <section className={`pulse-day-hello${helloPlay ? ' is-play' : ''}`} aria-label="Today on the team">
+                {dayNotes.map((note) => (
+                  <article key={note.id} className={`pulse-day-note is-${note.kind}`}>
+                    <span className="pulse-day-mark" aria-hidden="true">
+                      {note.mark}
+                      {helloPlay ? (
+                        <span className="pulse-day-burst">
+                          <i /><i /><i /><i /><i /><i /><i /><i />
+                        </span>
+                      ) : null}
+                    </span>
+                    <div className="pulse-day-copy">
+                      <span className="pulse-day-kicker">{note.kicker}</span>
+                      <strong>{note.title}</strong>
+                      <span className="pulse-day-aside">{note.note}</span>
+                    </div>
+                  </article>
+                ))}
+                <button type="button" className="pulse-day-dismiss" onClick={hideHello}>
+                  Hide
+                </button>
+              </section>
+            ) : null}
           </div>
         </div>
         {draggingId && typeof document !== 'undefined'
@@ -859,6 +1037,7 @@ function PulseOverviewHome({
         file={viewFile}
         onClose={() => setViewFile(null)}
       />
+      {partyOn ? <PulsePartyCrackers /> : null}
     </div>
   )
 }

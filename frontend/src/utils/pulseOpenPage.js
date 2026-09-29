@@ -153,6 +153,22 @@ export const PULSE_SHELL_VIEWS = {
     admin: true,
     label: 'Opening App access',
   },
+  projectStatus: {
+    path: `${APP_BASE}/company/status`,
+    space: 'organization',
+    module: 'home',
+    sub: 'status',
+    admin: true,
+    label: 'Opening Project Status',
+  },
+  bms: {
+    path: `${APP_BASE}/company/bms`,
+    space: 'organization',
+    module: 'home',
+    sub: 'bms',
+    admin: true,
+    label: 'Opening BMS',
+  },
   companyFiles: {
     path: `${APP_BASE}/company/files`,
     space: 'organization',
@@ -178,7 +194,7 @@ export const PULSE_SHELL_VIEWS = {
 }
 
 export const PULSE_OPEN_VIEWS = Object.fromEntries(
-  ['onboarding', 'leave', 'leaveTeam', 'leaveHolidays', 'attendance', 'time', 'hours', 'apps', 'companyTime', 'companyPerformance', 'companyPayroll', 'companyFiles', 'people', 'performance', 'payroll', 'files'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
+  ['onboarding', 'leave', 'leaveTeam', 'leaveHolidays', 'attendance', 'time', 'hours', 'apps', 'bms', 'projectStatus', 'companyTime', 'companyPerformance', 'companyPayroll', 'companyFiles', 'people', 'performance', 'payroll', 'files'].map((key) => [key, PULSE_SHELL_VIEWS[key]]),
 )
 
 export const PULSE_SHELL_PATHS = [...new Set(Object.values(PULSE_SHELL_VIEWS).map((view) => view.path))]
@@ -188,12 +204,14 @@ export function isPulseShellPath(pathname) {
   return PULSE_SHELL_PATHS.includes(path)
 }
 
-export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'attendance', 'time', 'people', 'performance', 'payroll', 'files'])
+export const ORG_OPEN_SUBS = new Set(['overview', 'onboarding', 'apps', 'bms', 'status', 'attendance', 'time', 'people', 'performance', 'payroll', 'files'])
 
 export function pathForShell({ space, module, sub, leaveTab } = {}) {
   if (space === 'organization') {
     if (sub === 'onboarding') return PULSE_SHELL_VIEWS.onboarding.path
     if (sub === 'apps') return PULSE_SHELL_VIEWS.apps.path
+    if (sub === 'bms') return PULSE_SHELL_VIEWS.bms.path
+    if (sub === 'status') return PULSE_SHELL_VIEWS.projectStatus.path
     if (sub === 'attendance') return PULSE_SHELL_VIEWS.attendance.path
     if (sub === 'time') return PULSE_SHELL_VIEWS.companyTime.path
     if (sub === 'performance') return PULSE_SHELL_VIEWS.companyPerformance.path

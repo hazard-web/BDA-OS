@@ -43,11 +43,26 @@ const sessionSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const ticketRefSchema = new mongoose.Schema(
+  {
+    source: { type: String, enum: ['agile', 'task'], required: true },
+    flowluId: { type: Number, required: true },
+    key: { type: String, trim: true, default: '' },
+    name: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
 const taskEntrySchema = new mongoose.Schema(
   {
+    kind: { type: String, enum: ['general', 'ticket'], default: 'general' },
     description: { type: String, required: true, trim: true },
     project: { type: String, default: 'BDA OS', trim: true },
     minutes: { type: Number, required: true, min: 1 },
+    ticket: { type: ticketRefSchema, default: undefined },
+    task: { type: mongoose.Schema.Types.ObjectId, ref: 'AssignedTask', default: null },
+    flowluTimelogId: { type: Number, default: null },
+    flowluError: { type: String, default: '' },
   },
   { _id: true },
 );
