@@ -392,15 +392,14 @@ body:has(.pulse-shell),
 
 .pulse-head-presence-time {
   flex: none;
-  font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: #6d6760;
+  color: #183B35;
 }
 
 .pulse-head-presence-pop .is-active .pulse-head-presence-time {
-  color: var(--pulse-primary);
+  color: #183B35;
 }
 
 .pulse-head-presence-pop .pulse-head-presence-empty {

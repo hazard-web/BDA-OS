@@ -2,12 +2,15 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { isPulseAuxiliaryTab } from '../utils/pulseOpenPage'
+import { isCheckedIn } from '../utils/pulseCheckIn'
 import {
   cancelPulseUnloadPending,
   forcePulseCheckOutOnly,
   installPulseUnloadWatch,
   markPulseUnloadPending,
   startPulseSessionHeartbeat,
+  startScreenLockCheckOutWatch,
+  stopScreenLockCheckOutWatch,
 } from '../utils/pulseForceExit'
 
 /**
@@ -64,37 +67,20 @@ export default function PulseForceExitGuard() {
     const checkOutOnly = () => {
       if (liveExitRef.current) return
       liveExitRef.current = true
-      forcePulseCheckOutOnly({ email })
+      forcePulseCheckOutOnly({ email, reason: 'sleep' })
       window.setTimeout(() => {
         liveExitRef.current = false
       }, 2000)
     }
 
     const onFreeze = () => checkOutOnly()
-
-    let idleAbort
-    const startIdle = async () => {
-      if (!('IdleDetector' in window)) return
-      try {
-        const request = window.IdleDetector.requestPermission
-        const permission = request ? await request() : 'granted'
-        if (permission !== 'granted') return
-        idleAbort = new AbortController()
-        const detector = new window.IdleDetector()
-        detector.addEventListener('change', () => {
-          if (detector.screenState === 'locked') checkOutOnly()
-        })
-        await detector.start({ threshold: 60_000, signal: idleAbort.signal })
-      } catch {
-        /* unsupported / denied */
-      }
-    }
-    void startIdle()
-
     document.addEventListener('freeze', onFreeze)
 
+    // Resume lock watch if already checked in (permission may already be granted).
+    if (isCheckedIn(email)) startScreenLockCheckOutWatch(email)
+
     return () => {
-      idleAbort?.abort()
+      stopScreenLockCheckOutWatch()
       document.removeEventListener('freeze', onFreeze)
     }
   }, [email, pathname, loading, auxiliary])
