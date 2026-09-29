@@ -4,6 +4,7 @@
  * GOOGLE_CHAT_PROJECT_NUMBER (classic app audience), and for a Workspace add-on Chat app:
  * GOOGLE_CHAT_ADDON=true + GOOGLE_CHAT_ENDPOINT_URL (defaults to BACKEND_URL/api/chat-bot/events).
  */
+const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 
 const CHAT_API = 'https://chat.googleapis.com/v1'
@@ -16,35 +17,57 @@ let serviceAccount = null
 let accessToken = { value: '', expiresAt: 0 }
 const certCache = new Map()
 
+/**
+ * Rebuild a PEM private key however the hosting dashboard stored it: quoted, with literal or
+ * double-escaped "\n", or with line breaks collapsed into spaces.
+ */
+function normalizePrivateKey(raw) {
+  const text = String(raw || '').trim().replace(/^['"]|['"]$/g, '').replace(/(\\+r)?\\+n/g, '\n')
+  const match = text.match(/-----BEGIN ([A-Z ]*PRIVATE KEY)-----([\s\S]*?)-----END \1-----/)
+  if (!match) throw new Error('GOOGLE_CHAT_SA_PRIVATE_KEY is not a PEM private key (missing BEGIN/END lines)')
+  const body = match[2].replace(/[^A-Za-z0-9+/=]/g, '')
+  const pem = `-----BEGIN ${match[1]}-----\n${body.match(/.{1,64}/g).join('\n')}\n-----END ${match[1]}-----\n`
+  crypto.createPrivateKey(pem)
+  return pem
+}
+
 function chatServiceAccount() {
   if (serviceAccount) return serviceAccount
   const email = String(process.env.GOOGLE_CHAT_SA_EMAIL || '').trim()
   const key = String(process.env.GOOGLE_CHAT_SA_PRIVATE_KEY || '').trim()
   if (email && key) {
-    // Env files and hosting dashboards usually store the PEM with literal "\n"
-    serviceAccount = { client_email: email, private_key: key.replace(/^"|"$/g, '').replace(/\\n/g, '\n') }
+    serviceAccount = { client_email: email, private_key: normalizePrivateKey(key) }
     return serviceAccount
   }
   const raw = String(process.env.GOOGLE_CHAT_SA_JSON || '').trim()
   if (!raw) return null
   const json = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8')
-  serviceAccount = JSON.parse(json)
+  const parsed = JSON.parse(json)
+  serviceAccount = { ...parsed, private_key: normalizePrivateKey(parsed.private_key) }
   return serviceAccount
 }
 
-function isChatConfigured() {
+/** Why Google Chat can't be used on this server, or '' when it can. */
+function chatConfigError() {
   try {
     const sa = chatServiceAccount()
-    return Boolean(sa?.client_email && sa?.private_key)
-  } catch {
-    return false
+    if (!sa?.client_email || !sa?.private_key) {
+      return 'set GOOGLE_CHAT_SA_EMAIL + GOOGLE_CHAT_SA_PRIVATE_KEY on this server'
+    }
+    return ''
+  } catch (err) {
+    return err.message
   }
+}
+
+function isChatConfigured() {
+  return !chatConfigError()
 }
 
 async function chatAccessToken() {
   if (accessToken.value && Date.now() < accessToken.expiresAt - 60_000) return accessToken.value
   const sa = chatServiceAccount()
-  if (!sa) throw new Error('Google Chat is not configured (GOOGLE_CHAT_SA_JSON)')
+  if (!sa) throw new Error('Google Chat is not configured (set GOOGLE_CHAT_SA_EMAIL + GOOGLE_CHAT_SA_PRIVATE_KEY on this server)')
   const now = Math.floor(Date.now() / 1000)
   const assertion = jwt.sign(
     {
@@ -116,42 +139,53 @@ function chatEndpointUrl() {
 async function verifyWith(token, certsUrl, options) {
   const decoded = jwt.decode(token, { complete: true })
   const cert = (await signingCerts(certsUrl))[decoded?.header?.kid]
-  if (!cert) return null
+  if (!cert) return { error: 'token is not signed by a current Google key' }
   try {
-    return jwt.verify(token, cert, { algorithms: ['RS256'], ...options })
-  } catch {
-    return null
+    return { claims: jwt.verify(token, cert, { algorithms: ['RS256'], ...options }) }
+  } catch (err) {
+    const got = decoded?.payload || {}
+    return { error: `${err.message} (token aud=${got.aud}, iss=${got.iss})` }
   }
 }
 
 /**
- * Verify the bearer token Google attaches to Chat events.
+ * Verify the bearer token Google attaches to Chat events. Returns { ok, reason }.
  * Classic app: signed by chat@system, audience = project number.
- * Workspace add-on: Google ID token for the add-ons service account, audience = endpoint URL.
+ * Workspace add-on: Google ID token for this project's add-ons service account; the audience is the
+ * endpoint URL or the project number, depending on the Chat app's "Authentication audience" setting.
  * GOOGLE_CHAT_VERIFY=false skips it for local simulation, never in production.
  */
 async function verifyChatRequest(req) {
-  if (process.env.GOOGLE_CHAT_VERIFY === 'false' && process.env.NODE_ENV !== 'production') return true
-  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-  if (!token) return false
+  if (process.env.GOOGLE_CHAT_VERIFY === 'false' && process.env.NODE_ENV !== 'production') return { ok: true, reason: '' }
+  const header = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+  // Add-on events also carry the same Google ID token in the body
+  const token = header || String(req.body?.authorizationEventObject?.systemIdToken || '')
+  if (!token) return { ok: false, reason: 'no Google ID token on the request' }
+  const project = String(process.env.GOOGLE_CHAT_PROJECT_NUMBER || '').trim()
   if (req.body?.chat || req.body?.commonEventObject) {
-    const audience = chatEndpointUrl()
-    if (!audience) return false
-    const claims = await verifyWith(token, GOOGLE_CERTS_URL, {
+    const endpoint = chatEndpointUrl()
+    const variants = endpoint ? [endpoint, endpoint.replace('://www.', '://'), endpoint.replace('://', '://www.')] : []
+    const audience = [...new Set(variants.flatMap((url) => [url, `${url}/`]))].concat(project ? [project] : [])
+    if (!audience.length) return { ok: false, reason: 'set GOOGLE_CHAT_ENDPOINT_URL or GOOGLE_CHAT_PROJECT_NUMBER' }
+    const { claims, error } = await verifyWith(token, GOOGLE_CERTS_URL, {
       issuer: ['https://accounts.google.com', 'accounts.google.com'],
       audience,
     })
-    const email = String(claims?.email || '')
-    const project = String(process.env.GOOGLE_CHAT_PROJECT_NUMBER || '').trim()
-    return Boolean(claims?.email_verified && email.endsWith(ADDON_SA_SUFFIX) && (!project || email.includes(project)))
+    if (error) return { ok: false, reason: error }
+    const email = String(claims.email || '')
+    if (!claims.email_verified || !email.endsWith(ADDON_SA_SUFFIX) || (project && !email.includes(project))) {
+      return { ok: false, reason: `token is for ${email || 'no email'}, not this project's add-ons service account` }
+    }
+    return { ok: true, reason: '' }
   }
-  const audience = String(process.env.GOOGLE_CHAT_PROJECT_NUMBER || '').trim()
-  if (!audience) return false
-  return Boolean(await verifyWith(token, CERTS_URL, { issuer: CHAT_ISSUER, audience }))
+  if (!project) return { ok: false, reason: 'set GOOGLE_CHAT_PROJECT_NUMBER' }
+  const { error } = await verifyWith(token, CERTS_URL, { issuer: CHAT_ISSUER, audience: project })
+  return error ? { ok: false, reason: error } : { ok: true, reason: '' }
 }
 
 module.exports = {
   isChatConfigured,
+  chatConfigError,
   isAddonMode,
   chatEndpointUrl,
   sendChatMessage,

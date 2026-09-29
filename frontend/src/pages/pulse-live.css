@@ -2398,3 +2398,23 @@
     grid-template-columns: 1fr;
   }
 }
+
+.pulse-ps-slot-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pulse-ps-slot-name span {
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+.pulse-ps-slot-name span.is-ok {
+  color: #047857;
+}
+
+.pulse-ps-slot-name span.is-bad {
+  color: #b91c1c;
+}
