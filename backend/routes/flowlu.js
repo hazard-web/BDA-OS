@@ -1,9 +1,11 @@
+const crypto = require('crypto')
 const express = require('express')
 const mongoose = require('mongoose')
 const { auth } = require('./auth')
 const User = require('../models/User')
 const FlowluSync = require('../models/FlowluSync')
 const FlowluTicket = require('../models/FlowluTicket')
+const ChatBotSettings = require('../models/ChatBotSettings')
 const PulseWorkDay = require('../models/PulseWorkDay')
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth')
 const { personName } = require('../utils/pulsePerson')
@@ -248,6 +250,10 @@ router.get('/status', auth, requireAdmin, async (req, res) => {
         ticketsSyncedAt: state?.ticketsSyncedAt || null,
         lastError: state?.lastError || '',
         lastErrorAt: state?.lastErrorAt || null,
+        ticketJob: state?.ticketJob || null,
+        lastWebhook: state?.lastWebhook || null,
+        autoSync: autoSyncEnabled() ? `every ${AUTO_SYNC_MINUTES} min, ${WORK_HOURS[0]}–${WORK_HOURS[1]} IST` : 'off on this server',
+        webhookConfigured: Boolean(String(process.env.FLOWLU_WEBHOOK_SECRET || '').trim()),
         pendingLogs,
       },
     })
@@ -297,17 +303,22 @@ router.get('/mapping', auth, requireAdmin, async (req, res) => {
   }
 })
 
+/** Refresh the cached Flowlu users, then auto-match members by email. */
+async function syncUsersFor(organizationId) {
+  const users = await fetchFlowluUsers()
+  await syncState(organizationId)
+  await FlowluSync.updateOne(
+    { organizationId },
+    { $set: { users, usersSyncedAt: new Date(), lastError: '' } },
+  )
+  return { users, ...(await autoLinkMembers(organizationId, users)) }
+}
+
 // POST /api/flowlu/sync/users — refresh Flowlu users, then auto-match by email
 router.post('/sync/users', auth, requireAdmin, async (req, res) => {
   const organizationId = orgObjectId(req.user)
   try {
-    const users = await fetchFlowluUsers()
-    await syncState(organizationId)
-    await FlowluSync.updateOne(
-      { organizationId },
-      { $set: { users, usersSyncedAt: new Date(), lastError: '' } },
-    )
-    const result = await autoLinkMembers(organizationId, users)
+    const { users, ...result } = await syncUsersFor(organizationId)
     res.json({
       success: true,
       message: `${users.length} BMS users · ${result.linked} newly matched by email${result.cleared ? ` · ${result.cleared} unlinked` : ''}`,
@@ -377,58 +388,117 @@ router.put('/mapping/:userId', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /api/flowlu/sync/tickets — pull issues/tasks from the allowlisted projects
+// A crashed job leaves running=true; treat locks older than this as free
+const SYNC_LOCK_MS = 30 * 60 * 1000
+
+async function setJob(organizationId, patch) {
+  await FlowluSync.updateOne(
+    { organizationId },
+    { $set: Object.fromEntries(Object.entries(patch).map(([key, value]) => [`ticketJob.${key}`, value])) },
+  )
+}
+
+/**
+ * Pull issues/tasks for the org's selected projects (or only `only`) as a background job.
+ * Returns at once; progress and the result land in FlowluSync.ticketJob.
+ */
+async function runTicketSync(organizationId, { reason = 'manual', only = null } = {}) {
+  await syncState(organizationId)
+  const state = await FlowluSync.findOneAndUpdate(
+    {
+      organizationId,
+      $or: [{ 'ticketJob.running': { $ne: true } }, { 'ticketJob.startedAt': { $lt: new Date(Date.now() - SYNC_LOCK_MS) } }],
+    },
+    { $set: { ticketJob: { running: true, reason, startedAt: new Date(), progress: 'Starting…', message: '', error: '' } } },
+    { new: true },
+  )
+  if (!state) return { started: false, message: 'A ticket sync is already running' }
+
+  const selected = projectsToSync(state.toObject())
+  const targets = only
+    ? selected.filter((p) => only.some((o) => o.source === p.source && o.flowluId === p.flowluId))
+    : selected
+  if (!targets.length) {
+    const message = only ? 'That project is not selected for sync' : 'No projects selected. Choose projects to sync first.'
+    await setJob(organizationId, { running: false, finishedAt: new Date(), progress: '', error: message })
+    return { started: false, message }
+  }
+
+  const job = async () => {
+    let stages = [...(state.stages || [])].map((s) => (s.toObject ? s.toObject() : s))
+    const projects = new Map((state.projects || []).map((p) => [`${p.source}:${p.flowluId}`, p.toObject ? p.toObject() : p]))
+    let taskStageName = null
+    const counts = { agile: 0, task: 0, removed: 0 }
+    const failed = []
+    for (const [index, target] of targets.entries()) {
+      await setJob(organizationId, { progress: `Project ${index + 1}/${targets.length}` })
+      try {
+        let result
+        if (target.source === 'agile') {
+          result = await fetchAgileTickets(target.flowluId)
+          const workflows = new Set(result.stages.map((s) => s.workflowId))
+          stages = stages.filter((s) => !(s.source === 'agile' && workflows.has(s.workflowId))).concat(result.stages)
+        } else {
+          if (!taskStageName) {
+            const taskStages = await flowluList('task/stages/list')
+            taskStageName = new Map(taskStages.map((s) => [Number(s.id), s.name]))
+            stages = stages.filter((s) => s.source !== 'task').concat(taskStages.map((s) => stageRow('task', s)))
+          }
+          result = await fetchProjectTasks(target.flowluId, taskStageName)
+        }
+        // Save each project as it finishes so a long sync shows progress and survives a later failure
+        const stamp = new Date()
+        if (result.tickets.length) {
+          await FlowluTicket.bulkWrite(result.tickets.map((ticket) => ({
+            updateOne: {
+              filter: { organizationId, source: ticket.source, flowluId: ticket.flowluId },
+              update: { $set: { ...ticket, organizationId, syncedAt: stamp } },
+              upsert: true,
+            },
+          })))
+        }
+        const gone = await FlowluTicket.deleteMany({
+          organizationId, source: target.source, projectId: target.flowluId, syncedAt: { $lt: stamp },
+        })
+        counts[target.source] += result.tickets.length
+        counts.removed += gone.deletedCount
+        projects.set(`${target.source}:${target.flowluId}`, result.project)
+        await setJob(organizationId, { progress: `Project ${index + 1}/${targets.length} · ${result.project.name}` })
+      } catch (err) {
+        failed.push(`${target.name || `${target.source} ${target.flowluId}`}: ${err.message}`)
+      }
+    }
+
+    const update = { stages, lastError: failed.length ? failed[0] : '' }
+    if (!only) {
+      // Drop tickets of projects that are no longer selected
+      const keep = selected.map((p) => ({ source: p.source, projectId: p.flowluId }))
+      const dropped = await FlowluTicket.deleteMany({ organizationId, $nor: keep })
+      counts.removed += dropped.deletedCount
+      update.projects = selected.map((p) => projects.get(`${p.source}:${p.flowluId}`)).filter(Boolean)
+      update.ticketsSyncedAt = new Date()
+    } else {
+      update.projects = [...projects.values()]
+    }
+    const message = `${counts.agile} issues and ${counts.task} tasks from ${targets.length - failed.length}/${targets.length} project${targets.length === 1 ? '' : 's'}${counts.removed ? ` · ${counts.removed} removed` : ''}`
+    await FlowluSync.updateOne({ organizationId }, { $set: update })
+    await setJob(organizationId, { running: false, finishedAt: new Date(), progress: '', message, error: failed.join(' | ') })
+  }
+
+  job().catch(async (err) => {
+    console.error('[flowlu] ticket sync failed:', err.message)
+    await setJob(organizationId, { running: false, finishedAt: new Date(), progress: '', error: err.message }).catch(() => {})
+  })
+  return { started: true, message: `Ticket sync started for ${targets.length} project${targets.length === 1 ? '' : 's'}` }
+}
+
+// POST /api/flowlu/sync/tickets — start a background sync of the selected projects
 router.post('/sync/tickets', auth, requireAdmin, async (req, res) => {
-  const organizationId = orgObjectId(req.user)
   try {
-    const selected = projectsToSync(await FlowluSync.findOne({ organizationId }).lean())
-    const agileIds = selected.filter((p) => p.source === 'agile').map((p) => p.flowluId)
-    const taskProjectIds = selected.filter((p) => p.source === 'task').map((p) => p.flowluId)
-    if (!selected.length) {
-      return res.status(400).json({ success: false, message: 'No projects selected. Choose projects to sync first.' })
-    }
-
-    const results = []
-    const stages = []
-    for (const id of agileIds) {
-      const result = await fetchAgileTickets(id)
-      results.push(result)
-      stages.push(...result.stages)
-    }
-    if (taskProjectIds.length) {
-      const taskStages = await flowluList('task/stages/list')
-      const taskStageName = new Map(taskStages.map((s) => [Number(s.id), s.name]))
-      stages.push(...taskStages.map((s) => stageRow('task', s)))
-      for (const id of taskProjectIds) results.push(await fetchProjectTasks(id, taskStageName))
-    }
-
-    const now = new Date()
-    const tickets = results.flatMap((r) => r.tickets)
-    if (tickets.length) {
-      await FlowluTicket.bulkWrite(tickets.map((ticket) => ({
-        updateOne: {
-          filter: { organizationId, source: ticket.source, flowluId: ticket.flowluId },
-          update: { $set: { ...ticket, organizationId, syncedAt: now } },
-          upsert: true,
-        },
-      })))
-    }
-    const removed = await FlowluTicket.deleteMany({ organizationId, syncedAt: { $lt: now } })
-
-    await syncState(organizationId)
-    await FlowluSync.updateOne(
-      { organizationId },
-      { $set: { projects: results.map((r) => r.project), stages, ticketsSyncedAt: now, lastError: '' } },
-    )
-    const agileCount = tickets.filter((t) => t.source === 'agile').length
-    res.json({
-      success: true,
-      message: `${agileCount} issues and ${tickets.length - agileCount} tasks synced from ${results.length} project${results.length === 1 ? '' : 's'}${removed.deletedCount ? ` · ${removed.deletedCount} removed` : ''}`,
-      data: { issues: agileCount, tasks: tickets.length - agileCount, removed: removed.deletedCount },
-    })
+    const result = await runTicketSync(orgObjectId(req.user), { reason: `manual · ${personName(req.user, req.user.email)}` })
+    res.status(result.started ? 202 : 409).json({ success: result.started, message: result.message })
   } catch (err) {
-    await recordError(organizationId, err)
-    res.status(502).json({ success: false, message: err.message || 'Ticket sync failed' })
+    res.status(500).json({ success: false, message: err.message || 'Could not start ticket sync' })
   }
 })
 
@@ -526,6 +596,7 @@ router.get('/tickets', auth, requireAdmin, async (req, res) => {
           flowluId: t.flowluId,
           key: t.key,
           name: t.name,
+          projectId: t.projectId,
           projectName: t.projectName,
           sprintName: t.sprintName,
           stageName: t.stageName,
@@ -748,4 +819,142 @@ router.put('/tickets/:source/:flowluId/stage', auth, async (req, res) => {
   }
 })
 
-module.exports = { router, resolveTicketEntries, pushTimesheetToFlowlu }
+/* ---------- Scheduled pull and Flowlu webhooks ---------- */
+
+const AUTO_SYNC_MINUTES = Number(process.env.FLOWLU_SYNC_INTERVAL_MINUTES) || 30
+const WORK_HOURS = ['08:00', '21:00']
+const BEFORE_MORNING_MINUTES = 20
+
+// Runs on the scheduler server by default; FLOWLU_AUTO_SYNC=true/false overrides
+function autoSyncEnabled() {
+  const flag = process.env.FLOWLU_AUTO_SYNC
+  return flag ? flag === 'true' : process.env.GOOGLE_CHAT_SCHEDULER === 'true'
+}
+
+function istMinutes(at = new Date()) {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .format(at)
+    .split(':')
+    .map(Number)
+  return h * 60 + m
+}
+
+const toMinutes = (hhmm) => {
+  const [h, m] = String(hhmm).split(':').map(Number)
+  return h * 60 + m
+}
+
+async function syncOrgNow(organizationId, reason) {
+  await syncUsersFor(organizationId).catch((err) => recordError(organizationId, err))
+  return runTicketSync(organizationId, { reason })
+}
+
+let autoTicking = false
+
+async function autoSyncTick() {
+  if (autoTicking || !isFlowluConfigured()) return
+  autoTicking = true
+  try {
+    const now = istMinutes()
+    const states = await FlowluSync.find({ $or: [{ projectsChosenAt: { $ne: null } }, { 'projects.0': { $exists: true } }] }).lean()
+    for (const st of states) {
+      if (st.ticketJob?.running) continue
+      const lastAttempt = Math.max(new Date(st.ticketsSyncedAt || 0).getTime(), new Date(st.ticketJob?.startedAt || 0).getTime())
+      const age = Date.now() - lastAttempt
+      const bot = await ChatBotSettings.findOne({ organizationId: st.organizationId }).select('enabled morningTime').lean()
+      const morning = bot?.enabled && bot.morningTime ? toMinutes(bot.morningTime) : null
+      const beforeMorning = morning != null && now >= morning - BEFORE_MORNING_MINUTES && now < morning
+        && age > BEFORE_MORNING_MINUTES * 60_000
+      const inHours = now >= toMinutes(WORK_HOURS[0]) && now <= toMinutes(WORK_HOURS[1])
+      if (beforeMorning || (inHours && age >= AUTO_SYNC_MINUTES * 60_000)) {
+        const result = await syncOrgNow(st.organizationId, beforeMorning ? 'before morning plan' : 'scheduled')
+        console.log(`[flowlu] auto-sync: ${result.message}`)
+      }
+    }
+  } catch (err) {
+    console.error('[flowlu] auto-sync tick failed:', err.message)
+  } finally {
+    autoTicking = false
+  }
+}
+
+function startFlowluAutoSync() {
+  if (!autoSyncEnabled()) return false
+  setInterval(autoSyncTick, 60_000)
+  console.log(`🔄 BMS auto-sync on (every ${AUTO_SYNC_MINUTES} min, ${WORK_HOURS[0]}–${WORK_HOURS[1]} IST, and before the morning plan)`)
+  return true
+}
+
+/** Find which project a Flowlu webhook payload is about (agile issue or project task), if it says. */
+function projectFromPayload(payload) {
+  const seen = new Set()
+  const stack = [payload]
+  while (stack.length) {
+    const node = stack.pop()
+    if (!node || typeof node !== 'object' || seen.has(node)) continue
+    seen.add(node)
+    const projectId = Number(node.project_id)
+    if (projectId && ('sprint_id' in node || 'workflow_stage_id' in node || 'number_label' in node || 'assignee_id' in node)) {
+      return { source: 'agile', flowluId: projectId }
+    }
+    if (node.module === 'st' && node.model === 'project' && Number(node.model_id)) {
+      return { source: 'task', flowluId: Number(node.model_id) }
+    }
+    // A task payload (it always carries module/model) that is not in a project: personal task or event
+    if ('responsible_id' in node && 'module' in node && 'model' in node) return { ignore: true }
+    Object.values(node).forEach((value) => stack.push(value))
+  }
+  return null
+}
+
+const pendingFullSync = new Map()
+
+function queueFullSync(organizationId) {
+  const key = String(organizationId)
+  if (pendingFullSync.has(key)) return
+  // Many webhooks arrive in bursts; one full sync a minute later covers them all
+  pendingFullSync.set(key, setTimeout(() => {
+    pendingFullSync.delete(key)
+    runTicketSync(organizationId, { reason: 'webhook' }).catch(() => {})
+  }, 60_000))
+}
+
+async function handleWebhook(payload) {
+  const found = projectFromPayload(payload)
+  const states = await FlowluSync.find({}).lean()
+  if (found?.ignore) {
+    await FlowluSync.updateMany({}, { $set: { lastWebhook: { at: new Date(), summary: 'task outside a project, ignored' } } })
+    return
+  }
+  const ref = found
+  for (const st of states) {
+    const selected = projectsToSync(st)
+    const inScope = ref && selected.some((p) => p.source === ref.source && p.flowluId === ref.flowluId)
+    let summary
+    if (ref && !inScope) {
+      summary = `${ref.source} project ${ref.flowluId} is not selected, ignored`
+    } else if (ref) {
+      const result = await runTicketSync(st.organizationId, { reason: 'webhook', only: [ref] })
+      if (!result.started) queueFullSync(st.organizationId)
+      summary = result.started ? `re-synced ${ref.source} project ${ref.flowluId}` : 'sync busy, full sync queued'
+    } else {
+      queueFullSync(st.organizationId)
+      summary = 'project not in payload, full sync queued'
+    }
+    await FlowluSync.updateOne({ _id: st._id }, { $set: { lastWebhook: { at: new Date(), summary } } })
+  }
+}
+
+// POST /api/flowlu/webhook/:secret — Flowlu outgoing webhook (tasks / agile issues changed)
+router.post('/webhook/:secret', (req, res) => {
+  const secret = String(process.env.FLOWLU_WEBHOOK_SECRET || '').trim()
+  const given = Buffer.from(String(req.params.secret || ''))
+  const valid = secret && given.length === Buffer.byteLength(secret)
+    && crypto.timingSafeEqual(given, Buffer.from(secret))
+  if (!valid) return res.status(401).json({ success: false })
+  // Answer at once; Flowlu does not wait for a sync
+  res.json({ success: true })
+  handleWebhook(req.body || {}).catch((err) => console.error('[flowlu] webhook failed:', err.message))
+})
+
+module.exports = { router, resolveTicketEntries, pushTimesheetToFlowlu, startFlowluAutoSync }

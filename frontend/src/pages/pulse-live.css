@@ -2535,3 +2535,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+.pulse-bms-sync-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pulse-muted);
+}
+
+.pulse-bms-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.pulse-bms-project-filter.ant-select {
+  min-width: 260px;
+}

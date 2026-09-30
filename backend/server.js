@@ -36,7 +36,7 @@ const candidateRoutes = require('./routes/candidates');
 const pulsePerformanceRoutes = require('./routes/pulsePerformance');
 const { router: pulsePayrollRoutes } = require('./routes/pulsePayroll');
 const { router: pulseFilesRoutes } = require('./routes/pulseFiles');
-const { router: flowluRoutes } = require('./routes/flowlu');
+const { router: flowluRoutes, startFlowluAutoSync } = require('./routes/flowlu');
 const { router: chatBotRoutes, startChatBotScheduler } = require('./routes/chatBot');
 
 const app = express();
@@ -309,6 +309,7 @@ if (!process.env.VERCEL) {
   console.log('⏰ Local shift-check cron scheduled (every 1 hour)');
   console.log('🕖 Office closing cron scheduled (every 5 minutes - fires at 7:00 PM & 7:30 PM IST)');
   startChatBotScheduler();
+  startFlowluAutoSync();
 }
 
 // Eagerly establish the Mongo connection on cold start so the first

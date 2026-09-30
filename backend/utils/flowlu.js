@@ -76,7 +76,8 @@ async function flowluList(path, filter = {}) {
   const query = Object.fromEntries(Object.entries(filter).map(([key, value]) => [`filter[${key}]`, value]))
   const items = []
   for (let page = 1; page <= 200; page += 1) {
-    const res = await flowluRequest(path, { query: { ...query, page } })
+    // 100 is Flowlu's maximum page size; the default is 50
+    const res = await flowluRequest(path, { query: { ...query, page, limit: 100 } })
     const batch = res?.items || []
     items.push(...batch)
     if (!batch.length || items.length >= Number(res?.total || 0)) break
