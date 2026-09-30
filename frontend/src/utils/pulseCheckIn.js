@@ -839,19 +839,8 @@ export function startCheckInHeartbeat(getEmail) {
   // Recover if a prior build (or missed reload guard) checked out on refresh.
   resumeCheckInAfterReloadIfNeeded(emailOf())
 
-  let hiddenAt = 0
-  const LOCK_AWAY_MS = 8_000
-
   const onShow = () => {
-    const email = emailOf()
-    // Mac lock freezes JS — on unlock, hidden duration is the reliable signal.
-    if (email && hiddenAt && Date.now() - hiddenAt >= LOCK_AWAY_MS && readCheckInAt(email)) {
-      hiddenAt = 0
-      stopCheckIn(email, { reason: 'sleep' })
-      return
-    }
-    hiddenAt = 0
-    resumeCheckInAfterReloadIfNeeded(email)
+    resumeCheckInAfterReloadIfNeeded(emailOf())
     clearExpectReload()
     pulse({ broadcast: true, syncDesktop: true, forceSync: true })
   }
@@ -861,12 +850,8 @@ export function startCheckInHeartbeat(getEmail) {
   const id = window.setInterval(() => pulse(), 15_000)
 
   const onVisibility = () => {
-    if (document.visibilityState === 'hidden') {
-      hiddenAt = Date.now()
-      onHide()
-    } else {
-      onShow()
-    }
+    if (document.visibilityState === 'hidden') onHide()
+    else onShow()
   }
 
   window.addEventListener('online', onShow)
