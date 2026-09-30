@@ -14,12 +14,12 @@ const CAKE = {
   bye: '/pulse-checkin-buddy-bye-cake.png',
 }
 
-function buddyLine(mode, hour = new Date().getHours(), { birthday = false, name = '' } = {}) {
+function buddyLine(mode, hour = new Date().getHours(), { birthday = false } = {}) {
   if (birthday) {
     if (mode === 'bye') {
-      return { title: `Happy birthday, ${name || 'you'}`, note: 'Party hard' }
+      return { title: 'Happy birthday', note: 'Party hard' }
     }
-    return { title: `Happy birthday, ${name || 'you'}`, note: 'Take a light day' }
+    return { title: 'Happy birthday', note: 'Take a light day' }
   }
   const period = periodForHour(hour)
   if (mode === 'bye') {
@@ -74,9 +74,10 @@ function BirthdayCap() {
   )
 }
 
-export default function PulseCheckinBuddy({ checkedIn, gesture = 0, birthday = false, name = '' }) {
+export default function PulseCheckinBuddy({ checkedIn, gesture = 0, birthday = false }) {
   const wasIn = useRef(false)
   const gestureSeen = useRef(gesture)
+  const playedEnter = useRef(false)
   const [mode, setMode] = useState('hidden')
   const [sayOpen, setSayOpen] = useState(false)
   const [hour] = useState(() => new Date().getHours())
@@ -86,9 +87,11 @@ export default function PulseCheckinBuddy({ checkedIn, gesture = 0, birthday = f
     if (gestured) gestureSeen.current = gesture
 
     if (checkedIn) {
-      const arrived = !wasIn.current
       wasIn.current = true
-      if (arrived && gestured) {
+      // Walk in on the check-in gesture even if checkedIn landed a tick earlier
+      // (startCheckIn event before setCheckGesture used to skip enter).
+      if (gestured && !playedEnter.current) {
+        playedEnter.current = true
         setSayOpen(true)
         setMode('enter')
         const toWork = window.setTimeout(() => setMode('work'), 1100)
@@ -109,6 +112,7 @@ export default function PulseCheckinBuddy({ checkedIn, gesture = 0, birthday = f
       return undefined
     }
     wasIn.current = false
+    playedEnter.current = false
     if (!gestured) {
       setMode('hidden')
       setSayOpen(false)
@@ -125,7 +129,7 @@ export default function PulseCheckinBuddy({ checkedIn, gesture = 0, birthday = f
 
   if (mode === 'hidden') return null
 
-  const line = buddyLine(mode, hour, { birthday, name })
+  const line = buddyLine(mode, hour, { birthday })
 
   return (
     <div className={`pulse-checkin-buddy is-${mode}${birthday ? ' is-birthday' : ''}${sayOpen ? ' has-say' : ' say-out'}`} aria-hidden="true">
