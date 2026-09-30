@@ -4,6 +4,8 @@ import {
   pulseDayKey,
   readCheckInAt,
   readCheckInActiveEmail,
+  readCheckInSession,
+  stampCheckInBeforeHide,
   stopCheckIn,
 } from './pulseCheckIn'
 import { broadcastPulseLogout } from './pulseAuthSync'
@@ -152,10 +154,15 @@ export function acknowledgePulseLogin() {
 
 /**
  * pagehide/beforeunload cannot tell reload from tab-close by themselves.
- * Always mark a pending exit; on the next boot we keep the session only for a real reload.
+ * Mark a pending exit only for a real unload — not bfcache / soft hide
+ * (Chrome Memory Saver + laptop sleep often fire pagehide with persisted=true,
+ * which used to look like “logged out after a few minutes idle”).
+ * @param {{ persisted?: boolean } | null} [event]
  */
-export function markPulseUnloadPending() {
+export function markPulseUnloadPending(event = null) {
   try {
+    // Entering back-forward cache — tab is still open; do not sign out on resume.
+    if (event && event.persisted) return
     localStorage.setItem(EXIT_FLAG, String(Date.now()))
     clearSessionAlive()
   } catch {
@@ -173,6 +180,14 @@ export function cancelPulseUnloadPending() {
   }
   touchSessionAlive()
   ensureTabSession()
+}
+
+function wasTabDiscardedByBrowser() {
+  try {
+    return typeof document !== 'undefined' && document.wasDiscarded === true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -198,20 +213,26 @@ export function consumePulseUnloadExit() {
       return false
     }
 
-    // Closed tab / Ctrl+Shift+T after close (flag survives; sessionStorage may return).
+    // Chrome Memory Saver / discarded background tab — keep the session.
+    // pagehide still ran (and may have set EXIT_FLAG), but this is idle discard,
+    // not an intentional close.
+    if (wasTabDiscardedByBrowser()) {
+      localStorage.removeItem(EXIT_FLAG)
+      ensureTabSession()
+      touchSessionAlive()
+      return false
+    }
+
+    // Closed tab (hard pagehide sets EXIT_FLAG). Soft idle discard / bfcache
+    // are filtered above and in markPulseUnloadPending(persisted).
     if (hasPendingExit()) {
       localStorage.removeItem(EXIT_FLAG)
       return true
     }
 
-    // Tab killed with no unload: brand-new tab has empty sessionStorage + stale heartbeat.
-    // Do NOT use stale-alone when sessionStorage was restored (Ctrl+Shift+T) without a flag —
-    // that path is covered by EXIT_FLAG when pagehide ran. Stale-alone was signing users
-    // out immediately after a successful login.
-    if (!hasTabSession() && isAliveStale()) {
-      return true
-    }
-
+    // Do not sign out on “stale heartbeat + new tab” alone — Chrome Memory Saver
+    // and laptop sleep clear sessionStorage / pause timers and looked like a kill.
+    // Intentional close is covered by EXIT_FLAG from non-persisted pagehide.
     ensureTabSession()
     touchSessionAlive()
     return false
@@ -221,23 +242,19 @@ export function consumePulseUnloadExit() {
 }
 
 /**
- * bfcache / Ctrl+Shift+T can revive a closed tab without remounting React.
- * Only honor an explicit close flag — never “alive stale” alone (breaks login).
+ * bfcache restore after idle is not a tab close — keep the session.
+ * (Older builds set EXIT_FLAG on persisted pagehide; clear it instead of logging out.)
  */
 export function handlePulseBfcacheRestore() {
   if (typeof window === 'undefined') return false
-  if (isBrowserReload()) return false
-  const token = localStorage.getItem('token')
-  if (!token) return false
-  if (!hasPendingExit()) return false
-
-  forcePulseExit({ reason: 'tab-restore' })
   try {
-    window.location.replace('/login')
+    localStorage.removeItem(EXIT_FLAG)
+    touchSessionAlive()
+    ensureTabSession()
   } catch {
     /* ignore */
   }
-  return true
+  return false
 }
 
 /** Keep multi-tab sessions alive: a live tab clears another tab's close flag. */
@@ -337,15 +354,19 @@ export function forcePulseCheckOutOnly({ email: emailHint, reason = 'sleep' } = 
   if (!token) return false
 
   const email =
-    String(emailHint || '').toLowerCase()
+    readCheckInActiveEmail()
+    || String(emailHint || '').toLowerCase().trim()
     || emailFromToken(token)
-    || readCheckInActiveEmail()
     || null
 
   const wasCheckedIn = Boolean(email && readCheckInAt(email))
   if (!wasCheckedIn || !email) return false
 
-  const activeMs = Math.max(0, getElapsedSeconds(email) * 1000)
+  const current = readCheckInSession(email)
+  const autoOut = reason === 'sleep' || reason === 'shutdown'
+  const activeMs = autoOut
+    ? Math.max(0, Number(current?.activeMs) || 0)
+    : Math.max(0, getElapsedSeconds(email) * 1000)
   postCheckOutKeepalive({ token, email, activeMs })
 
   try {
@@ -359,60 +380,188 @@ export function forcePulseCheckOutOnly({ email: emailHint, reason = 'sleep' } = 
 }
 
 let screenLockStop = null
+let screenLockEmail = null
+let lastIdlePermission = null
+
+/** Hidden this long ⇒ treat as lock / sleep on resume (JS was frozen or user away). */
+const LOCK_AWAY_MS = 8_000
+
+/** @returns {'granted'|'denied'|'prompt'|'unsupported'|null} */
+export function getIdleDetectionPermission() {
+  return lastIdlePermission
+}
+
+/**
+ * Request Idle Detection while we still have a user gesture (check-in click).
+ * @returns {Promise<'granted'|'denied'|'unsupported'>}
+ */
+export async function requestIdleDetectionPermission() {
+  if (typeof window === 'undefined' || !('IdleDetector' in window)) {
+    lastIdlePermission = 'unsupported'
+    return 'unsupported'
+  }
+  try {
+    const request = window.IdleDetector.requestPermission
+    const permission = request ? await request() : 'granted'
+    lastIdlePermission = permission === 'granted' ? 'granted' : 'denied'
+    return lastIdlePermission
+  } catch {
+    lastIdlePermission = 'denied'
+    return 'denied'
+  }
+}
 
 /** Stop an active screen-lock watcher. */
 export function stopScreenLockCheckOutWatch() {
   if (typeof screenLockStop === 'function') {
     screenLockStop()
-    screenLockStop = null
   }
+  screenLockStop = null
+  screenLockEmail = null
 }
 
 /**
- * Watch Mac/Chrome screen lock via IdleDetector and check out immediately.
- * Call from check-in (user gesture) so permission can be granted.
+ * Watch Mac screen lock / sleep and check out.
+ *
+ * Chrome freezes JS while the lock screen is up, so timers cannot fire during
+ * the lock. Reliable path: stamp time on hide, then check out on resume if the
+ * page was hidden ≥ LOCK_AWAY_MS (covers lock + sleep). IdleDetector + desktop
+ * companion still try to check out earlier when they can.
  */
 export function startScreenLockCheckOutWatch(email) {
+  const next = String(email || '').toLowerCase().trim()
+  if (typeof window === 'undefined' || !next) return () => {}
+
+  if (screenLockStop && screenLockEmail === next) return screenLockStop
+
   stopScreenLockCheckOutWatch()
-  if (typeof window === 'undefined' || !email) return () => {}
-  if (!('IdleDetector' in window)) return () => {}
+  screenLockEmail = next
 
   let stopped = false
   const ac = new AbortController()
   let pollId = 0
+  let desktopPollId = 0
+  let hiddenAt = 0
+  /** @type {{ screenState?: string } | null} */
+  let detector = null
 
   const checkOut = () => {
     if (stopped) return
-    if (!readCheckInAt(email)) return
-    forcePulseCheckOutOnly({ email, reason: 'sleep' })
+    const active = readCheckInActiveEmail() || next
+    if (!readCheckInAt(active)) return
+    hiddenAt = 0
+    forcePulseCheckOutOnly({ email: active, reason: 'sleep' })
   }
 
-  const run = async () => {
+  const maybeCheckOutFromDetector = () => {
+    if (stopped || !detector) return
     try {
-      const request = window.IdleDetector.requestPermission
-      const permission = request ? await request() : 'granted'
-      if (stopped || permission !== 'granted') return
-
-      const detector = new window.IdleDetector()
-      const onChange = () => {
-        if (detector.screenState === 'locked') checkOut()
-      }
-      detector.addEventListener('change', onChange)
-      await detector.start({ threshold: 60_000, signal: ac.signal })
-      if (stopped) return
-      onChange()
-      // Some Chromium builds are late to fire `change` on lock — poll while checked in.
-      pollId = window.setInterval(onChange, 2000)
+      if (detector.screenState === 'locked') checkOut()
     } catch {
-      /* unsupported / denied */
+      /* ignore */
     }
   }
-  void run()
+
+  const pollDesktopLock = async () => {
+    if (stopped) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), 800)
+    try {
+      const res = await fetch('http://127.0.0.1:39217/state', {
+        method: 'GET',
+        signal: controller.signal,
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.pendingLockCheckout) {
+        checkOut()
+        try {
+          await fetch('http://127.0.0.1:39217/ack-lock-checkout', { method: 'POST' })
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* companion not running */
+    } finally {
+      window.clearTimeout(timer)
+    }
+  }
+
+  const onVisibility = () => {
+    if (stopped) return
+    const active = readCheckInActiveEmail() || next
+
+    if (document.visibilityState === 'hidden') {
+      // Freeze the credited total at this moment (before lock freezes JS).
+      if (readCheckInAt(active)) stampCheckInBeforeHide(active)
+      hiddenAt = Date.now()
+      maybeCheckOutFromDetector()
+      void pollDesktopLock()
+      return
+    }
+
+    // Resume after lock/sleep: page was hidden long enough that we treat it as away.
+    const awayMs = hiddenAt ? Date.now() - hiddenAt : 0
+    hiddenAt = 0
+    maybeCheckOutFromDetector()
+    void pollDesktopLock()
+    if (awayMs >= LOCK_AWAY_MS && readCheckInAt(active)) {
+      checkOut()
+    }
+  }
+
+  const onFreeze = () => {
+    const active = readCheckInActiveEmail() || next
+    if (readCheckInAt(active)) stampCheckInBeforeHide(active)
+    checkOut()
+  }
+
+  const startIdleDetector = async () => {
+    if (!('IdleDetector' in window)) {
+      lastIdlePermission = 'unsupported'
+      return
+    }
+    try {
+      if (lastIdlePermission !== 'granted') {
+        const permission = await requestIdleDetectionPermission()
+        if (stopped || permission !== 'granted') return
+      }
+
+      detector = new window.IdleDetector()
+      detector.addEventListener('change', maybeCheckOutFromDetector)
+      await detector.start({ threshold: 60_000, signal: ac.signal })
+      if (stopped) return
+      maybeCheckOutFromDetector()
+      pollId = window.setInterval(maybeCheckOutFromDetector, 2000)
+    } catch {
+      lastIdlePermission = lastIdlePermission || 'denied'
+      detector = null
+    }
+  }
+
+  document.addEventListener('visibilitychange', onVisibility)
+  document.addEventListener('freeze', onFreeze)
+  const onFocus = () => {
+    if (document.visibilityState === 'visible') onVisibility()
+  }
+  window.addEventListener('focus', onFocus)
+
+  void startIdleDetector()
+  desktopPollId = window.setInterval(() => {
+    void pollDesktopLock()
+  }, 1000)
+  void pollDesktopLock()
 
   screenLockStop = () => {
     stopped = true
     ac.abort()
     if (pollId) window.clearInterval(pollId)
+    if (desktopPollId) window.clearInterval(desktopPollId)
+    document.removeEventListener('visibilitychange', onVisibility)
+    document.removeEventListener('freeze', onFreeze)
+    window.removeEventListener('focus', onFocus)
+    detector = null
   }
   return screenLockStop
 }

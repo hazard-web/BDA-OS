@@ -20,6 +20,7 @@ let state = {
   checkedInAt: null,
   activeMs: 0,
   lastTickAt: null,
+  pendingLockCheckout: false,
 }
 
 /** @type {ReturnType<typeof setInterval> | null} */
@@ -288,12 +289,13 @@ function applyCheckIn(payload) {
       // Trust browser session mapping — live elapsed, not a hardcoded clock.
       activeMs: incomingActive,
       lastTickAt: incomingLast,
+      pendingLockCheckout: false,
     }
     reconcileState(now)
     showTimer()
     return true
   }
-  state = { email: null, checkedInAt: null, activeMs: 0, lastTickAt: null }
+  state = { email: null, checkedInAt: null, activeMs: 0, lastTickAt: null, pendingLockCheckout: false }
   hideTimer()
   sendState()
   return true
@@ -362,6 +364,12 @@ function startBridge() {
 
       if (req.method === 'POST' && url.pathname === '/checkout') {
         applyCheckIn({ email: null, checkedInAt: null })
+        sendJson(res, 200, { ok: true })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/ack-lock-checkout') {
+        state = { ...state, pendingLockCheckout: false }
         sendJson(res, 200, { ok: true })
         return
       }
@@ -440,7 +448,17 @@ app.whenReady().then(() => {
 
   try {
     powerMonitor.on('suspend', () => {
-      if (state.checkedInAt) reconcileState()
+      if (state.checkedInAt) {
+        reconcileState()
+        state = { ...state, pendingLockCheckout: true }
+      }
+    })
+    powerMonitor.on('lock-screen', () => {
+      if (!state.checkedInAt) return
+      reconcileState()
+      // Browser polls /state and checks out the live timer.
+      state = { ...state, pendingLockCheckout: true }
+      hideTimer()
     })
     powerMonitor.on('resume', () => {
       if (!state.checkedInAt) return
@@ -455,7 +473,10 @@ app.whenReady().then(() => {
       sendState()
     })
     powerMonitor.on('shutdown', () => {
-      if (state.checkedInAt) reconcileState()
+      if (state.checkedInAt) {
+        reconcileState()
+        state = { ...state, pendingLockCheckout: true }
+      }
     })
   } catch {
     /* older Electron */
