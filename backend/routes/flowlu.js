@@ -596,6 +596,7 @@ router.get('/tickets', auth, requireAdmin, async (req, res) => {
           flowluId: t.flowluId,
           key: t.key,
           name: t.name,
+          projectId: t.projectId,
           projectName: t.projectName,
           sprintName: t.sprintName,
           stageName: t.stageName,
@@ -899,6 +900,8 @@ function projectFromPayload(payload) {
     if (node.module === 'st' && node.model === 'project' && Number(node.model_id)) {
       return { source: 'task', flowluId: Number(node.model_id) }
     }
+    // A task payload (it always carries module/model) that is not in a project: personal task or event
+    if ('responsible_id' in node && 'module' in node && 'model' in node) return { ignore: true }
     Object.values(node).forEach((value) => stack.push(value))
   }
   return null
@@ -917,8 +920,13 @@ function queueFullSync(organizationId) {
 }
 
 async function handleWebhook(payload) {
-  const ref = projectFromPayload(payload)
+  const found = projectFromPayload(payload)
   const states = await FlowluSync.find({}).lean()
+  if (found?.ignore) {
+    await FlowluSync.updateMany({}, { $set: { lastWebhook: { at: new Date(), summary: 'task outside a project, ignored' } } })
+    return
+  }
+  const ref = found
   for (const st of states) {
     const selected = projectsToSync(st)
     const inScope = ref && selected.some((p) => p.source === ref.source && p.flowluId === ref.flowluId)

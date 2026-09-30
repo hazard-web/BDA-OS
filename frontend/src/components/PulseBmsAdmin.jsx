@@ -163,6 +163,7 @@ export default function PulseBmsAdmin() {
   const [members, setMembers] = useState([])
   const [flowluUsers, setFlowluUsers] = useState([])
   const [tickets, setTickets] = useState([])
+  const [ticketProject, setTicketProject] = useState('all')
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -343,6 +344,26 @@ export default function PulseBmsAdmin() {
     },
   ]
 
+  const projectKey = (t) => `${t.source}:${t.projectId}`
+
+  const projectFilterOptions = useMemo(() => {
+    const byProject = new Map()
+    tickets.forEach((t) => {
+      const key = projectKey(t)
+      const row = byProject.get(key) || { value: key, name: t.projectName || 'Untitled project', source: t.source, count: 0 }
+      row.count += 1
+      byProject.set(key, row)
+    })
+    return [
+      { value: 'all', label: `All projects · ${tickets.length}` },
+      ...[...byProject.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((p) => ({ value: p.value, label: `${p.name} (${p.source === 'agile' ? 'Agile' : 'Projects'}) · ${p.count}` })),
+    ]
+  }, [tickets])
+
+  const visibleTickets = ticketProject === 'all' ? tickets : tickets.filter((t) => projectKey(t) === ticketProject)
+
   const ticketColumns = [
     { title: 'Key', dataIndex: 'key', width: 90, render: (key, t) => <Tag color={t.source === 'agile' ? 'purple' : 'cyan'}>{key}</Tag> },
     { title: 'Title', dataIndex: 'name', ellipsis: true },
@@ -488,6 +509,18 @@ export default function PulseBmsAdmin() {
                   { value: 'tickets', label: `Tickets (${tickets.length})` },
                 ]}
               />
+              {view === 'tickets' ? (
+                <Select
+                  showSearch
+                  className="pulse-bms-project-filter"
+                  value={projectFilterOptions.some((o) => o.value === ticketProject) ? ticketProject : 'all'}
+                  options={projectFilterOptions}
+                  optionFilterProp="label"
+                  popupMatchSelectWidth={false}
+                  onChange={setTicketProject}
+                  aria-label="Filter tickets by project"
+                />
+              ) : null}
             </div>
 
             <div className="pulse-apps-table-wrap">
@@ -523,7 +556,7 @@ export default function PulseBmsAdmin() {
                   loading={loading}
                   pagination={{ pageSize: 25, hideOnSinglePage: true }}
                   columns={ticketColumns}
-                  dataSource={tickets}
+                  dataSource={visibleTickets}
                   locale={{
                     emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No tickets yet. Run “Sync tickets”." />,
                   }}
