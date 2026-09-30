@@ -834,11 +834,11 @@ export default function PeopleHome() {
           return
         }
         const resuming = baseActiveMs > 0
-        const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
-        // User gesture → request IdleDetector so Mac screen lock can check out.
-        const idlePermission = await requestIdleDetectionPermission()
-        startScreenLockCheckOutWatch(user.email)
+        // Gesture before startCheckIn so the buddy walk-in sees arrived+gestured
+        // together. startCheckIn fires PULSE_CHECKIN_EVENT which sets checkedInAt;
+        // awaiting IdleDetector first used to skip the left-enter animation.
         setCheckGesture((n) => n + 1)
+        const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
         setCheckedInAt(session?.checkedInAt || Date.now())
         const secs = getElapsedSeconds(user.email)
         setElapsed(secs)
@@ -847,6 +847,9 @@ export default function PeopleHome() {
           resuming ? formatElapsed(secs) : format(new Date(), 'h:mm a'),
           { duration: 2000 },
         )
+        // User gesture → request IdleDetector so Mac screen lock can check out.
+        const idlePermission = await requestIdleDetectionPermission()
+        startScreenLockCheckOutWatch(user.email)
         if (idlePermission === 'denied') {
           pulseToast.info(
             'Lock-screen check-out',

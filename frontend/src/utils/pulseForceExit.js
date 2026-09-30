@@ -383,9 +383,6 @@ let screenLockStop = null
 let screenLockEmail = null
 let lastIdlePermission = null
 
-/** Hidden this long ⇒ treat as lock / sleep on resume (JS was frozen or user away). */
-const LOCK_AWAY_MS = 8_000
-
 /** @returns {'granted'|'denied'|'prompt'|'unsupported'|null} */
 export function getIdleDetectionPermission() {
   return lastIdlePermission
@@ -423,10 +420,10 @@ export function stopScreenLockCheckOutWatch() {
 /**
  * Watch Mac screen lock / sleep and check out.
  *
- * Chrome freezes JS while the lock screen is up, so timers cannot fire during
- * the lock. Reliable path: stamp time on hide, then check out on resume if the
- * page was hidden ≥ LOCK_AWAY_MS (covers lock + sleep). IdleDetector + desktop
- * companion still try to check out earlier when they can.
+ * Switching tabs or other sites must NOT check out — only real lock/sleep:
+ *  1. IdleDetector screenState === 'locked' (needs Idle detection permission)
+ *  2. Desktop companion powerMonitor lock-screen
+ *  3. Page Lifecycle `freeze` (system sleep)
  */
 export function startScreenLockCheckOutWatch(email) {
   const next = String(email || '').toLowerCase().trim()
@@ -441,7 +438,6 @@ export function startScreenLockCheckOutWatch(email) {
   const ac = new AbortController()
   let pollId = 0
   let desktopPollId = 0
-  let hiddenAt = 0
   /** @type {{ screenState?: string } | null} */
   let detector = null
 
@@ -449,7 +445,6 @@ export function startScreenLockCheckOutWatch(email) {
     if (stopped) return
     const active = readCheckInActiveEmail() || next
     if (!readCheckInAt(active)) return
-    hiddenAt = 0
     forcePulseCheckOutOnly({ email: active, reason: 'sleep' })
   }
 
@@ -490,25 +485,10 @@ export function startScreenLockCheckOutWatch(email) {
 
   const onVisibility = () => {
     if (stopped) return
-    const active = readCheckInActiveEmail() || next
-
-    if (document.visibilityState === 'hidden') {
-      // Freeze the credited total at this moment (before lock freezes JS).
-      if (readCheckInAt(active)) stampCheckInBeforeHide(active)
-      hiddenAt = Date.now()
-      maybeCheckOutFromDetector()
-      void pollDesktopLock()
-      return
-    }
-
-    // Resume after lock/sleep: page was hidden long enough that we treat it as away.
-    const awayMs = hiddenAt ? Date.now() - hiddenAt : 0
-    hiddenAt = 0
+    // Tab/app switch also hides the page — never check out from hide/show alone.
+    // Only probe lock signals (IdleDetector / desktop) when visibility changes.
     maybeCheckOutFromDetector()
     void pollDesktopLock()
-    if (awayMs >= LOCK_AWAY_MS && readCheckInAt(active)) {
-      checkOut()
-    }
   }
 
   const onFreeze = () => {
