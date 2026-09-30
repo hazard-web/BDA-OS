@@ -55,6 +55,7 @@ import {
   isFullDay,
   PULSE_CHECKIN_EVENT,
   readCheckInAt,
+  resumeCheckInAfterReloadIfNeeded,
   rolloverCheckInDayIfNeeded,
   startCheckIn,
   stopCheckIn,
@@ -65,6 +66,7 @@ import { prefetchPulseLocation } from '../utils/pulseLocation'
 import {
   startScreenLockCheckOutWatch,
   stopScreenLockCheckOutWatch,
+  requestIdleDetectionPermission,
 } from '../utils/pulseForceExit'
 import PulseUserAvatar from '../components/PulseUserAvatar'
 import './pulse-myspace.css'
@@ -301,7 +303,13 @@ function presenceRowKey(row) {
   return String(row?.email || row?.id || '').toLowerCase()
 }
 
-function presenceSeconds(row, now = Date.now()) {
+function presenceSeconds(row, now = Date.now(), selfEmail = '') {
+  const self = String(selfEmail || '').toLowerCase()
+  // Own row must match the live header timer — server sync can lag ~15–45s.
+  if (self && presenceRowKey(row) === self) {
+    const local = getElapsedSeconds(self)
+    if (local > 0 || readCheckInAt(self)) return local
+  }
   const base = Math.max(0, Number(row?.activeMs) || 0)
   if (!row?.live) return Math.floor(base / 1000)
   const asOf = row.asOf ? new Date(row.asOf).getTime() : now
@@ -309,15 +317,21 @@ function presenceSeconds(row, now = Date.now()) {
   return Math.floor((base + extra) / 1000)
 }
 
-function presenceTimeLabel(row, now) {
-  if (!row?.live && !(Number(row?.activeMs) > 0)) return '—'
-  const total = Math.max(0, presenceSeconds(row, now))
+function presenceTimeLabel(row, now, selfEmail = '') {
+  const isSelf = Boolean(selfEmail) && presenceRowKey(row) === String(selfEmail).toLowerCase()
+  // Only the signed-in user's live session can override an empty server total.
+  if (!row?.live && !(Number(row?.activeMs) > 0) && !(isSelf && readCheckInAt(selfEmail))) {
+    return '—'
+  }
+  const total = Math.max(0, presenceSeconds(row, now, selfEmail))
   const hours = Math.floor(total / 3600)
   const mins = Math.floor((total % 3600) / 60)
   if (hours > 0 && mins > 0) return `${hours} hr${hours === 1 ? '' : 's'} ${mins} min${mins === 1 ? '' : 's'}`
   if (hours > 0) return `${hours} hr${hours === 1 ? '' : 's'}`
   if (mins > 0) return `${mins} min${mins === 1 ? '' : 's'}`
-  return '0 mins'
+  // Still active but under a minute — show 0 mins only for a live session.
+  if (row?.live || (isSelf && readCheckInAt(selfEmail))) return '0 mins'
+  return '—'
 }
 
 /** Instant header counts while the check-in API sync (~1.4s) is still in flight. */
@@ -331,11 +345,14 @@ function applySelfPresence(board, selfEmail, detail) {
   const fromActive = active.find((row) => presenceRowKey(row) === email)
   const fromInactive = inactive.find((row) => presenceRowKey(row) === email)
   const self = fromActive || fromInactive
-  if (!self) return board
-
+  const localMs = Math.max(0, getElapsedSeconds(email) * 1000)
   const stamped = {
-    ...self,
-    activeMs: Math.max(0, Number(detail?.activeMs) || Number(self.activeMs) || 0),
+    ...(self || {
+      id: email,
+      email,
+      name: email.split('@')[0] || 'You',
+    }),
+    activeMs: Math.max(localMs, Number(detail?.activeMs) || Number(self?.activeMs) || 0),
     live: status === 'active',
     asOf: new Date().toISOString(),
   }
@@ -394,7 +411,7 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
     }
 
     load()
-    const timer = window.setInterval(load, 30_000)
+    const timer = window.setInterval(load, 10_000)
 
     const onCheckInChange = (event) => {
       const email = String(event?.detail?.email || '').toLowerCase()
@@ -402,12 +419,12 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
       if (self && email === self) {
         setBoard((prev) => applySelfPresence(prev, self, event.detail))
       }
-      // Remote sync is debounced ~1.4s — confirm from server after it lands.
+      // Remote sync is debounced — confirm from server after it lands.
       if (syncRefreshTimer) window.clearTimeout(syncRefreshTimer)
       syncRefreshTimer = window.setTimeout(() => {
         syncRefreshTimer = 0
         load()
-      }, 1800)
+      }, 1600)
     }
 
     const onVisible = () => {
@@ -444,7 +461,7 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
             {board.active.map((row) => (
               <li key={row.id}>
                 <span className="pulse-head-presence-name">{presenceName(row)}</span>
-                <time className="pulse-head-presence-time">{presenceTimeLabel(row, now)}</time>
+                <time className="pulse-head-presence-time">{presenceTimeLabel(row, now, selfEmail)}</time>
               </li>
             ))}
           </ul>
@@ -462,7 +479,7 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
             {board.inactive.map((row) => (
               <li key={row.id}>
                 <span className="pulse-head-presence-name">{presenceName(row)}</span>
-                <time className="pulse-head-presence-time">{presenceTimeLabel(row, now)}</time>
+                <time className="pulse-head-presence-time">{presenceTimeLabel(row, now, selfEmail)}</time>
               </li>
             ))}
           </ul>
@@ -748,6 +765,8 @@ export default function PeopleHome() {
       .then(() => hydrateCheckInFromServer(user.email))
       .finally(() => {
         if (!live) return
+        // Reload used to check out via pagehide — restore the live timer immediately.
+        resumeCheckInAfterReloadIfNeeded(user.email)
         setCheckedInAt(readCheckInAt(user.email))
         setElapsed(getElapsedSeconds(user.email))
       })
@@ -815,10 +834,11 @@ export default function PeopleHome() {
           return
         }
         const resuming = baseActiveMs > 0
-        const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
-        // User gesture → request IdleDetector so Mac screen lock can check out.
-        startScreenLockCheckOutWatch(user.email)
+        // Gesture before startCheckIn so the buddy walk-in sees arrived+gestured
+        // together. startCheckIn fires PULSE_CHECKIN_EVENT which sets checkedInAt;
+        // awaiting IdleDetector first used to skip the left-enter animation.
         setCheckGesture((n) => n + 1)
+        const session = startCheckIn(user.email, Date.now(), { baseActiveMs })
         setCheckedInAt(session?.checkedInAt || Date.now())
         const secs = getElapsedSeconds(user.email)
         setElapsed(secs)
@@ -827,6 +847,16 @@ export default function PeopleHome() {
           resuming ? formatElapsed(secs) : format(new Date(), 'h:mm a'),
           { duration: 2000 },
         )
+        // User gesture → request IdleDetector so Mac screen lock can check out.
+        const idlePermission = await requestIdleDetectionPermission()
+        startScreenLockCheckOutWatch(user.email)
+        if (idlePermission === 'denied') {
+          pulseToast.info(
+            'Lock-screen check-out',
+            'Allow Idle detection for this site in Chrome (Site settings) so locking the Mac checks you out',
+            { duration: 5000 },
+          )
+        }
       }
     } finally {
       // Release quickly so the next CTA is not blocked
@@ -1200,7 +1230,7 @@ export default function PeopleHome() {
             variant="pane"
             label={serviceGateLabel || bootView?.label || 'Opening BDA OS'}
           />
-          {!(showAccount || showTimesheet || showPerformance || showPayroll) ? (
+          {!(showAccount || showPerformance || showPayroll) ? (
           <div
             className={`pulse-sub${
               showOverview ||
@@ -1208,7 +1238,8 @@ export default function PeopleHome() {
               showCompanyShell ||
               showCalendar ||
               showLeave ||
-              showAttendance
+              showAttendance ||
+              showTimesheet
                 ? ' pulse-sub-overview'
                 : ''
             }`}
@@ -1218,6 +1249,8 @@ export default function PeopleHome() {
                 ? 'Company sections'
                 : showLeave || showAttendance
                   ? 'Leave & Attendance sections'
+                  : showTimesheet
+                    ? 'Timesheet'
                   : space === 'organization'
                     ? 'Company sections'
                     : 'You sections'
@@ -1256,6 +1289,12 @@ export default function PeopleHome() {
                       {item.label}
                     </button>
                   ))
+                : showTimesheet
+                ? (
+                    <button type="button" role="tab" aria-selected className="pulse-sub-tab is-on">
+                      Timesheet
+                    </button>
+                  )
                 : showLeave || showAttendance
                 ? LEAVE_SHELL_SUB_TABS.map((item) => {
                     const isLeave = item.key === 'leave'
@@ -1307,7 +1346,7 @@ export default function PeopleHome() {
                     </button>
                   )}
             </div>
-            {(showOverview) ? <div id="pulse-dash-sub-tools" className="pulse-sub-tools" /> : null}
+            {showOverview ? <div id="pulse-dash-sub-tools" className="pulse-sub-tools" /> : null}
           </div>
           ) : null}
 

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { isPulseAuxiliaryTab } from '../utils/pulseOpenPage'
-import { isCheckedIn } from '../utils/pulseCheckIn'
+import { isCheckedIn, PULSE_CHECKIN_EVENT } from '../utils/pulseCheckIn'
 import {
   cancelPulseUnloadPending,
   forcePulseCheckOutOnly,
@@ -14,12 +14,11 @@ import {
 } from '../utils/pulseForceExit'
 
 /**
- * Tab close / kill / Ctrl+Shift+T restore → check out + sign out
- * (reload must stay signed in).
+ * Tab close / kill → check out + sign out (reload must stay signed in).
  * System sleep / screen lock → check out only (session stays signed in).
  *
- * Pending tab-close exit is consumed in AuthProvider boot (before profile fetch).
- * bfcache restore is handled on pageshow so the timer cannot resume.
+ * Do not tear down the screen-lock watcher on route changes or loading flickers —
+ * restarting IdleDetector without a user gesture silently drops permission.
  */
 export default function PulseForceExitGuard() {
   const { user, loading } = useAuth()
@@ -32,7 +31,6 @@ export default function PulseForceExitGuard() {
     installPulseUnloadWatch()
   }, [])
 
-  // Heartbeat + unload markers whenever a token exists (main or service tabs).
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
     if (!localStorage.getItem('token')) return undefined
@@ -40,27 +38,25 @@ export default function PulseForceExitGuard() {
     startPulseSessionHeartbeat()
     cancelPulseUnloadPending()
 
-    const onUnload = () => {
-      markPulseUnloadPending()
+    const onPageHide = (event) => {
+      markPulseUnloadPending(event)
     }
 
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
-      if (localStorage.getItem('pulsePendingForceExit')) return
       cancelPulseUnloadPending()
     }
 
-    window.addEventListener('pagehide', onUnload)
-    window.addEventListener('beforeunload', onUnload)
+    window.addEventListener('pagehide', onPageHide)
     document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
-      window.removeEventListener('pagehide', onUnload)
-      window.removeEventListener('beforeunload', onUnload)
+      window.removeEventListener('pagehide', onPageHide)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [pathname, loading, email])
 
+  // Sleep freeze backup (screen-lock watcher also listens to freeze).
   useEffect(() => {
     if (!email || loading || auxiliary) return undefined
 
@@ -76,14 +72,37 @@ export default function PulseForceExitGuard() {
     const onFreeze = () => checkOutOnly()
     document.addEventListener('freeze', onFreeze)
 
-    // Resume lock watch if already checked in (permission may already be granted).
-    if (isCheckedIn(email)) startScreenLockCheckOutWatch(email)
-
     return () => {
-      stopScreenLockCheckOutWatch()
       document.removeEventListener('freeze', onFreeze)
     }
   }, [email, pathname, loading, auxiliary])
+
+  // Screen-lock watcher — start on check-in, stop only on check-out / logout.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    if (!email || loading) return undefined
+
+    if (isCheckedIn(email)) startScreenLockCheckOutWatch(email)
+
+    const onCheckIn = (event) => {
+      const detailEmail = String(event?.detail?.email || '').toLowerCase()
+      if (detailEmail && detailEmail !== String(email).toLowerCase()) return
+      if (event?.detail?.checkedInAt) startScreenLockCheckOutWatch(email)
+      else stopScreenLockCheckOutWatch()
+    }
+
+    window.addEventListener(PULSE_CHECKIN_EVENT, onCheckIn)
+    return () => {
+      window.removeEventListener(PULSE_CHECKIN_EVENT, onCheckIn)
+      // Keep watcher alive across React remounts while still checked in.
+      // Only stop when this user signs out (email effect tears down) or checks out.
+    }
+  }, [email, loading])
+
+  useEffect(() => () => {
+    // True unmount / account switch — release the detector.
+    stopScreenLockCheckOutWatch()
+  }, [email])
 
   return null
 }
