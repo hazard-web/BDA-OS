@@ -53,10 +53,55 @@ function pulseWorkDaysOf(user) {
 }
 
 async function linkedStaff(user) {
-  return Staff.findOne({
-    email: String(user.email || '').toLowerCase(),
-    user: orgIdOf(user),
+  const email = String(user?.email || '').toLowerCase().trim();
+  if (!email) return null;
+  const orgId = orgIdOf(user);
+  if (!orgId) return null;
+
+  const ownerIds = [orgId];
+  if (user._id && String(user._id) !== String(orgId)) {
+    ownerIds.push(user._id);
+  }
+
+  let staff = await Staff.findOne({
+    email,
+    user: { $in: ownerIds },
   }).lean();
+
+  // Staff created by a non-owner admin is stored under that admin's _id,
+  // not the org owner id — still treat it as this person's profile.
+  if (!staff) {
+    const tenantIds = await User.find({
+      $or: [{ _id: orgId }, { organizationId: orgId }],
+    }).distinct('_id');
+    staff = await Staff.findOne({
+      email,
+      user: { $in: tenantIds },
+    }).lean();
+    if (staff && String(staff.user) !== String(orgId)) {
+      await Staff.updateOne({ _id: staff._id }, { $set: { user: orgId } });
+      staff = { ...staff, user: orgId };
+    }
+  }
+
+  if (staff) return staff;
+
+  // Invited Pulse users often have a User account but no Staff row yet.
+  // Provision one so leave / attendance can proceed.
+  try {
+    const created = await Staff.create({
+      user: orgId,
+      email,
+      fullName: personName(user),
+      additionalDocuments: [],
+    });
+    return created.toObject();
+  } catch (err) {
+    if (err?.code === 11000) {
+      return Staff.findOne({ email, user: orgId }).lean();
+    }
+    throw err;
+  }
 }
 
 function casualLeaveBalance(staff) {
