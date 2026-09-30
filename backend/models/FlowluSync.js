@@ -49,6 +49,20 @@ const flowluSyncSchema = new mongoose.Schema(
     ticketsSyncedAt: Date,
     lastError: { type: String, default: '' },
     lastErrorAt: Date,
+    // Background ticket sync (one at a time per org; running doubles as the lock)
+    ticketJob: {
+      running: { type: Boolean, default: false },
+      reason: { type: String, default: '' },
+      startedAt: Date,
+      finishedAt: Date,
+      progress: { type: String, default: '' },
+      message: { type: String, default: '' },
+      error: { type: String, default: '' },
+    },
+    lastWebhook: {
+      at: Date,
+      summary: { type: String, default: '' },
+    },
   },
   { timestamps: true },
 )

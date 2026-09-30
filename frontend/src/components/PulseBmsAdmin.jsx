@@ -188,6 +188,28 @@ export default function PulseBmsAdmin() {
     load()
   }, [load])
 
+  const jobRunning = Boolean(status?.ticketJob?.running)
+
+  // A ticket sync runs in the background; poll until it finishes, then reload and report
+  useEffect(() => {
+    if (!jobRunning) return undefined
+    const timer = setInterval(async () => {
+      try {
+        const res = await api.get('/flowlu/status')
+        const next = res.data?.data
+        setStatus(next || null)
+        if (next && !next.ticketJob?.running) {
+          if (next.ticketJob?.error) message.warning(`Ticket sync finished with problems: ${next.ticketJob.error}`)
+          else if (next.ticketJob?.message) message.success(`Ticket sync done: ${next.ticketJob.message}`)
+          load()
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [jobRunning, load, message])
+
   const run = async (key, requests) => {
     setBusy(key)
     try {
@@ -409,7 +431,7 @@ export default function PulseBmsAdmin() {
                 <Button icon={<Users size={15} />} loading={busy === 'users'} disabled={Boolean(busy)} onClick={() => run('users', [['/flowlu/sync/users', 'User sync']])}>
                   Sync users &amp; auto-match
                 </Button>
-                <Button icon={<Ticket size={15} />} loading={busy === 'tickets'} disabled={Boolean(busy)} onClick={() => run('tickets', [['/flowlu/sync/tickets', 'Ticket sync']])}>
+                <Button icon={<Ticket size={15} />} loading={busy === 'tickets' || jobRunning} disabled={Boolean(busy) || jobRunning} onClick={() => run('tickets', [['/flowlu/sync/tickets', 'Ticket sync']])}>
                   Sync tickets
                 </Button>
                 {s.pendingLogs ? (
@@ -420,13 +442,22 @@ export default function PulseBmsAdmin() {
                 <button
                   type="button"
                   className="pov-cta plive-top-cta plive-checkin"
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || jobRunning}
                   onClick={() => run('all', [['/flowlu/sync/users', 'User sync'], ['/flowlu/sync/tickets', 'Ticket sync']])}
                 >
-                  <RefreshCw size={15} className={busy === 'all' ? 'pulse-bms-spin' : undefined} />
-                  {busy === 'all' ? 'Syncing…' : 'Sync all'}
+                  <RefreshCw size={15} className={busy === 'all' || jobRunning ? 'pulse-bms-spin' : undefined} />
+                  {busy === 'all' || jobRunning ? 'Syncing…' : 'Sync all'}
                 </button>
               </div>
+              <p className="pulse-bms-sync-line">
+                {jobRunning
+                  ? `Syncing tickets in the background · ${s.ticketJob.progress || 'starting'} · started ${ago(s.ticketJob.startedAt)}`
+                  : s.ticketJob?.finishedAt
+                    ? `Last ticket sync ${ago(s.ticketJob.finishedAt)} (${s.ticketJob.reason || 'manual'}) · ${s.ticketJob.error ? `problems: ${s.ticketJob.error}` : s.ticketJob.message}`
+                    : 'No ticket sync has run yet'}
+                {' · '}Auto-sync: {s.autoSync || 'off'}
+                {' · '}Webhook: {s.webhookConfigured ? (s.lastWebhook?.at ? `last event ${ago(s.lastWebhook.at)} — ${s.lastWebhook.summary}` : 'ready, no events yet') : 'not set up (FLOWLU_WEBHOOK_SECRET)'}
+              </p>
               <div className="pulse-bms-projects">
                 <span>
                   {selectedProjects.length
