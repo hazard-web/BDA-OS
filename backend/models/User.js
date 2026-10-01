@@ -146,6 +146,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
+  /** Last Pulse client heartbeat — used for "online" (session open), not check-in. */
+  pulseLastSeenAt: {
+    type: Date,
+    default: null,
+  },
   gender: {
     type: String,
     trim: true,

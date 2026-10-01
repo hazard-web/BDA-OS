@@ -412,6 +412,7 @@ body:has(.pulse-shell),
 
 .pulse-head-presence-col + .pulse-head-presence-col {
   border-left: 1px solid #eee9e0;
+  padding-left: 16px;
 }
 
 .pulse-head-presence-pop .pulse-head-presence-h {
@@ -455,7 +456,7 @@ body:has(.pulse-shell),
 
 .pulse-head-presence-pop .pulse-head-presence-col li {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin: 0;
@@ -465,11 +466,28 @@ body:has(.pulse-shell),
   line-height: 1.35;
 }
 
+.pulse-head-presence-person {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .pulse-head-presence-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pulse-head-presence-online {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: none;
 }
 
 .pulse-head-presence-time {
@@ -496,6 +514,10 @@ body:has(.pulse-shell),
 .pulse-head-presence-pop .pulse-head-presence-col li.is-on-leave .pulse-head-presence-name,
 .pulse-head-presence-pop .pulse-head-presence-col li.is-on-leave .pulse-head-presence-time {
   color: #b42318;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-col li.is-on-leave .pulse-head-presence-online {
+  background: #22c55e;
 }
 
 .pulse-head-timer {
