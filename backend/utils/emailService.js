@@ -1418,6 +1418,112 @@ async function sendLeaveRequestEmail({
 }
 
 /**
+ * Leave decision for the employee who applied — congratulate on approve,
+ * professional note on reject.
+ */
+async function sendLeaveDecisionEmail({
+  to,
+  employeeName,
+  leaveType,
+  fromDate,
+  toDate,
+  days,
+  status,
+  adminNotes,
+  leaveUrl,
+  companyName,
+  decidedByName,
+}) {
+  if (!isValidEmail(to)) {
+    throw new Error(`Invalid employee address: ${to}`);
+  }
+
+  const approved = String(status || '').toLowerCase() === 'approved';
+  const transporter = await createSMTPTransporter();
+  const logo = bdaLogoAttachment();
+  const org = brandOrgName(companyName);
+  const name = escapeHtml(employeeName || 'there');
+  const dayLabel = `${days} day${days === 1 ? '' : 's'}`;
+  const typeLabel = escapeHtml(leaveType || 'leave');
+  const range = `${escapeHtml(fromDate)} – ${escapeHtml(toDate)}`;
+  const reviewer = escapeHtml(decidedByName || 'Your administrator');
+  const notes = String(adminNotes || '').trim();
+
+  const detailRows = [
+    ['Leave type', typeLabel],
+    ['From', escapeHtml(fromDate)],
+    ['To', escapeHtml(toDate)],
+    ['Duration', dayLabel],
+    ['Decision', approved ? 'Approved' : 'Not approved'],
+    notes ? ['Note from reviewer', escapeHtml(notes)] : null,
+  ]
+    .filter(Boolean)
+    .map(
+      ([label, value]) => `
+        <tr>
+          <td style="padding:10px 0;font-size:13px;font-weight:600;color:#6b778c;width:140px;vertical-align:top;">${label}</td>
+          <td style="padding:10px 0;font-size:15px;color:#172b4d;vertical-align:top;">${value}</td>
+        </tr>`,
+    )
+    .join('');
+
+  const title = approved ? 'Your leave request was approved' : 'Update on your leave request';
+  const subject = approved
+    ? `Congratulations — your leave was approved (${fromDate} to ${toDate})`
+    : `Leave request update — ${fromDate} to ${toDate}`;
+
+  const bodyHtml = approved
+    ? `
+        <p style="margin:0 0 14px;">Hi ${name},</p>
+        <p style="margin:0 0 14px;">
+          Congratulations — <strong>${reviewer}</strong> approved your
+          <strong>${typeLabel}</strong> request (${dayLabel}, ${range}).
+          Enjoy your time away, and we look forward to having you back.
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;border-top:1px solid #e8ebef;border-bottom:1px solid #e8ebef;">
+          ${detailRows}
+        </table>
+      `
+    : `
+        <p style="margin:0 0 14px;">Hi ${name},</p>
+        <p style="margin:0 0 14px;">
+          Thank you for submitting your leave request. After review,
+          <strong>${reviewer}</strong> was unable to approve your
+          <strong>${typeLabel}</strong> request for ${range} at this time.
+        </p>
+        <p style="margin:0 0 14px;">
+          If you need to adjust the dates or discuss alternatives, please reach out to your manager or HR.
+          You may also submit a new request from BDA OS when ready.
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;border-top:1px solid #e8ebef;border-bottom:1px solid #e8ebef;">
+          ${detailRows}
+        </table>
+      `;
+
+  const mailOptions = {
+    from: buildFromAddress('BDA Technologies'),
+    to,
+    subject,
+    html: buildBdaTrustEmailHtml({
+      orgName: org,
+      title,
+      subtitle: approved ? 'Good news from your leave request' : 'A note about your leave request',
+      bodyHtml,
+      ctaLabel: 'View my leave',
+      ctaUrl: leaveUrl,
+      closing: `
+        <p style="margin:0;">Regards,<br/>${escapeHtml(org)}</p>
+      `,
+      poweredBy: 'Powered by BDA OS',
+    }),
+    ...(logo ? { attachments: [logo] } : {}),
+  };
+
+  const info = await sendMailWithRetry(transporter, mailOptions);
+  return info;
+}
+
+/**
  * Notify a person that their BDA OS org role changed.
  */
 async function sendPulseRoleChangedEmail({
@@ -1546,4 +1652,5 @@ module.exports = {
   sendPulseRoleChangedEmail,
   sendCandidateOnboardingEmail,
   sendLeaveRequestEmail,
+  sendLeaveDecisionEmail,
 };

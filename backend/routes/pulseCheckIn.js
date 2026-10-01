@@ -13,7 +13,8 @@ const AssignedTask = require('../models/AssignedTask');
 const { logActivity } = require('../utils/logger');
 const { isPulseAdmin, orgIdOf } = require('../utils/pulseAuth');
 const { personName } = require('../utils/pulsePerson');
-const { sendLeaveRequestEmail } = require('../utils/emailService');
+const Notification = require('../models/Notification');
+const { sendLeaveRequestEmail, sendLeaveDecisionEmail } = require('../utils/emailService');
 const { uploadBase64 } = require('../utils/cloudinary');
 const { getProductionBaseUrl } = require('../utils/urlHelper');
 const { collectMyFiles } = require('./pulseFiles');
@@ -503,6 +504,21 @@ function dayKeyOf(value) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
+/** True when the linked staff profile has Approved leave covering `dateKey` (yyyy-MM-dd). */
+async function hasApprovedLeaveOn(user, dateKey) {
+  const key = dayKeyOf(dateKey) || todayKey();
+  if (!key) return false;
+  const staff = await linkedStaff(user).catch(() => null);
+  if (!staff?._id) return false;
+  const hit = await LeaveRequest.exists({
+    staff: staff._id,
+    status: 'Approved',
+    startDate: { $lte: new Date(`${key}T23:59:59`) },
+    endDate: { $gte: new Date(`${key}T00:00:00`) },
+  });
+  return Boolean(hit);
+}
+
 function recordIsPresent(row) {
   if (!row) return false;
   if (Number(row.totalActiveMs) > 0) return true;
@@ -578,25 +594,48 @@ router.get('/admin/presence', auth, async (req, res) => {
       : [];
     const dayByUser = new Map(days.map((row) => [String(row.user), row]));
 
+    // Approved leave today → non-active list (top), matched by staff email.
+    const leaveRows = await LeaveRequest.find({
+      admin: organizationId,
+      status: 'Approved',
+      startDate: { $lte: new Date(`${today}T23:59:59`) },
+      endDate: { $gte: new Date(`${today}T00:00:00`) },
+    })
+      .populate('staff', 'email')
+      .select('staff')
+      .lean();
+    const onLeaveEmails = new Set(
+      leaveRows
+        .map((row) => String(row.staff?.email || '').toLowerCase().trim())
+        .filter(Boolean),
+    );
+
     const active = [];
     const inactive = [];
     members.forEach((member) => {
       const day = dayByUser.get(String(member._id));
+      const email = String(member.email || '').toLowerCase().trim();
+      const onLeave = onLeaveEmails.has(email);
       const snap = presenceTime(day, asOf);
       const row = {
         id: String(member._id),
         name: personName(member),
         email: member.email || '',
         activeMs: snap.activeMs,
-        live: snap.live,
+        live: onLeave ? false : snap.live,
+        onLeave,
         asOf: asOf.toISOString(),
       };
-      if (day?.status === 'active') active.push(row);
+      // On approved leave → always non-active (even if a session was left open).
+      if (!onLeave && day?.status === 'active') active.push(row);
       else inactive.push(row);
     });
 
     active.sort((a, b) => a.name.localeCompare(b.name));
-    inactive.sort((a, b) => a.name.localeCompare(b.name));
+    inactive.sort((a, b) => {
+      if (Boolean(a.onLeave) !== Boolean(b.onLeave)) return a.onLeave ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 
     res.json({
       success: true,
@@ -1091,6 +1130,14 @@ router.post('/check-in', auth, async (req, res) => {
       touchHeartbeat(doc, now);
       await doc.save();
       return res.json({ success: true, data: serializeDay(doc) });
+    }
+
+    // Approved leave for this calendar day blocks new check-in / resume.
+    if (await hasApprovedLeaveOn(req.user, date)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Check-in is not available while you are on approved leave',
+      });
     }
 
     // Close a dangling open session before opening a new one (tab crash / missed check-out).
@@ -2548,6 +2595,57 @@ router.get('/leaves/team', auth, async (req, res) => {
   }
 });
 
+// DELETE /api/pulse-checkin/leaves/:id — employee revoke own pending request
+router.delete('/leaves/:id', auth, async (req, res) => {
+  try {
+    const staff = await linkedStaff(req.user);
+    if (!staff) {
+      return res.status(400).json({
+        success: false,
+        message: 'No employee profile is linked to this BDA OS account yet.',
+      });
+    }
+    const leave = await LeaveRequest.findOne({ _id: req.params.id, staff: staff._id });
+    if (!leave) {
+      return res.status(404).json({ success: false, message: 'Leave request not found' });
+    }
+    if (leave.status !== 'Pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only pending leave requests can be revoked',
+      });
+    }
+
+    const days = leaveDurationDays(leave.startDate, leave.endDate);
+    const leaveId = String(leave._id);
+    const leaveType = leave.type;
+    await leave.deleteOne();
+
+    // Sick days were deducted on apply; restore them. Casual remaining is
+    // derived from Pending + Approved rows, so deleting is enough.
+    if (leaveType === 'Sick') {
+      await adjustLeaveBalance(staff._id, 'Sick', days, 'restore');
+    } else if (leaveType === 'Casual') {
+      await loadCasualLeaveBalance(staff);
+    }
+
+    await logActivity(
+      req.user._id,
+      'PULSE_LEAVE_REVOKE',
+      `${req.user.email} revoked pending leave ${leaveId}`,
+      { leaveId },
+    );
+
+    res.json({
+      success: true,
+      message: 'Leave request revoked',
+      casual: await loadCasualLeaveBalance(staff),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to revoke leave request' });
+  }
+});
+
 // POST /api/pulse-checkin/leaves/:id/respond — admin approve or reject
 router.post('/leaves/:id/respond', auth, async (req, res) => {
   try {
@@ -2597,9 +2695,60 @@ router.post('/leaves/:id/respond', auth, async (req, res) => {
       .populate('staff', 'fullName email employeeId')
       .lean();
 
+    const employeeEmail = String(populated?.staff?.email || '').trim().toLowerCase();
+    const employeeName = populated?.staff?.fullName || employeeEmail || 'there';
+    const fromDate = formatLeaveDate(leave.startDate);
+    const toDate = formatLeaveDate(leave.endDate);
+    const typeLabel = leaveTypeLabel(leave.type);
+    const decidedByName = personName(req.user) || req.user.email || 'Your administrator';
+    const leaveUrl = `${getProductionBaseUrl()}/bda-os/leave`;
+
+    // In-app notice for the employee (staff portal / shared Notification model).
+    const staffMessage =
+      status === 'Approved'
+        ? `Congratulations — your ${typeLabel} request (${fromDate} to ${toDate}) was approved.`
+        : `Your ${typeLabel} request (${fromDate} to ${toDate}) was not approved. Please contact your manager if you need to discuss alternatives.`;
+    try {
+      await Notification.create({
+        admin: orgId,
+        staff: leave.staff,
+        recipientType: 'staff',
+        type: 'LEAVE_REQUEST',
+        referenceId: leave._id,
+        message: leave.adminNotes
+          ? `${staffMessage} Note: ${leave.adminNotes}`
+          : staffMessage,
+      });
+    } catch {
+      // Non-fatal — email below is the primary employee channel in BDA OS.
+    }
+
+    let employeeNotified = false;
+    if (employeeEmail) {
+      try {
+        await sendLeaveDecisionEmail({
+          to: employeeEmail,
+          employeeName,
+          leaveType: typeLabel,
+          fromDate,
+          toDate,
+          days,
+          status,
+          adminNotes: leave.adminNotes,
+          leaveUrl,
+          companyName: req.user.companyName || '',
+          decidedByName,
+        });
+        employeeNotified = true;
+      } catch {
+        // Leave status is already saved; report notify failure to the admin.
+      }
+    }
+
     res.json({
       success: true,
       message: `Leave ${status.toLowerCase()}`,
+      employeeNotified,
       data: serializeTeamLeave(populated),
     });
   } catch (err) {

@@ -281,6 +281,7 @@ function PulseAttendanceBoard({
   elapsed,
   checkBusy,
   onCheckIn,
+  onLeaveToday = false,
   leaveLeft,
   leaveTaken,
   leaveTotal = ATT_LEAVE_TOTAL,
@@ -428,14 +429,6 @@ function PulseAttendanceBoard({
               />
             ) : null}
           </div>
-          <button
-            type="button"
-            className={`pov-cta plive-top-cta plive-checkin`}
-            onClick={onCheckIn}
-            disabled={checkBusy}
-          >
-            {checkBusy ? 'Working…' : checkedInAt ? 'Check out' : 'Check in'}
-          </button>
         </header>
 
         <div className="plive-metrics">
@@ -496,8 +489,26 @@ function PulseAttendanceBoard({
         <section className="pulse-att-panel" aria-label={range.label}>
           <div className="pulse-att-panel-chrome">
             <header className="pulse-att-panel-head">
-              <h4>{range.label}</h4>
-              <span>{rows.length} day{rows.length === 1 ? '' : 's'}</span>
+              <div className="pulse-att-panel-title">
+                <h4>{range.label}</h4>
+                <span>{rows.length} day{rows.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="pulse-leave-toolbar-actions">
+                <button
+                  type="button"
+                  className={`pov-cta plive-top-cta plive-checkin${onLeaveToday && !checkedInAt ? ' is-on-leave' : ''}`}
+                  onClick={onCheckIn}
+                  disabled={checkBusy || (onLeaveToday && !checkedInAt)}
+                >
+                  {checkBusy
+                    ? 'Working…'
+                    : onLeaveToday && !checkedInAt
+                      ? 'On leave'
+                      : checkedInAt
+                        ? 'Check out'
+                        : 'Check in'}
+                </button>
+              </div>
             </header>
             <div className="pulse-att-cols" aria-hidden="true">
               <span>Date</span>
@@ -544,6 +555,7 @@ export default function PulseLiveModule({
   elapsed = 0,
   checkBusy,
   onCheckIn,
+  onLeaveToday = false,
   weekHours = 0,
   leaveLeft = 0,
   leaveTaken,
@@ -624,6 +636,7 @@ export default function PulseLiveModule({
         elapsed={elapsed}
         checkBusy={checkBusy}
         onCheckIn={onCheckIn}
+        onLeaveToday={onLeaveToday}
         leaveLeft={leaveLeft}
         leaveTaken={leaveTaken}
         leaveTotal={leaveTotal}
@@ -673,9 +686,15 @@ export default function PulseLiveModule({
       <PulseGlassBoard
         title="Onboarding"
         kicker={`Welcome, ${name}`}
-        ctaLabel={checkedInAt ? 'Checked in' : 'Start Day 1'}
-        checkIn={!checkedInAt}
-        onCta={checkedInAt ? undefined : onCheckIn}
+        ctaLabel={
+          onLeaveToday && !checkedInAt
+            ? 'On leave'
+            : checkedInAt
+              ? 'Checked in'
+              : 'Start Day 1'
+        }
+        checkIn={!checkedInAt && !onLeaveToday}
+        onCta={checkedInAt || onLeaveToday ? undefined : onCheckIn}
         metrics={[
           { label: 'Tasks', value: `${onboard.rows.filter((row) => row.done).length}/${onboard.rows.length}`, hint: 'Completed' },
           { label: 'Today', value: initial, hint: 'You' },

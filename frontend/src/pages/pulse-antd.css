@@ -19,6 +19,88 @@ body:has(.pulse-shell),
   background: var(--pulse-page, #fafbf7);
 }
 
+/* Align Ant Design buttons with beUI pill language across Pulse */
+.pulse-shell .ant-btn,
+.pulse-leave-add-drawer .ant-btn,
+.pulse-ts-add-drawer .ant-btn,
+.pulse-leave-filter-drawer .ant-btn {
+  border-radius: 999px !important;
+  font-weight: 600;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-shell .ant-btn-default,
+.pulse-leave-add-drawer .ant-btn-default,
+.pulse-ts-add-drawer .ant-btn-default,
+.pulse-leave-filter-drawer .ant-btn-default {
+  height: 40px;
+  padding-inline: 20px;
+  border-color: var(--pulse-border, #d9dfc9) !important;
+  color: var(--pulse-heading, #35421f) !important;
+  background: #fff !important;
+}
+
+.pulse-shell .ant-btn-primary,
+.pulse-leave-add-drawer .ant-btn-primary,
+.pulse-ts-add-drawer .ant-btn-primary,
+.pulse-leave-filter-drawer .ant-btn-primary {
+  height: 40px;
+  padding-inline: 20px;
+  background: var(--pulse-primary, #465a27) !important;
+  border-color: var(--pulse-primary, #465a27) !important;
+  color: #fff !important;
+}
+
+.pulse-shell .ant-btn-primary:not(:disabled):hover,
+.pulse-leave-add-drawer .ant-btn-primary:not(:disabled):hover,
+.pulse-ts-add-drawer .ant-btn-primary:not(:disabled):hover,
+.pulse-leave-filter-drawer .ant-btn-primary:not(:disabled):hover {
+  background: var(--pulse-primary-hover, #3f5123) !important;
+  border-color: var(--pulse-primary-hover, #3f5123) !important;
+  color: #fff !important;
+  filter: none;
+}
+
+.pulse-shell .ant-btn-default:not(:disabled):hover,
+.pulse-leave-add-drawer .ant-btn-default:not(:disabled):hover,
+.pulse-ts-add-drawer .ant-btn-default:not(:disabled):hover,
+.pulse-leave-filter-drawer .ant-btn-default:not(:disabled):hover {
+  border-color: var(--pulse-border, #d9dfc9) !important;
+  background: var(--pulse-soft, #e5ebd6) !important;
+  color: var(--pulse-heading, #35421f) !important;
+}
+
+.pulse-shell .ant-btn-sm {
+  height: 32px;
+  padding-inline: 16px;
+  font-size: 12px;
+}
+
+.pulse-shell .ant-btn-icon-only,
+.pulse-leave-add-drawer .ant-btn-icon-only,
+.pulse-ts-add-drawer .ant-btn-icon-only {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+}
+
+.pulse-shell .ant-btn-text,
+.pulse-shell .ant-btn-link,
+.pulse-leave-add-drawer .ant-btn-text,
+.pulse-ts-add-drawer .ant-btn-text {
+  border-radius: 10px !important;
+  height: auto;
+  min-height: 32px;
+  padding-inline: 10px;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
 .pulse-shell .ant-table-thead > tr > th {
   background: var(--pulse-table-head, #556b2f) !important;
   color: var(--pulse-table-head-fg, #fff) !important;
@@ -408,6 +490,12 @@ body:has(.pulse-shell),
   font-weight: 500;
   color: #8a8580;
   line-height: 1.45;
+}
+
+.pulse-head-presence-pop .pulse-head-presence-col li.is-on-leave,
+.pulse-head-presence-pop .pulse-head-presence-col li.is-on-leave .pulse-head-presence-name,
+.pulse-head-presence-pop .pulse-head-presence-col li.is-on-leave .pulse-head-presence-time {
+  color: #b42318;
 }
 
 .pulse-head-timer {
@@ -1294,7 +1382,44 @@ body:has(.pulse-shell),
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 8px;
   margin-left: auto;
+}
+
+.pulse-sub-tools .pulse-leave-toolbar-actions {
+  margin-left: 0;
+  gap: 8px;
+}
+
+.pulse-sub-tools .plive-top-cta,
+.pulse-sub-tools .pulse-att-page .plive-top-cta {
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  min-width: 0 !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+  border-radius: 9px !important;
+}
+
+.pulse-sub-tools .pulse-leave-filter-btn.ant-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 9px;
+}
+
+.pulse-sub-tools .pulse-ts-retry.ant-btn {
+  height: 32px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.pulse-sub-tools .pulse-ts-sent {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 9px;
 }
 
 .pulse-sub-tab {
@@ -2025,15 +2150,16 @@ body:has(.pulse-shell),
   gap: 8px;
 }
 
-.pulse-leave-apply-foot .ant-btn-primary {
-  min-width: 88px;
-  height: 34px;
+.pulse-leave-apply-foot .ant-btn-primary,
+.pulse-leave-apply-foot .ant-btn-default {
+  min-width: 108px;
+  height: 40px;
   font-weight: 600;
 }
 
-.pulse-leave-apply-foot .ant-btn-default {
-  min-width: 88px;
-  height: 34px;
+.pulse-att-panel-head .pulse-leave-toolbar-actions button.is-on {
+  color: var(--pulse-orange, #e88a2d) !important;
+  border-color: var(--pulse-orange, #e88a2d) !important;
 }
 
 .pulse-leave-add-drawer.ant-drawer {
@@ -5532,9 +5658,21 @@ body:has(.pulse-shell),
   position: relative;
   z-index: 3;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   flex: 0 0 auto;
+  min-height: 20px;
+}
+
+.pulse-checkin-head .pulse-checkin-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: #173b36;
 }
 
 .pulse-checkin-who {
@@ -5544,6 +5682,13 @@ body:has(.pulse-shell),
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+
+.pulse-checkin-who .pulse-checkin-status {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #173b36;
 }
 
 .pulse-checkin-who strong {
@@ -5579,6 +5724,11 @@ body:has(.pulse-shell),
 .pulse-checkin-status.is-closed,
 .pulse-checkin-status.is-idle {
   color: #44403c;
+  background: none;
+}
+
+.pulse-checkin-status.is-leave {
+  color: #b42318;
   background: none;
 }
 
@@ -5888,6 +6038,29 @@ body:has(.pulse-shell),
   box-shadow: none !important;
 }
 
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave,
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave:disabled,
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave.ant-btn-disabled {
+  cursor: default !important;
+  opacity: 1;
+  background: #b42318 !important;
+  border-color: #b42318 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave:hover,
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave:focus,
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave:focus-visible,
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave:disabled:hover,
+.pulse-checkin-card .ant-btn.pulse-checkin-cta.is-on-leave.ant-btn-disabled:hover {
+  background: #b42318 !important;
+  border-color: #b42318 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
 .pulse-checkin-card .ant-btn.pulse-checkin-cta:hover,
 .pulse-checkin-card .ant-btn.pulse-checkin-cta:focus,
 .pulse-checkin-card .ant-btn.pulse-checkin-cta:focus-visible,
@@ -6021,15 +6194,15 @@ body:has(.pulse-shell),
 
 .pulse-checkin-date {
   display: block;
-  margin: 0 0 0 auto;
-  padding: 4px 0 0;
+  margin: 0;
+  padding: 0;
   flex: 0 0 auto;
   font-family: Figtree, system-ui, sans-serif;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.02em;
   text-transform: none;
-  line-height: 1.3;
+  line-height: 1.2;
   color: #183B35 !important;
   text-align: right;
   white-space: nowrap;
@@ -7013,13 +7186,13 @@ body:has(.pulse-shell),
 :is(.pulse-scroll-surface, .pulse-scroll-plain) .pulse-leave-page.is-att .plive-top-cta {
   width: auto !important;
   box-sizing: border-box !important;
-  border-radius: 12px !important;
-  height: 48px !important;
-  min-height: 48px !important;
-  max-height: 48px !important;
-  min-width: 200px !important;
-  padding: 0 32px !important;
-  font-size: 16px !important;
+  border-radius: 10px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  min-width: 0 !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   letter-spacing: 0 !important;
   line-height: 1 !important;
@@ -7293,13 +7466,13 @@ body:has(.pulse-shell),
 :is(.pulse-scroll-surface, .pulse-scroll-plain) .pulse-att-page .plive-top-cta {
   width: auto !important;
   box-sizing: border-box !important;
-  border-radius: 12px !important;
-  height: 48px !important;
-  min-height: 48px !important;
-  max-height: 48px !important;
-  min-width: 200px !important;
-  padding: 0 32px !important;
-  font-size: 16px !important;
+  border-radius: 10px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  min-width: 0 !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   letter-spacing: 0 !important;
   line-height: 1 !important;
@@ -7638,13 +7811,13 @@ body:has(.pulse-shell),
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
-  min-width: 200px;
-  padding: 0 32px;
-  border-radius: 12px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 14px;
+  border-radius: 10px;
   background: #e8f1ee;
   color: var(--pulse-primary, var(--pulse-primary));
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   box-sizing: border-box;
 }
@@ -9981,10 +10154,10 @@ body.pulse-dash-dragging * {
 
 /* Timesheet: BMS retry + my tickets */
 .pulse-ts-retry.ant-btn {
-  height: 40px;
+  height: 36px;
   border-radius: 10px;
   margin-left: auto;
-  margin-right: 10px;
+  margin-right: 8px;
 }
 
 .pulse-ts-tickets {
