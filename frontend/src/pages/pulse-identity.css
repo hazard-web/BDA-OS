@@ -284,6 +284,10 @@
   color: #fff;
 }
 
+.pulse-shell.pulse-id .pulse-head-timer.is-on-leave .pulse-head-timer-label {
+  color: #fecaca;
+}
+
 .pulse-shell.pulse-id .pulse-head-timer.is-idle .pulse-head-timer-time {
   display: inline;
   opacity: 0.7;
@@ -1562,6 +1566,14 @@
 .pulse-overview .pulse-checkin-status {
   font-size: 12px;
   font-weight: 650;
+}
+
+.pulse-overview .pulse-checkin-head > .pulse-checkin-status {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: #183B35;
 }
 
 .pulse-scroll-surface .pulse-overview .pulse-checkin-date {

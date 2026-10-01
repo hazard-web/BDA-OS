@@ -118,12 +118,12 @@
 .pulse-att-page .plive-top-cta {
   width: auto !important;
   box-sizing: border-box !important;
-  height: 48px !important;
-  min-height: 48px !important;
-  max-height: 48px !important;
-  min-width: 200px !important;
-  padding: 0 32px !important;
-  font-size: 16px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  min-width: 0 !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   letter-spacing: 0 !important;
   line-height: 1 !important;
@@ -132,6 +132,7 @@
   justify-content: center !important;
   text-align: center !important;
   white-space: nowrap !important;
+  border-radius: 10px !important;
 }
 
 .plive-checkin {
@@ -185,7 +186,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -354,10 +355,10 @@
 /* Date range ribbon only — app header chrome */
 .pulse-att-panel-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--pulse-chrome-line, rgba(120, 175, 163, 0.28));
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%),
@@ -365,6 +366,14 @@
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.pulse-att-panel-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .pulse-att-panel-head h4 {
@@ -375,25 +384,44 @@
   color: var(--pulse-chrome-fg, #e8f1ee);
 }
 
-.pulse-att-panel-head span {
+.pulse-att-panel-head .pulse-att-panel-title > span,
+.pulse-att-panel-head > span {
   font-size: 12px;
   font-weight: 650;
   color: #ffffff;
 }
 
-/* DATE / HOURS / STATUS — keep light, unchanged from list */
+.pulse-att-panel-head .pulse-leave-toolbar-actions {
+  margin-left: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse-att-panel-head .pulse-leave-toolbar-actions > button {
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(15, 30, 12, 0.18);
+}
+
+.pulse-att-panel-head .pulse-leave-toolbar-actions > button.is-on {
+  color: var(--pulse-orange, #e88a2d) !important;
+  border-color: var(--pulse-orange, #e88a2d) !important;
+}
+
+/* DATE / HOURS / STATUS — soft sub-header under chrome */
 .pulse-att-cols {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) 88px 132px;
   gap: 12px;
-  padding: 10px 18px 12px 44px;
+  padding: 9px 18px 9px 44px;
   font-size: 11px;
   font-weight: 750;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--pulse-table-subhead-fg, #35421f);
+  color: var(--pulse-heading, #35421f);
   border-bottom: 1px solid var(--pulse-border, #d9dfc9);
-  background: var(--pulse-table-subhead, #e5ebd6);
+  background: var(--pulse-soft, #e5ebd6);
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -1462,11 +1490,12 @@
 }
 
 .pulse-leave-filter-btn.ant-btn {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   padding: 0;
   border: 1px solid #d9d9d9 !important;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff !important;
   color: var(--pulse-heading, #183b35) !important;
   box-shadow: none !important;
@@ -1476,7 +1505,7 @@
 .pulse-leave-toolbar-actions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-left: auto;
 }
 
@@ -1497,26 +1526,26 @@
 
 .pulse-leave-team-toolbar {
   align-items: center;
-  min-height: 48px;
+  min-height: 36px;
 }
 
 .pulse-leave-week-period {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
 }
 
 .pulse-leave-week-nav.pulse-att-day-nav {
-  height: 48px;
-  border-radius: 12px;
+  height: 36px;
+  border-radius: 10px;
 }
 
 .pulse-leave-week-nav .pulse-att-day-step {
-  width: 48px;
-  height: 48px;
-  font-size: 14px;
+  width: 36px;
+  height: 36px;
+  font-size: 13px;
 }
 
 .pulse-leave-week-label {
@@ -1559,17 +1588,37 @@
 }
 
 .pulse-leave-att-cols {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) 64px 110px !important;
-  padding-left: 44px;
+  grid-template-columns: 20px minmax(0, 1.2fr) minmax(120px, 1fr) 56px 100px 72px !important;
+  gap: 12px;
+  padding: 9px 18px;
+  align-items: end;
 }
 
-.pulse-leave-att-cols span:nth-child(3),
-.pulse-leave-att-cols span:nth-child(4) {
+.pulse-leave-att-cols .pulse-att-cols-spacer {
+  width: 16px;
+  justify-self: center;
+}
+
+/* Reset attendance header right-align so columns match row cells */
+.pulse-leave-att-cols > span {
+  text-align: left;
+}
+
+.pulse-leave-att-cols > span:nth-child(4),
+.pulse-leave-att-cols > span:nth-child(5),
+.pulse-leave-att-cols > span:nth-child(6) {
   text-align: right;
 }
 
+.pulse-leave-att-cols > span:nth-child(5),
+.pulse-leave-att-cols > span:nth-child(6) {
+  justify-self: end;
+}
+
 .pulse-leave-att-row {
-  grid-template-columns: 20px minmax(0, 1.2fr) minmax(0, 1.4fr) 64px 110px;
+  grid-template-columns: 20px minmax(0, 1.2fr) minmax(120px, 1fr) 56px 100px 72px;
+  gap: 12px;
+  padding: 11px 18px;
 }
 
 .pulse-leave-att-dates {
@@ -1577,6 +1626,52 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--pulse-heading, #183b35);
+  text-align: left;
+}
+
+.pulse-leave-att-row .pulse-att-status {
+  min-width: 0;
+  width: 100%;
+  justify-self: stretch;
+}
+
+.pulse-leave-att-action {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+
+.pulse-leave-att-action-dash {
+  color: var(--pulse-muted, #9aa39a);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.pulse-leave-revoke-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #b42318;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.pulse-leave-revoke-btn:hover:not(:disabled),
+.pulse-leave-revoke-btn:focus-visible:not(:disabled) {
+  color: #912018;
+  outline: none;
+}
+
+.pulse-leave-revoke-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .pulse-leave-att .pulse-leave-empty {
@@ -1817,11 +1912,11 @@
   }
 
   .pulse-leave-att-cols {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 48px 96px !important;
+    grid-template-columns: 20px minmax(0, 1fr) minmax(100px, 1fr) 48px 88px 64px !important;
   }
 
   .pulse-leave-att-row {
-    grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr) 48px 96px;
+    grid-template-columns: 20px minmax(0, 1fr) minmax(100px, 1fr) 48px 88px 64px;
   }
 }
 
@@ -1846,6 +1941,26 @@
     color: var(--pulse-muted, #6b7280);
   }
   .pulse-att-status { grid-area: status; }
+
+  .pulse-leave-att-row {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'dot day status'
+      'dot dates action'
+      'dot hours action';
+  }
+
+  .pulse-leave-att-row .pulse-leave-att-dates {
+    grid-area: dates;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--pulse-muted, #6b7280);
+  }
+
+  .pulse-leave-att-row .pulse-leave-att-action {
+    grid-area: action;
+    align-self: start;
+  }
 }
 
 :root[data-theme='dark'] .plive-metric p,
@@ -1889,7 +2004,8 @@
   color: var(--pulse-chrome-fg, #e8f1ee) !important;
 }
 
-:root[data-theme='dark'] .pulse-att-panel-head span {
+:root[data-theme='dark'] .pulse-att-panel-head .pulse-att-panel-title > span,
+:root[data-theme='dark'] .pulse-att-panel-head > span {
   color: #ffffff;
 }
 

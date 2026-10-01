@@ -9,7 +9,6 @@ import PulseGreetingBanner, { greetingTitle, periodForHour, PulsePeriodMark } fr
 import PulseWorkSchedule from './PulseWorkSchedule'
 import PulseMySpaceCalendar from './PulseMySpaceCalendar'
 import PulseCheckinBuddy from './PulseCheckinBuddy'
-import PulseUserAvatar from './PulseUserAvatar'
 import {
   DashListWidget,
   buildDemo,
@@ -373,20 +372,27 @@ function PortraitCard({ name, role, portraitSrc, user, initial, onPointerDown })
         <div className="pulse-ov-portrait-mono" aria-hidden="true">{initial}</div>
       )}
       <div className="pulse-ov-portrait-plate">
-        <strong>{name}</strong>
-        <span>{role}</span>
+        <strong>{role}</strong>
       </div>
     </aside>
   )
 }
 
-function checkInView(checkedInAt, elapsed, birthday = false) {
+function checkInView(checkedInAt, elapsed, birthday = false, onLeaveToday = false) {
   if (checkedInAt) {
     return {
       mode: 'live',
       status: 'On the clock',
       action: 'Check out',
       busy: 'Checking out',
+    }
+  }
+  if (onLeaveToday) {
+    return {
+      mode: 'leave',
+      status: 'On Leave',
+      action: 'On leave',
+      busy: 'On leave',
     }
   }
   if (isFullDay(elapsed) && !birthday) {
@@ -445,7 +451,18 @@ function ElapsedFace({ seconds, mode, waking, locked }) {
   )
 }
 
-function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elapsed: elapsedProp, checkBusy, onCheckIn, gesture = 0, birthday = false }) {
+function CheckinCard({
+  name,
+  email,
+  hour,
+  checkedInAt,
+  elapsed: elapsedProp,
+  checkBusy,
+  onCheckIn,
+  gesture = 0,
+  birthday = false,
+  onLeaveToday = false,
+}) {
   const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
   const reply = useCheckInReply(checkedInAt, Math.max(Number(elapsedProp) || 0, elapsed), gesture)
 
@@ -464,7 +481,8 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
     return () => window.clearInterval(id)
   }, [checkedInAt, email])
 
-  const view = checkInView(checkedInAt, elapsed, birthday)
+  const view = checkInView(checkedInAt, elapsed, birthday, onLeaveToday)
+  const blocked = view.mode === 'closed' || view.mode === 'leave'
   const period = periodForHour(hour)
   return (
     <Card
@@ -482,21 +500,9 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
         checkedIn={Boolean(checkedInAt)}
         gesture={gesture}
         birthday={birthday}
-        name={personFirst(name)}
       />
       <div className="pulse-checkin-head">
-        <PulseUserAvatar
-          size={40}
-          src={avatarUrl}
-          className="pulse-avatar pulse-checkin-face"
-          alt={name}
-        >
-          {initial}
-        </PulseUserAvatar>
-        <div className="pulse-checkin-who">
-          <strong>{name}</strong>
-          <span className={`pulse-checkin-status is-${view.mode}`}>{view.status}</span>
-        </div>
+        <span className={`pulse-checkin-status is-${view.mode}`}>{view.status}</span>
         <time className="pulse-checkin-date" dateTime={format(new Date(), 'yyyy-MM-dd')}>
           {format(new Date(), 'EEE d MMM')}
         </time>
@@ -504,8 +510,8 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
       <div className="pulse-checkin-main">
         <div className="pulse-checkin-clock">
           <ElapsedFace seconds={reply.shown} mode={view.mode} waking={reply.waking} locked={reply.dayClosed} />
-          <span className={`pulse-checkin-greet${reply.dayClosed || view.mode === 'closed' ? ' is-closed' : ''}`}>
-            {reply.dayClosed || view.mode === 'closed' ? 'Day closed' : greetingTitle(period)}
+          <span className={`pulse-checkin-greet${reply.dayClosed || view.mode === 'closed' || view.mode === 'leave' ? ' is-closed' : ''}`}>
+            {view.mode === 'leave' ? 'On leave' : reply.dayClosed || view.mode === 'closed' ? 'Day closed' : greetingTitle(period)}
           </span>
         </div>
         <div className="pulse-checkin-cta-wrap">
@@ -515,14 +521,14 @@ function CheckinCard({ name, initial, avatarUrl, email, hour, checkedInAt, elaps
               size="large"
               block
               aria-busy={checkBusy}
-              disabled={view.mode === 'closed'}
-              icon={view.mode === 'closed' ? null : view.mode === 'live' ? <LogoutOutlined /> : <LoginOutlined />}
-              className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}${view.mode === 'closed' ? ' is-closed' : ''}${reply.settling ? ' is-settling' : ''}`}
+              disabled={blocked}
+              icon={blocked ? null : view.mode === 'live' ? <LogoutOutlined /> : <LoginOutlined />}
+              className={`pulse-checkin-cta${view.mode === 'live' ? ' is-checked-in' : ''}${view.mode === 'paused' ? ' is-resume' : ''}${view.mode === 'closed' ? ' is-closed' : ''}${view.mode === 'leave' ? ' is-on-leave' : ''}${reply.settling ? ' is-settling' : ''}`}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
                 event.currentTarget.blur()
-                if (checkBusy || view.mode === 'closed') return
+                if (checkBusy || blocked) return
                 onCheckIn()
               }}
             >
@@ -579,6 +585,7 @@ function PulseOverviewHome({
   checkBusy,
   onCheckIn,
   checkGesture = 0,
+  onLeaveToday = false,
   isPulseAdmin,
   onOpen,
   onSoon,
@@ -861,8 +868,6 @@ function PulseOverviewHome({
       return (
         <CheckinCard
           name={name}
-          initial={initial}
-          avatarUrl={user?.avatarUrl}
           email={user?.email}
           hour={hour}
           checkedInAt={checkedInAt}
@@ -870,6 +875,7 @@ function PulseOverviewHome({
           checkBusy={checkBusy}
           gesture={checkGesture}
           birthday={birthdayArrival}
+          onLeaveToday={onLeaveToday}
           onCheckIn={onCheckIn}
         />
       )
