@@ -221,14 +221,25 @@ function HeaderAssignedApps({ apps, user }) {
   )
 }
 
-function headerCheckInMode(checkedInAt, elapsed, birthday = false) {
+function headerCheckInMode(checkedInAt, elapsed, birthday = false, onLeaveToday = false) {
   if (checkedInAt) return 'live'
+  if (onLeaveToday) return 'leave'
   if (isFullDay(elapsed) && !birthday) return 'closed'
   if (elapsed > 0) return 'paused'
   return 'idle'
 }
 
-function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, onCheckIn, checkBusy, gesture = 0, birthday = false }) {
+function HeaderCheckInTimer({
+  elapsed: elapsedProp,
+  checkedInAt,
+  email,
+  onOpen,
+  onCheckIn,
+  checkBusy,
+  gesture = 0,
+  birthday = false,
+  onLeaveToday = false,
+}) {
   const [elapsed, setElapsed] = useState(() => Number(elapsedProp) || 0)
   const reply = useCheckInReply(checkedInAt, Math.max(Number(elapsedProp) || 0, elapsed), gesture)
 
@@ -247,17 +258,20 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, 
     return () => window.clearInterval(id)
   }, [checkedInAt, email])
 
-  const mode = headerCheckInMode(checkedInAt, elapsed, birthday)
+  const mode = headerCheckInMode(checkedInAt, elapsed, birthday, onLeaveToday)
   const stamp = formatElapsed(reply.shown)
   const idle = mode === 'idle'
+  const onLeave = mode === 'leave'
   const dayClosed = reply.dayClosed || mode === 'closed'
-  const label = dayClosed
-    ? `Day closed, ${stamp}`
-    : mode === 'live'
-      ? `On the clock, ${stamp}`
-      : mode === 'paused'
-        ? `Paused, ${stamp}`
-        : 'Check-in'
+  const label = onLeave
+    ? 'On leave'
+    : dayClosed
+      ? `Day closed, ${stamp}`
+      : mode === 'live'
+        ? `On the clock, ${stamp}`
+        : mode === 'paused'
+          ? `Paused, ${stamp}`
+          : 'Check-in'
   return (
     <button
       type="button"
@@ -266,8 +280,13 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, 
         `is-${mode}`,
         reply.waking ? 'is-waking' : '',
         dayClosed ? 'is-closed' : '',
+        onLeave ? 'is-on-leave' : '',
       ].filter(Boolean).join(' ')}
       onClick={() => {
+        if (onLeave) {
+          onOpen?.()
+          return
+        }
         if (idle && typeof onCheckIn === 'function') {
           onCheckIn()
           return
@@ -281,7 +300,9 @@ function HeaderCheckInTimer({ elapsed: elapsedProp, checkedInAt, email, onOpen, 
       <span className="pulse-head-timer-mark" aria-hidden="true">
         <ClockCircleOutlined className="pulse-head-timer-ico" />
       </span>
-      {dayClosed ? (
+      {onLeave ? (
+        <span className="pulse-head-timer-label">On leave</span>
+      ) : dayClosed ? (
         <span className="pulse-head-timer-label">Closed</span>
       ) : idle ? (
         <span className="pulse-head-timer-cta">Check-in</span>
@@ -318,6 +339,7 @@ function presenceSeconds(row, now = Date.now(), selfEmail = '') {
 }
 
 function presenceTimeLabel(row, now, selfEmail = '') {
+  if (row?.onLeave) return 'On leave'
   const isSelf = Boolean(selfEmail) && presenceRowKey(row) === String(selfEmail).toLowerCase()
   // Only the signed-in user's live session can override an empty server total.
   if (!row?.live && !(Number(row?.activeMs) > 0) && !(isSelf && readCheckInAt(selfEmail))) {
@@ -334,6 +356,13 @@ function presenceTimeLabel(row, now, selfEmail = '') {
   return '—'
 }
 
+function sortPresenceInactive(rows) {
+  return [...rows].sort((a, b) => {
+    if (Boolean(a?.onLeave) !== Boolean(b?.onLeave)) return a?.onLeave ? -1 : 1
+    return presenceName(a).localeCompare(presenceName(b))
+  })
+}
+
 /** Instant header counts while the check-in API sync (~1.4s) is still in flight. */
 function applySelfPresence(board, selfEmail, detail) {
   const status = detail?.status
@@ -345,6 +374,8 @@ function applySelfPresence(board, selfEmail, detail) {
   const fromActive = active.find((row) => presenceRowKey(row) === email)
   const fromInactive = inactive.find((row) => presenceRowKey(row) === email)
   const self = fromActive || fromInactive
+  // Keep on-leave people on the inactive side even during optimistic check-in.
+  if (self?.onLeave && status === 'active') return board
   const localMs = Math.max(0, getElapsedSeconds(email) * 1000)
   const stamped = {
     ...(self || {
@@ -354,6 +385,7 @@ function applySelfPresence(board, selfEmail, detail) {
     }),
     activeMs: Math.max(localMs, Number(detail?.activeMs) || Number(self?.activeMs) || 0),
     live: status === 'active',
+    onLeave: Boolean(self?.onLeave),
     asOf: new Date().toISOString(),
   }
 
@@ -370,9 +402,10 @@ function applySelfPresence(board, selfEmail, detail) {
     }
   }
 
-  const nextInactive = (fromInactive ? inactive : [...inactive, stamped])
-    .map((row) => (presenceRowKey(row) === email ? stamped : row))
-    .sort((a, b) => presenceName(a).localeCompare(presenceName(b)))
+  const nextInactive = sortPresenceInactive(
+    (fromInactive ? inactive : [...inactive, stamped])
+      .map((row) => (presenceRowKey(row) === email ? stamped : row)),
+  )
   const nextActive = active.filter((row) => presenceRowKey(row) !== email)
   return {
     active: nextActive,
@@ -477,7 +510,7 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
         {board.inactive.length ? (
           <ul>
             {board.inactive.map((row) => (
-              <li key={row.id}>
+              <li key={row.id} className={row.onLeave ? 'is-on-leave' : undefined}>
                 <span className="pulse-head-presence-name">{presenceName(row)}</span>
                 <time className="pulse-head-presence-time">{presenceTimeLabel(row, now, selfEmail)}</time>
               </li>
@@ -580,6 +613,11 @@ export default function PeopleHome() {
     todaySeconds,
   })
   const weekDays = workWeek.days
+  const todayLeave = weekDays.find((day) => day.today)
+  const onLeaveToday = Boolean(
+    todayLeave?.leaveStatus === 'Approved'
+      || (todayLeave?.onLeave && todayLeave?.leaveLabel === 'On Leave'),
+  )
   const attendanceRows = weekDays.map((day) => ({
     key: day.key,
     day: day.label,
@@ -820,6 +858,14 @@ export default function PeopleHome() {
           { duration: 2000 },
         )
       } else {
+        if (onLeaveToday) {
+          pulseToast.info(
+            'On leave',
+            'Check-in is not available while you are on approved leave',
+            { duration: 2500 },
+          )
+          return
+        }
         closeCheckInPip()
         // Resume from server day total so timer matches calendar (e.g. 3h 45m), not 00:00.
         const hydrated = await hydrateCheckInFromServer(user.email)
@@ -847,16 +893,9 @@ export default function PeopleHome() {
           resuming ? formatElapsed(secs) : format(new Date(), 'h:mm a'),
           { duration: 2000 },
         )
-        // User gesture → request IdleDetector so Mac screen lock can check out.
-        const idlePermission = await requestIdleDetectionPermission()
+        // User gesture → request IdleDetector when Chrome supports it (optional).
+        await requestIdleDetectionPermission()
         startScreenLockCheckOutWatch(user.email)
-        if (idlePermission === 'denied') {
-          pulseToast.info(
-            'Lock-screen check-out',
-            'Allow Idle detection for this site in Chrome (Site settings) so locking the Mac checks you out',
-            { duration: 5000 },
-          )
-        }
       }
     } finally {
       // Release quickly so the next CTA is not blocked
@@ -958,6 +997,7 @@ export default function PeopleHome() {
     elapsed,
     checkBusy,
     onCheckIn,
+    onLeaveToday,
     weekHours,
     leaveLeft: sample ? COMPANY_LEAVE_TOTAL : leaveLeft,
     leaveTaken: sample ? 0 : leaveTaken,
@@ -1131,6 +1171,7 @@ export default function PeopleHome() {
             checkBusy={checkBusy}
             gesture={checkGesture}
             birthday={birthdayToday}
+            onLeaveToday={onLeaveToday}
             onCheckIn={onCheckIn}
             onOpen={() => {
               setMoreOpen(false)
@@ -1424,6 +1465,7 @@ export default function PeopleHome() {
                 checkBusy={checkBusy}
                 checkGesture={checkGesture}
                 onCheckIn={onCheckIn}
+                onLeaveToday={onLeaveToday}
                 isPulseAdmin={isPulseAdmin}
                 onOpen={openDashTarget}
                 onSoon={soon}
