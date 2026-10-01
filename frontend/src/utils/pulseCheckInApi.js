@@ -61,6 +61,16 @@ export async function fetchPulseWorkDayToday(date) {
   return res.data?.data || null
 }
 
+/** Ping while Pulse is open — marks the user online (not checked in). */
+export async function pingPulseOnline() {
+  try {
+    await api.post('/pulse-checkin/online')
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function saveTimesheetDraft({ date, entries, email } = {}) {
   const res = await api.put('/pulse-checkin/timesheet/today', {
     date: date || dayKey(),

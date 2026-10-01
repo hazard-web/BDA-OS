@@ -385,6 +385,7 @@ function applySelfPresence(board, selfEmail, detail) {
     }),
     activeMs: Math.max(localMs, Number(detail?.activeMs) || Number(self?.activeMs) || 0),
     live: status === 'active',
+    online: true,
     onLeave: Boolean(self?.onLeave),
     asOf: new Date().toISOString(),
   }
@@ -415,6 +416,32 @@ function applySelfPresence(board, selfEmail, detail) {
   }
 }
 
+/** Viewer has Pulse open — show their own online dot immediately. */
+function withSelfOnline(board, selfEmail) {
+  const email = String(selfEmail || '').toLowerCase()
+  if (!email) return board
+  const mark = (rows) =>
+    (Array.isArray(rows) ? rows : []).map((row) =>
+      presenceRowKey(row) === email ? { ...row, online: true } : row,
+    )
+  return {
+    ...board,
+    active: mark(board.active),
+    inactive: mark(board.inactive),
+  }
+}
+
+function PresencePersonName({ row }) {
+  return (
+    <span className="pulse-head-presence-person">
+      {row?.online ? (
+        <i className="pulse-head-presence-online" aria-label="Online" title="Online" />
+      ) : null}
+      <span className="pulse-head-presence-name">{presenceName(row)}</span>
+    </span>
+  )
+}
+
 function HeaderTeamPresence({ enabled, selfEmail }) {
   const [board, setBoard] = useState({ active: [], inactive: [], activeCount: 0, inactiveCount: 0 })
   const [now, setNow] = useState(() => Date.now())
@@ -430,12 +457,17 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
         .then((res) => {
           if (!live) return
           const data = res.data?.data || {}
-          setBoard({
-            active: Array.isArray(data.active) ? data.active : [],
-            inactive: Array.isArray(data.inactive) ? data.inactive : [],
-            activeCount: Number(data.activeCount) || 0,
-            inactiveCount: Number(data.inactiveCount) || 0,
-          })
+          setBoard(
+            withSelfOnline(
+              {
+                active: Array.isArray(data.active) ? data.active : [],
+                inactive: Array.isArray(data.inactive) ? data.inactive : [],
+                activeCount: Number(data.activeCount) || 0,
+                inactiveCount: Number(data.inactiveCount) || 0,
+              },
+              selfEmail,
+            ),
+          )
         })
         .catch(() => {
           if (!live) return
@@ -493,7 +525,7 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
           <ul>
             {board.active.map((row) => (
               <li key={row.id}>
-                <span className="pulse-head-presence-name">{presenceName(row)}</span>
+                <PresencePersonName row={row} />
                 <time className="pulse-head-presence-time">{presenceTimeLabel(row, now, selfEmail)}</time>
               </li>
             ))}
@@ -511,7 +543,7 @@ function HeaderTeamPresence({ enabled, selfEmail }) {
           <ul>
             {board.inactive.map((row) => (
               <li key={row.id} className={row.onLeave ? 'is-on-leave' : undefined}>
-                <span className="pulse-head-presence-name">{presenceName(row)}</span>
+                <PresencePersonName row={row} />
                 <time className="pulse-head-presence-time">{presenceTimeLabel(row, now, selfEmail)}</time>
               </li>
             ))}
