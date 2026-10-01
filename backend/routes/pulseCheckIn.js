@@ -196,7 +196,7 @@ const LEAVE_TYPE_ALIASES = {
  * address from this list, so the endpoint can never mail an arbitrary recipient.
  */
 const LEAVE_NOTIFY_EMAILS = String(
-  process.env.PULSE_LEAVE_NOTIFY_EMAILS || 'office@bda.co.in,hello@ambesh.com',
+  process.env.PULSE_LEAVE_NOTIFY_EMAILS || 'office@bda.co.in,hello@ambesh.com,udayan@bda.co.in',
 )
   .split(',')
   .map((value) => value.trim())
@@ -568,6 +568,26 @@ function presenceTime(day, now = new Date()) {
   };
 }
 
+/** Browser session open in Pulse — independent of check-in / check-out. */
+const ONLINE_STALE_MS = 2 * 60 * 1000;
+
+function isPulseOnline(lastSeenAt, now = new Date()) {
+  if (!lastSeenAt) return false;
+  const at = new Date(lastSeenAt).getTime();
+  return Number.isFinite(at) && now.getTime() - at <= ONLINE_STALE_MS;
+}
+
+// POST /api/pulse-checkin/online — lightweight presence ping while Pulse is open
+router.post('/online', auth, async (req, res) => {
+  try {
+    const now = new Date();
+    await User.updateOne({ _id: req.user._id }, { $set: { pulseLastSeenAt: now } });
+    res.json({ success: true, data: { at: now.toISOString() } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || 'Online ping failed' });
+  }
+});
+
 // GET /api/pulse-checkin/admin/presence — who is checked in right now (admin)
 router.get('/admin/presence', auth, async (req, res) => {
   try {
@@ -581,7 +601,7 @@ router.get('/admin/presence', auth, async (req, res) => {
     const members = await User.find({
       $or: [{ organizationId: orgObjectId }, { _id: orgObjectId }],
     })
-      .select('_id firstName lastName displayName email')
+      .select('_id firstName lastName displayName email pulseLastSeenAt')
       .lean();
 
     const today = todayKey();
@@ -623,6 +643,7 @@ router.get('/admin/presence', auth, async (req, res) => {
         email: member.email || '',
         activeMs: snap.activeMs,
         live: onLeave ? false : snap.live,
+        online: isPulseOnline(member.pulseLastSeenAt, asOf),
         onLeave,
         asOf: asOf.toISOString(),
       };
