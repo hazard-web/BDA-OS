@@ -1,6 +1,7 @@
 import {
   endCheckInOnLogout,
   getElapsedSeconds,
+  pauseCheckInClock,
   pulseDayKey,
   readCheckInAt,
   readCheckInActiveEmail,
@@ -418,12 +419,12 @@ export function stopScreenLockCheckOutWatch() {
 }
 
 /**
- * Watch Mac screen lock / sleep and check out.
+ * Screen lock vs sleep / shut down:
+ *  - Screen lock only → pause timer (keep live session; unlock continues)
+ *  - Laptop sleep (`freeze`) → check out immediately
+ *  - Shut down / tab close → handled by pagehide (check out immediately)
  *
- * Switching tabs or other sites must NOT check out — only real lock/sleep:
- *  1. IdleDetector screenState === 'locked' (needs Idle detection permission)
- *  2. Desktop companion powerMonitor lock-screen
- *  3. Page Lifecycle `freeze` (system sleep)
+ * IdleDetector / desktop companion report lock-screen, not full sleep.
  */
 export function startScreenLockCheckOutWatch(email) {
   const next = String(email || '').toLowerCase().trim()
@@ -441,17 +442,26 @@ export function startScreenLockCheckOutWatch(email) {
   /** @type {{ screenState?: string } | null} */
   let detector = null
 
-  const checkOut = () => {
+  const pauseForLock = () => {
     if (stopped) return
     const active = readCheckInActiveEmail() || next
     if (!readCheckInAt(active)) return
+    stampCheckInBeforeHide(active)
+    pauseCheckInClock(active, { reason: 'idle' })
+  }
+
+  const checkOutForSleep = () => {
+    if (stopped) return
+    const active = readCheckInActiveEmail() || next
+    if (!readCheckInAt(active)) return
+    stampCheckInBeforeHide(active)
     forcePulseCheckOutOnly({ email: active, reason: 'sleep' })
   }
 
-  const maybeCheckOutFromDetector = () => {
+  const maybePauseFromDetector = () => {
     if (stopped || !detector) return
     try {
-      if (detector.screenState === 'locked') checkOut()
+      if (detector.screenState === 'locked') pauseForLock()
     } catch {
       /* ignore */
     }
@@ -469,7 +479,7 @@ export function startScreenLockCheckOutWatch(email) {
       if (!res.ok) return
       const data = await res.json()
       if (data?.pendingLockCheckout) {
-        checkOut()
+        pauseForLock()
         try {
           await fetch('http://127.0.0.1:39217/ack-lock-checkout', { method: 'POST' })
         } catch {
@@ -485,16 +495,14 @@ export function startScreenLockCheckOutWatch(email) {
 
   const onVisibility = () => {
     if (stopped) return
-    // Tab/app switch also hides the page — never check out from hide/show alone.
-    // Only probe lock signals (IdleDetector / desktop) when visibility changes.
-    maybeCheckOutFromDetector()
+    // Tab/app switch — never check out from hide/show alone.
+    maybePauseFromDetector()
     void pollDesktopLock()
   }
 
   const onFreeze = () => {
-    const active = readCheckInActiveEmail() || next
-    if (readCheckInAt(active)) stampCheckInBeforeHide(active)
-    checkOut()
+    // Page Lifecycle freeze = OS sleep / suspend → check out now.
+    checkOutForSleep()
   }
 
   const startIdleDetector = async () => {
@@ -509,11 +517,11 @@ export function startScreenLockCheckOutWatch(email) {
       }
 
       detector = new window.IdleDetector()
-      detector.addEventListener('change', maybeCheckOutFromDetector)
+      detector.addEventListener('change', maybePauseFromDetector)
       await detector.start({ threshold: 60_000, signal: ac.signal })
       if (stopped) return
-      maybeCheckOutFromDetector()
-      pollId = window.setInterval(maybeCheckOutFromDetector, 2000)
+      maybePauseFromDetector()
+      pollId = window.setInterval(maybePauseFromDetector, 2000)
     } catch {
       lastIdlePermission = lastIdlePermission || 'denied'
       detector = null
