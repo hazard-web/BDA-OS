@@ -19,80 +19,105 @@ body:has(.pulse-shell),
   background: var(--pulse-page, #fafbf7);
 }
 
-/* Align Ant Design buttons with beUI pill language across Pulse */
-.pulse-shell .ant-btn,
-.pulse-leave-add-drawer .ant-btn,
-.pulse-ts-add-drawer .ant-btn,
-.pulse-leave-filter-drawer .ant-btn {
+/*
+ * Pulse Ant primary + default → beUI motion pill language.
+ * While .pulse-shell is mounted: shell + drawer body/footer + modal content.
+ * Skips drawer-extra/header chrome, text/link, danger, check-in, plus, filter icon.
+ */
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  :is(.ant-btn-primary, .ant-btn-default):not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
   border-radius: 999px !important;
   font-weight: 600;
   box-shadow: none !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 40px;
+  padding-inline: 24px;
 }
 
-.pulse-shell .ant-btn-default,
-.pulse-leave-add-drawer .ant-btn-default,
-.pulse-ts-add-drawer .ant-btn-default,
-.pulse-leave-filter-drawer .ant-btn-default {
-  height: 40px;
-  padding-inline: 20px;
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-default:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
   border-color: var(--pulse-border, #d9dfc9) !important;
   color: var(--pulse-heading, #35421f) !important;
   background: #fff !important;
 }
 
-.pulse-shell .ant-btn-primary,
-.pulse-leave-add-drawer .ant-btn-primary,
-.pulse-ts-add-drawer .ant-btn-primary,
-.pulse-leave-filter-drawer .ant-btn-primary {
-  height: 40px;
-  padding-inline: 20px;
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
   background: var(--pulse-primary, #465a27) !important;
   border-color: var(--pulse-primary, #465a27) !important;
   color: #fff !important;
 }
 
-.pulse-shell .ant-btn-primary:not(:disabled):hover,
-.pulse-leave-add-drawer .ant-btn-primary:not(:disabled):hover,
-.pulse-ts-add-drawer .ant-btn-primary:not(:disabled):hover,
-.pulse-leave-filter-drawer .ant-btn-primary:not(:disabled):hover {
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn):not(:disabled):hover {
   background: var(--pulse-primary-hover, #3f5123) !important;
   border-color: var(--pulse-primary-hover, #3f5123) !important;
   color: #fff !important;
   filter: none;
 }
 
-.pulse-shell .ant-btn-default:not(:disabled):hover,
-.pulse-leave-add-drawer .ant-btn-default:not(:disabled):hover,
-.pulse-ts-add-drawer .ant-btn-default:not(:disabled):hover,
-.pulse-leave-filter-drawer .ant-btn-default:not(:disabled):hover {
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-default:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn):not(:disabled):hover {
   border-color: var(--pulse-border, #d9dfc9) !important;
   background: var(--pulse-soft, #e5ebd6) !important;
   color: var(--pulse-heading, #35421f) !important;
 }
 
-.pulse-shell .ant-btn-sm {
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  :is(.ant-btn-primary, .ant-btn-default).ant-btn-sm:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
   height: 32px;
   padding-inline: 16px;
   font-size: 12px;
 }
 
-.pulse-shell .ant-btn-icon-only,
-.pulse-leave-add-drawer .ant-btn-icon-only,
-.pulse-ts-add-drawer .ant-btn-icon-only {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
+body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  :is(.ant-btn-primary, .ant-btn-default).ant-btn-icon-only:not(.ant-btn-dangerous):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
   padding: 0 !important;
-  border-radius: 10px !important;
+  border-radius: 999px !important;
 }
 
-.pulse-shell .ant-btn-text,
-.pulse-shell .ant-btn-link,
-.pulse-leave-add-drawer .ant-btn-text,
-.pulse-ts-add-drawer .ant-btn-text {
+/* Text / link — compact radius, not pills (header search, bell, inline links) */
+body:has(.pulse-shell) :is(.pulse-shell, .ant-drawer, .ant-modal) :is(.ant-btn-text, .ant-btn-link) {
   border-radius: 10px !important;
   height: auto;
   min-height: 32px;

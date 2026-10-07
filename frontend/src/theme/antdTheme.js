@@ -58,6 +58,10 @@ const shared = {
       primaryColor: '#FFFFFF',
       defaultBorderColor: '#D9DFC9',
       defaultColor: '#35421F',
+      defaultBg: '#FFFFFF',
+      defaultHoverBg: '#E5EBD6',
+      defaultHoverBorderColor: '#D9DFC9',
+      defaultHoverColor: '#35421F',
     },
     Statistic: {
       contentFontSize: 32,
