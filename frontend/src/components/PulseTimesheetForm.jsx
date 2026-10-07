@@ -16,6 +16,8 @@ import {
   weekRange,
 } from '../utils/pulseWorkWeek'
 import PulseSlideClose from './PulseSlideClose'
+import { PulseButton } from './PulseButton'
+import { PulseStatefulButton } from './PulseStatefulButton'
 
 function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -123,6 +125,7 @@ export default function PulseTimesheetForm({
   const [checkInAt, setCheckInAt] = useState(checkedInAt || null)
   const [clockMs, setClockMs] = useState(Math.max(0, Number(elapsed) || 0))
   const [saving, setSaving] = useState(false)
+  const [submitState, setSubmitState] = useState('idle')
   const [period, setPeriod] = useState('week')
   const [bms, setBms] = useState({ linked: false, tickets: [], pendingLogs: 0 })
   const [retrying, setRetrying] = useState(false)
@@ -511,6 +514,7 @@ export default function PulseTimesheetForm({
 
   const closeForm = () => {
     if (saving) return
+    setSubmitState('idle')
     setOpen(false)
   }
 
@@ -521,6 +525,7 @@ export default function PulseTimesheetForm({
       return
     }
     setSaving(true)
+    setSubmitState('loading')
     try {
       if (!sample) {
         const data = await submitTimesheet({ date, email: user?.email, entries })
@@ -532,9 +537,14 @@ export default function PulseTimesheetForm({
         }
       }
       setSubmitted(true)
-      setOpen(false)
+      setSubmitState('success')
       message.success('Timesheet submitted')
+      window.setTimeout(() => {
+        setOpen(false)
+        setSubmitState('idle')
+      }, 700)
     } catch (err) {
+      setSubmitState('error')
       message.error(err?.response?.data?.message || 'Could not submit timesheet')
     } finally {
       setSaving(false)
@@ -571,22 +581,6 @@ export default function PulseTimesheetForm({
               />
             ) : null}
           </div>
-          {bms.pendingLogs > 0 ? (
-            <Button className="pulse-ts-retry" loading={retrying} onClick={retryBms}>
-              Retry BMS logs ({bms.pendingLogs})
-            </Button>
-          ) : null}
-          {submitted ? (
-            <span className="pulse-ts-sent">Submitted</span>
-          ) : (
-            <button
-              type="button"
-              className="pov-cta plive-top-cta plive-checkin"
-              onClick={() => setOpen(true)}
-            >
-              Submit timesheet
-            </button>
-          )}
         </header>
 
         <div className="plive-metrics">
@@ -677,8 +671,47 @@ export default function PulseTimesheetForm({
         <section className="pulse-att-panel" aria-label={panelTitle}>
           <div className="pulse-att-panel-chrome">
             <header className="pulse-att-panel-head">
-              <h4>{panelTitle}</h4>
-              <span>{panelHint}</span>
+              <div className="pulse-att-panel-title">
+                <h4>{panelTitle}</h4>
+                <span>{panelHint}</span>
+              </div>
+              <div className="pulse-leave-toolbar-actions">
+                {bms.pendingLogs > 0 ? (
+                  <PulseButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={retrying}
+                    onClick={retryBms}
+                  >
+                    {retrying ? 'Retrying…' : `Retry BMS (${bms.pendingLogs})`}
+                  </PulseButton>
+                ) : null}
+                {submitted ? (
+                  <PulseStatefulButton
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    state="success"
+                    successText="Submitted"
+                    disabled
+                  >
+                    Submitted
+                  </PulseStatefulButton>
+                ) : (
+                  <PulseButton
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={() => {
+                      setSubmitState('idle')
+                      setOpen(true)
+                    }}
+                  >
+                    Submit timesheet
+                  </PulseButton>
+                )}
+              </div>
             </header>
             <div className="pulse-att-cols pulse-ts-att-cols" aria-hidden="true">
               <span>{submitted && period === 'week' ? 'Task' : 'Day'}</span>
@@ -766,12 +799,31 @@ export default function PulseTimesheetForm({
         footer={(
           <div className="pulse-ts-drawer-foot">
             <div className="pulse-ts-drawer-actions">
-              <Button type="primary" loading={saving} onClick={onSubmit}>
+              <PulseStatefulButton
+                type="button"
+                variant="primary"
+                size="md"
+                state={submitState}
+                loadingText="Submitting"
+                successText="Submitted"
+                errorText="Try again"
+                disabled={saving}
+                onClick={() => {
+                  if (submitState === 'error') setSubmitState('idle')
+                  onSubmit()
+                }}
+              >
                 Submit
-              </Button>
-              <Button onClick={closeForm} disabled={saving}>
+              </PulseStatefulButton>
+              <PulseButton
+                type="button"
+                variant="outline"
+                size="md"
+                disabled={saving || submitState === 'loading'}
+                onClick={closeForm}
+              >
                 Cancel
-              </Button>
+              </PulseButton>
             </div>
             <p className="pulse-ts-drawer-total">
               <span>

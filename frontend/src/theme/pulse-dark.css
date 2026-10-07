@@ -2004,6 +2004,55 @@
   box-shadow: none !important;
 }
 
+/* Pulse pill primary/default — override light !important fills in dark */
+:root[data-theme='dark'] body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-default:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
+  background: #1c1917 !important;
+  border-color: #3f3b36 !important;
+  color: #f5f2ec !important;
+}
+
+:root[data-theme='dark'] body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-default:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn):not(:disabled):hover {
+  background: #292524 !important;
+  border-color: #57534e !important;
+  color: #fafaf9 !important;
+}
+
+:root[data-theme='dark'] body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn) {
+  background: var(--pulse-primary, #465a27) !important;
+  border-color: var(--pulse-primary, #465a27) !important;
+  color: #fff !important;
+}
+
+:root[data-theme='dark'] body:has(.pulse-shell) :is(
+  .pulse-shell,
+  .ant-drawer .ant-drawer-body,
+  .ant-drawer .ant-drawer-footer,
+  .ant-modal .ant-modal-content
+)
+  .ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-text):not(.ant-btn-link):not(.pulse-checkin-cta):not(.pulse-plus):not(.pulse-leave-filter-btn):not(:disabled):hover {
+  background: var(--pulse-primary-hover, #3f5123) !important;
+  border-color: var(--pulse-primary-hover, #3f5123) !important;
+  color: #fff !important;
+}
+
 :root[data-theme='dark'] .pulse-cal-page,
 :root[data-theme='dark'] .pulse-cal-scroll {
   background: transparent;

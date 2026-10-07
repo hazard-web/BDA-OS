@@ -10,19 +10,35 @@
   --color-brand-blue: #0096de;
   --color-brand-red: #e42527;
   --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+
+  /* beUI button-stateful semantic colors → Pulse */
+  --color-primary: #465a27;
+  --color-primary-foreground: #ffffff;
+  --color-foreground: #35421f;
+  --color-card: #ffffff;
+  --color-border: #d9dfc9;
+  --color-muted: #e5ebd6;
+  --color-muted-foreground: #6b7280;
+  --color-background: #fafbf7;
 }
 
 html {
   scrollbar-gutter: stable;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Keep Pulse typeface without beating Tailwind padding utilities (unlayered * { padding:0 } did). */
+  * {
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  }
 }
 
 :root {

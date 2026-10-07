@@ -38,6 +38,8 @@ import api from '../api'
 import { PULSE_LEAVE_EVENT } from '../utils/pulseCheckIn'
 import { pulseToast } from '../utils/pulseToast'
 import PulseSlideClose from './PulseSlideClose'
+import { PulseButton } from './PulseButton'
+import { PulseStatefulButton } from './PulseStatefulButton'
 import {
   formatElapsed,
   getElapsedSeconds,
@@ -817,6 +819,7 @@ export default function PulseLeaveTracker({
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(!sample)
   const [submitting, setSubmitting] = useState(false)
+  const [submitState, setSubmitState] = useState('idle')
   const [respondingId, setRespondingId] = useState(null)
   const [requests, setRequests] = useState(sample ? SAMPLE_REQUESTS : [])
   const [pendingLeaves, setPendingLeaves] = useState([])
@@ -1036,12 +1039,23 @@ export default function PulseLeaveTracker({
     if (sample) return
     setRespondingId(id)
     try {
-      await api.post(`/pulse-checkin/leaves/${id}/respond`, { status })
+      const res = await api.post(`/pulse-checkin/leaves/${id}/respond`, { status })
       window.dispatchEvent(new CustomEvent(PULSE_LEAVE_EVENT))
-      message.success({
-        content: status === 'Approved' ? 'Leave approved' : 'Leave rejected',
-        className: 'pulse-message',
-      })
+      if (status === 'Approved') {
+        pulseToast.success(
+          'Leave approved',
+          res.data?.employeeNotified
+            ? 'Employee notified with a congratulations email'
+            : 'Employee will see the update in Leave requests',
+        )
+      } else {
+        pulseToast.info(
+          'Leave rejected',
+          res.data?.employeeNotified
+            ? 'Employee notified with a professional update email'
+            : 'Employee will see the update in Leave requests',
+        )
+      }
       await loadTeam()
       await load()
     } catch (err) {
@@ -1052,6 +1066,40 @@ export default function PulseLeaveTracker({
     } finally {
       setRespondingId(null)
     }
+  }
+
+  const revokeLeave = (row) => {
+    if (String(row?.status || '').toLowerCase() !== 'pending') return
+    Modal.confirm({
+      title: 'Revoke this leave request?',
+      content: 'You can only revoke pending requests. After approval, ask an admin to change it.',
+      okText: 'Revoke',
+      okButtonProps: { danger: true },
+      cancelText: 'Keep',
+      centered: true,
+      onOk: async () => {
+        if (sample) {
+          setRequests((prev) => prev.filter((item) => item.id !== row.id))
+          return
+        }
+        setRespondingId(row.id)
+        try {
+          const res = await api.delete(`/pulse-checkin/leaves/${row.id}`)
+          if (res.data?.casual) setCasual(res.data.casual)
+          setRequests((prev) => prev.filter((item) => item.id !== row.id))
+          window.dispatchEvent(new CustomEvent(PULSE_LEAVE_EVENT))
+          message.success({ content: 'Leave request revoked', className: 'pulse-message' })
+        } catch (err) {
+          message.error({
+            content: err.response?.data?.message || err.message || 'Failed to revoke leave',
+            className: 'pulse-message',
+          })
+          throw err
+        } finally {
+          setRespondingId(null)
+        }
+      },
+    })
   }
 
   useEffect(() => {
@@ -1278,12 +1326,14 @@ export default function PulseLeaveTracker({
 
   const closeAdd = () => {
     setAddOpen(false)
+    setSubmitState('idle')
     form.resetFields()
   }
 
   const onSubmit = async (values) => {
     if (sample) return
     setSubmitting(true)
+    setSubmitState('loading')
     try {
       const res = await api.post('/pulse-checkin/leaves/apply', {
         leaveType: values.leaveType,
@@ -1293,7 +1343,7 @@ export default function PulseLeaveTracker({
         reason: values.reason,
         attachment: values.attachment || null,
       })
-      closeAdd()
+      setSubmitState('success')
       if (res.data?.casual) setCasual(res.data.casual)
       window.dispatchEvent(new CustomEvent(PULSE_LEAVE_EVENT))
       pulseToast.success(
@@ -1302,7 +1352,11 @@ export default function PulseLeaveTracker({
       )
       await load()
       onMyTabChange?.('requests')
+      window.setTimeout(() => {
+        closeAdd()
+      }, 700)
     } catch (err) {
+      setSubmitState('error')
       message.error({
         content: err.response?.data?.message || err.message || 'Failed to submit leave request',
         className: 'pulse-message',
@@ -1973,42 +2027,54 @@ export default function PulseLeaveTracker({
     const lastPage = Math.max(1, Math.ceil(filteredRequests.length / requestPageSize))
     const safePage = Math.min(requestPage, lastPage)
 
+    const leaveActions = (
+      <div className="pulse-leave-toolbar-actions">
+        <PulseButton
+          type="button"
+          variant="primary"
+          size="md"
+          onClick={() => {
+            setSubmitState('idle')
+            setAddOpen(true)
+          }}
+          disabled={sample}
+        >
+          Add Request
+        </PulseButton>
+        <PulseButton
+          type="button"
+          variant="secondary"
+          size="icon"
+          aria-label="Filter"
+          className={filterActive ? 'is-on' : undefined}
+          onClick={openFilter}
+        >
+          <FilterOutlined />
+        </PulseButton>
+      </div>
+    )
+
     return (
       <div className="pulse-att-page pulse-leave-att">
         <div className="pulse-att-board">
-          <header className="pulse-att-toolbar">
-            <div className="pulse-att-period" />
-            <div className="pulse-leave-toolbar-actions">
-              <button
-                type="button"
-                className="pov-cta plive-top-cta plive-checkin"
-                onClick={() => setAddOpen(true)}
-                disabled={sample}
-              >
-                Add Request
-              </button>
-              <Button
-                icon={<FilterOutlined />}
-                aria-label="Filter"
-                className={`pulse-leave-filter-btn${filterActive ? ' is-on' : ''}`}
-                onClick={openFilter}
-              />
-            </div>
-          </header>
-
           <section className="pulse-att-panel" aria-label="Leave requests">
             <div className="pulse-att-panel-chrome">
               <header className="pulse-att-panel-head">
-                <h4>Leave requests</h4>
-                <span>
-                  {filteredRequests.length} request{filteredRequests.length === 1 ? '' : 's'}
-                </span>
+                <div className="pulse-att-panel-title">
+                  <h4>Leave requests</h4>
+                  <span>
+                    {filteredRequests.length} request{filteredRequests.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {leaveActions}
               </header>
               <div className="pulse-att-cols pulse-leave-att-cols" aria-hidden="true">
+                <span className="pulse-att-cols-spacer" />
                 <span>Type</span>
                 <span>Dates</span>
                 <span>Days</span>
                 <span>Status</span>
+                <span>Action</span>
               </div>
             </div>
 
@@ -2019,6 +2085,7 @@ export default function PulseLeaveTracker({
                 <ul className="pulse-att-list pulse-leave-att-list" aria-label="Leave requests">
                   {pagedRequests.map((row) => {
                     const tone = String(row.status || '').toLowerCase()
+                    const canRevoke = tone === 'pending'
                     return (
                       <li key={row.id} className={`pulse-att-row pulse-leave-att-row is-${tone}`}>
                         <span className={`pulse-att-dot is-${tone === 'approved' ? 'ok' : tone === 'rejected' ? 'bad' : 'open'}`} aria-hidden="true" />
@@ -2033,6 +2100,22 @@ export default function PulseLeaveTracker({
                         <span className={`pulse-att-status is-${tone === 'approved' ? 'ok' : tone === 'rejected' ? 'bad' : 'open'}`}>
                           {row.status || 'Pending'}
                         </span>
+                        <div className="pulse-leave-att-action">
+                          {canRevoke ? (
+                            <button
+                              type="button"
+                              className="pulse-leave-revoke-btn"
+                              disabled={respondingId === row.id}
+                              onClick={() => revokeLeave(row)}
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <span className="pulse-leave-att-action-dash" aria-hidden="true">
+                              —
+                            </span>
+                          )}
+                        </div>
                       </li>
                     )
                   })}
@@ -2096,24 +2179,30 @@ export default function PulseLeaveTracker({
               {teamRangeLabel}
             </button>
           </div>
-          <div className="pulse-leave-toolbar-actions">
-            <Button
-              icon={<FilterOutlined />}
-              aria-label="Filter"
-              className={`pulse-leave-filter-btn${filterActive ? ' is-on' : ''}`}
-              onClick={openFilter}
-            />
-          </div>
         </header>
 
         {isAdmin ? (
           <section className="pulse-att-panel" aria-label="Pending approvals">
             <div className="pulse-att-panel-chrome">
               <header className="pulse-att-panel-head">
-                <h4>Pending approvals</h4>
-                <span>
-                  {pendingLeaves.length} request{pendingLeaves.length === 1 ? '' : 's'}
-                </span>
+                <div className="pulse-att-panel-title">
+                  <h4>Pending approvals</h4>
+                  <span>
+                    {pendingLeaves.length} request{pendingLeaves.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="pulse-leave-toolbar-actions">
+                  <PulseButton
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Filter"
+                    className={filterActive ? 'is-on' : undefined}
+                    onClick={openFilter}
+                  >
+                    <FilterOutlined />
+                  </PulseButton>
+                </div>
               </header>
             </div>
             <div className="pulse-leave-att-body">
@@ -2142,10 +2231,26 @@ export default function PulseLeaveTracker({
         <section className="pulse-att-panel" aria-label="On leave this week">
           <div className="pulse-att-panel-chrome">
             <header className="pulse-att-panel-head">
-              <h4>On leave this week</h4>
-              <span>
-                {teamOnLeave.length} member{teamOnLeave.length === 1 ? '' : 's'}
-              </span>
+              <div className="pulse-att-panel-title">
+                <h4>On leave this week</h4>
+                <span>
+                  {teamOnLeave.length} member{teamOnLeave.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              {!isAdmin ? (
+                <div className="pulse-leave-toolbar-actions">
+                  <PulseButton
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Filter"
+                    className={filterActive ? 'is-on' : undefined}
+                    onClick={openFilter}
+                  >
+                    <FilterOutlined />
+                  </PulseButton>
+                </div>
+              ) : null}
             </header>
           </div>
           <div className="pulse-leave-att-body">
@@ -2204,39 +2309,45 @@ export default function PulseLeaveTracker({
                 {holidayYear}
               </button>
             </div>
-            <div className="pulse-leave-toolbar-actions">
-              {isAdmin ? (
-                <button
-                  type="button"
-                  className="pov-cta plive-top-cta plive-checkin"
-                  disabled={holidaySaving}
-                  onClick={openPlanHolidays}
-                >
-                  Plan holidays
-                </button>
-              ) : null}
-              <Dropdown
-                trigger={['click']}
-                placement="bottomRight"
-                rootClassName="pulse-leave-more-menu"
-                menu={moreMenu(exportHolidays, visibleHolidays.length > 0)}
-              >
-                <Button
-                  icon={<EllipsisOutlined />}
-                  aria-label="More options"
-                  className="pulse-leave-filter-btn"
-                />
-              </Dropdown>
-            </div>
           </header>
 
           <section className="pulse-att-panel" aria-label="Holidays">
             <div className="pulse-att-panel-chrome">
               <header className="pulse-att-panel-head">
-                <h4>Holidays</h4>
-                <span>
-                  {visibleHolidays.length} holiday{visibleHolidays.length === 1 ? '' : 's'}
-                </span>
+                <div className="pulse-att-panel-title">
+                  <h4>Holidays</h4>
+                  <span>
+                    {visibleHolidays.length} holiday{visibleHolidays.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="pulse-leave-toolbar-actions">
+                  {isAdmin ? (
+                    <PulseButton
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      disabled={holidaySaving}
+                      onClick={openPlanHolidays}
+                    >
+                      Plan holidays
+                    </PulseButton>
+                  ) : null}
+                  <Dropdown
+                    trigger={['click']}
+                    placement="bottomRight"
+                    rootClassName="pulse-leave-more-menu"
+                    menu={moreMenu(exportHolidays, visibleHolidays.length > 0)}
+                  >
+                    <PulseButton
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      aria-label="More options"
+                    >
+                      <EllipsisOutlined />
+                    </PulseButton>
+                  </Dropdown>
+                </div>
               </header>
             </div>
 
@@ -2299,10 +2410,31 @@ export default function PulseLeaveTracker({
         rootClassName="pulse-leave-add-drawer"
         footer={(
           <div className="pulse-leave-apply-foot">
-            <Button type="primary" loading={submitting} onClick={() => form.submit()}>
+            <PulseStatefulButton
+              type="button"
+              variant="primary"
+              size="md"
+              state={submitState}
+              loadingText="Submitting"
+              successText="Submitted"
+              errorText="Try again"
+              disabled={sample || submitting}
+              onClick={() => {
+                if (submitState === 'error') setSubmitState('idle')
+                form.submit()
+              }}
+            >
               Submit
-            </Button>
-            <Button onClick={closeAdd}>Cancel</Button>
+            </PulseStatefulButton>
+            <PulseButton
+              type="button"
+              variant="outline"
+              size="md"
+              disabled={submitting || submitState === 'loading'}
+              onClick={closeAdd}
+            >
+              Cancel
+            </PulseButton>
           </div>
         )}
       >

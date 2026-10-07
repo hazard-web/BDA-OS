@@ -14,8 +14,9 @@ import {
 } from '../utils/pulseForceExit'
 
 /**
- * Tab close / kill → check out + sign out (reload must stay signed in).
- * System sleep / screen lock → check out only (session stays signed in).
+ * Tab close / kill / shut down → check out (+ sign out on hard exit).
+ * Laptop sleep (`freeze`) → check out immediately (stay signed in).
+ * Screen lock alone → pause only (see startScreenLockCheckOutWatch).
  *
  * Do not tear down the screen-lock watcher on route changes or loading flickers —
  * restarting IdleDetector without a user gesture silently drops permission.
@@ -56,12 +57,13 @@ export default function PulseForceExitGuard() {
     }
   }, [pathname, loading, email])
 
-  // Sleep freeze backup (screen-lock watcher also listens to freeze).
+  // Sleep / suspend → check out immediately (backup if screen-lock watcher missed it).
   useEffect(() => {
     if (!email || loading || auxiliary) return undefined
 
-    const checkOutOnly = () => {
+    const checkOutForSleep = () => {
       if (liveExitRef.current) return
+      if (!isCheckedIn(email)) return
       liveExitRef.current = true
       forcePulseCheckOutOnly({ email, reason: 'sleep' })
       window.setTimeout(() => {
@@ -69,7 +71,7 @@ export default function PulseForceExitGuard() {
       }, 2000)
     }
 
-    const onFreeze = () => checkOutOnly()
+    const onFreeze = () => checkOutForSleep()
     document.addEventListener('freeze', onFreeze)
 
     return () => {
