@@ -1214,6 +1214,7 @@ export default function PeopleHome() {
         <div className="pulse-top-tools">
           <HeaderAssignedApps apps={assignedApps.slice(0, HEADER_APP_CAP)} user={user} />
           <div className="pulse-top-actions">
+            {/* Plus → Notebook (hidden for now)
             <Dropdown
               trigger={['click']}
               placement="bottomRight"
@@ -1236,6 +1237,7 @@ export default function PeopleHome() {
             >
               <Button className="pulse-plus" type="primary" icon={<PlusOutlined />} aria-label="Quick add" />
             </Dropdown>
+            */}
             <PulseHeaderSearch
               user={user}
               onOpenView={(view) => {

@@ -315,9 +315,10 @@
 .pulse-shell.pulse-id .pulse-top-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 220px;
-  flex: 0 0 220px;
+  justify-content: flex-end;
+  gap: 14px;
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .pulse-shell.pulse-id .pulse-top-actions > * {

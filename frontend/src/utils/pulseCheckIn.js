@@ -370,8 +370,9 @@ export function alignLocalToServerTotal(email, serverActiveMs) {
 }
 
 /**
- * Credit only awake time. Sleep / shutdown gaps (> PULSE_IDLE_GAP_MS) check out
- * so the person shows as not active instead of staying on a paused live session.
+ * Credit only awake time. If JS was frozen long enough that sleep almost certainly
+ * happened (and `freeze` may have been missed), check out immediately on wake —
+ * no delayed timer; the gap itself is the signal.
  */
 export function reconcileCheckInSession(email) {
   const day = pulseDayKey()
@@ -831,6 +832,7 @@ export function startCheckInHeartbeat(getEmail) {
   const onFreeze = () => {
     const email = emailOf()
     if (!email || !readCheckInAt(email)) return
+    // Laptop sleep / suspend — check out immediately (no delay).
     stampCheckInBeforeHide(email)
     stopCheckIn(email, { reason: 'sleep' })
   }

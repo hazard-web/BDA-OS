@@ -162,9 +162,30 @@ export function PulseHeaderSearch({ user, onOpenModule, onOpenView }) {
   )
 }
 
+const SEEN_APPROVALS_KEY = 'pulse.notifications.seenApprovals'
+
+function readSeenApprovals() {
+  try {
+    const raw = sessionStorage.getItem(SEEN_APPROVALS_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    return new Set(Array.isArray(list) ? list.map(String) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeSeenApprovals(set) {
+  try {
+    sessionStorage.setItem(SEEN_APPROVALS_KEY, JSON.stringify([...set]))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 export function PulseHeaderNotifications({ approvals = [], onOpenLeave }) {
   const [open, setOpen] = useState(false)
   const [remote, setRemote] = useState([])
+  const [seenApprovals, setSeenApprovals] = useState(() => readSeenApprovals())
 
   const loadRemote = async () => {
     try {
@@ -176,21 +197,53 @@ export function PulseHeaderNotifications({ approvals = [], onOpenLeave }) {
   }
 
   useEffect(() => {
-    if (!open) return undefined
     loadRemote()
-    const timer = window.setInterval(loadRemote, 60000)
+    const timer = window.setInterval(loadRemote, 60_000)
     return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (open) loadRemote()
   }, [open])
 
+  const markRemoteRead = async (id) => {
+    const noteId = String(id || '')
+    if (!noteId) return
+    setRemote((prev) =>
+      prev.map((row) => (String(row._id) === noteId ? { ...row, isRead: true } : row)),
+    )
+    try {
+      await api.put(`/notifications/${noteId}/read`)
+    } catch {
+      // Re-sync if the server rejected the update.
+      loadRemote()
+    }
+  }
+
+  const markApprovalSeen = (key) => {
+    const next = new Set(seenApprovals)
+    next.add(String(key))
+    setSeenApprovals(next)
+    writeSeenApprovals(next)
+  }
+
   const items = useMemo(() => {
-    const fromApprovals = (approvals || []).map((row) => ({
-      key: `ap-${row.key}`,
-      title: row.from || 'Update',
-      message: `${row.type || 'Item'} · ${row.subject || 'Needs attention'}`,
-      status: row.status || 'Pending',
-      unread: ['Pending', 'Accepted', 'In Progress'].includes(row.status),
-      onClick: () => onOpenLeave?.(),
-    }))
+    const fromApprovals = (approvals || []).map((row) => {
+      const key = `ap-${row.key}`
+      const openStatus = ['Pending', 'Accepted', 'In Progress'].includes(row.status)
+      const unread = openStatus && !seenApprovals.has(key)
+      return {
+        key,
+        title: row.from || 'Update',
+        message: `${row.type || 'Item'} · ${row.subject || 'Needs attention'}`,
+        status: unread ? (row.status || 'Pending') : 'Read',
+        unread,
+        onClick: async () => {
+          markApprovalSeen(key)
+          onOpenLeave?.()
+        },
+      }
+    })
     const fromRemote = remote
       .filter((row) => !row.isArchived)
       .slice(0, 12)
@@ -201,27 +254,27 @@ export function PulseHeaderNotifications({ approvals = [], onOpenLeave }) {
         status: row.isRead ? 'Read' : 'New',
         unread: !row.isRead,
         onClick: async () => {
-          try {
-            if (!row.isRead) await api.put(`/notifications/${row._id}/read`)
-          } catch {
-            /* ignore */
-          }
+          if (!row.isRead) await markRemoteRead(row._id)
           onOpenLeave?.()
-          loadRemote()
         },
       }))
     return [...fromApprovals, ...fromRemote].slice(0, 16)
-  }, [approvals, remote, onOpenLeave])
+  }, [approvals, remote, onOpenLeave, seenApprovals])
 
   const unread = items.filter((item) => item.unread).length
 
-  const markAll = async () => {
+  const markAll = async (event) => {
+    event?.stopPropagation?.()
+    setRemote((prev) => prev.map((row) => ({ ...row, isRead: true })))
+    const next = new Set(seenApprovals)
+    ;(approvals || []).forEach((row) => next.add(`ap-${row.key}`))
+    setSeenApprovals(next)
+    writeSeenApprovals(next)
     try {
       await api.post('/notifications/admin/mark-all-read')
     } catch {
-      /* ignore */
+      loadRemote()
     }
-    loadRemote()
   }
 
   const panel = (
@@ -243,9 +296,9 @@ export function PulseHeaderNotifications({ approvals = [], onOpenLeave }) {
               <button
                 type="button"
                 className={item.unread ? 'is-unread' : undefined}
-                onClick={() => {
+                onClick={async () => {
+                  await item.onClick?.()
                   setOpen(false)
-                  item.onClick?.()
                 }}
               >
                 <span>
